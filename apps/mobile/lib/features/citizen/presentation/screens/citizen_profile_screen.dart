@@ -1,3 +1,4 @@
+import 'package:clean_savar_core/clean_savar_core.dart' as core;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -173,6 +174,61 @@ class CitizenProfileScreen extends ConsumerWidget {
         ),
         const SizedBox(height: 12),
         FlatCard(
+          child: Row(
+            children: [
+              Icon(
+                citizen.pendingSyncCount > 0
+                    ? Icons.cloud_upload_outlined
+                    : Icons.cloud_done_outlined,
+                color: citizen.pendingSyncCount > 0
+                    ? AppColors.warningAmberDark
+                    : AppColors.primaryGreen,
+                size: 26,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      citizen.pendingSyncCount > 0
+                          ? '${BanglaFormatters.formatInt(citizen.pendingSyncCount)}টি অফলাইন তথ্য সিঙ্কের অপেক্ষায়'
+                          : 'সার্ভার সিঙ্ক অবস্থা',
+                      style: const TextStyle(
+                        fontSize: 14.5,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    const Text(
+                      'অফলাইনে জমা দেওয়া রিপোর্ট ও পিকআপ নেট ফিরে এলে স্বয়ংক্রিয়ভাবে সিঙ্ক হবে',
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              OutlinedButton.icon(
+                onPressed: citizen.isRefreshing
+                    ? null
+                    : () => ref.read(citizenStateProvider.notifier).refreshFromServer(),
+                icon: const Icon(Icons.sync_rounded, size: 17),
+                label: Text(citizen.isRefreshing ? 'চলছে' : 'সিঙ্ক'),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        _CitizenOtpAuthCard(
+          phone: citizen.citizenPhone,
+          isAuthenticated: citizen.isAuthenticated,
+          otpPreview: citizen.otpPreview,
+        ),
+        const SizedBox(height: 12),
+        FlatCard(
           onTap: () => ref
               .read(appRoleProvider.notifier)
               .setRole(AppRole.collector),
@@ -216,6 +272,214 @@ class CitizenProfileScreen extends ConsumerWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _CitizenOtpAuthCard extends ConsumerStatefulWidget {
+  const _CitizenOtpAuthCard({
+    required this.phone,
+    required this.isAuthenticated,
+    this.otpPreview,
+  });
+
+  final String phone;
+  final bool isAuthenticated;
+  final String? otpPreview;
+
+  @override
+  ConsumerState<_CitizenOtpAuthCard> createState() => _CitizenOtpAuthCardState();
+}
+
+class _CitizenOtpAuthCardState extends ConsumerState<_CitizenOtpAuthCard> {
+  late final TextEditingController _phoneCtrl;
+  final TextEditingController _otpCtrl = TextEditingController();
+  bool _sending = false;
+  bool _verifying = false;
+  bool _otpRequested = false;
+  String? _statusMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    _phoneCtrl = TextEditingController(text: widget.phone);
+  }
+
+  @override
+  void dispose() {
+    _phoneCtrl.dispose();
+    _otpCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _sendOtp() async {
+    setState(() {
+      _sending = true;
+      _statusMessage = null;
+    });
+    try {
+      final challenge = await ref
+          .read(citizenStateProvider.notifier)
+          .requestCitizenOtp(phone: _phoneCtrl.text.trim());
+      if (!mounted) return;
+      setState(() {
+        _otpRequested = true;
+        if (challenge.devOtpPreview != null && challenge.devOtpPreview!.isNotEmpty) {
+          _otpCtrl.text = challenge.devOtpPreview!;
+          _statusMessage =
+              'ডেভ OTP কোড: ${challenge.devOtpPreview} (যাচাই করতে নিচের বাটনে চাপ দিন)';
+        } else {
+          _statusMessage = 'আপনার ফোনে ৬ সংখ্যার OTP পাঠানো হয়েছে।';
+        }
+      });
+    } on core.CleanSavarApiException catch (e) {
+      if (mounted) {
+        setState(() => _statusMessage = e.message);
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _statusMessage = 'সার্ভারের সাথে সংযোগ পাওয়া যায়নি।');
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _sending = false);
+      }
+    }
+  }
+
+  Future<void> _verifyOtp() async {
+    setState(() {
+      _verifying = true;
+      _statusMessage = null;
+    });
+    try {
+      await ref.read(citizenStateProvider.notifier).verifyCitizenOtp(
+            phone: _phoneCtrl.text.trim(),
+            otp: _otpCtrl.text.trim(),
+          );
+      if (mounted) {
+        setState(() {
+          _otpRequested = false;
+          _statusMessage = 'যাচাইকৃত সেশন চালু হয়েছে ও সিঙ্ক সম্পন্ন হয়েছে।';
+        });
+      }
+    } on core.CleanSavarApiException catch (e) {
+      if (mounted) {
+        setState(() => _statusMessage = e.message);
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _statusMessage = 'OTP যাচাই করা যায়নি।');
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _verifying = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FlatCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                widget.isAuthenticated ? Icons.verified_user_outlined : Icons.lock_outline_rounded,
+                color: widget.isAuthenticated ? AppColors.primaryGreen : AppColors.textSecondary,
+                size: 22,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  widget.isAuthenticated
+                      ? 'নাগরিক অ্যাকাউন্ট যাচাইকৃত'
+                      : 'লাইভ সার্ভার OTP লগইন',
+                  style: const TextStyle(
+                    fontSize: 14.5,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+              ),
+              if (widget.isAuthenticated)
+                TextButton(
+                  onPressed: () =>
+                      ref.read(citizenStateProvider.notifier).logoutCitizenAuth(),
+                  child: const Text('লগআউট'),
+                ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            widget.isAuthenticated
+                ? 'সার্ভারে পিকআপ, রিপোর্ট এবং ছবি পাঠাতে আপনার সেশন সক্রিয় আছে।'
+                : 'অনলাইন সার্ভারে পিকআপ রিকোয়েস্ট ও ময়লার ছবি পাঠাতে মোবাইল নম্বর OTP দিয়ে যাচাই করুন।',
+            style: const TextStyle(fontSize: 12.5, color: AppColors.textSecondary),
+          ),
+          if (!widget.isAuthenticated) ...[
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _phoneCtrl,
+                    keyboardType: TextInputType.phone,
+                    decoration: const InputDecoration(
+                      isDense: true,
+                      labelText: 'মোবাইল নম্বর',
+                      hintText: '01715-883210',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                ElevatedButton(
+                  onPressed: _sending ? null : _sendOtp,
+                  child: Text(_sending ? 'পাঠাচ্ছে...' : 'OTP পাঠান'),
+                ),
+              ],
+            ),
+            if (_otpRequested) ...[
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _otpCtrl,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                        isDense: true,
+                        labelText: 'OTP কোড',
+                        hintText: '৬ সংখ্যার কোড',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  ElevatedButton(
+                    onPressed: _verifying ? null : _verifyOtp,
+                    child: Text(_verifying ? 'যাচাই হচ্ছে...' : 'যাচাই করুন'),
+                  ),
+                ],
+              ),
+            ],
+          ],
+          if (_statusMessage != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              _statusMessage!,
+              style: const TextStyle(
+                fontSize: 12,
+                color: AppColors.primaryGreen,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ],
+      ),
     );
   }
 }

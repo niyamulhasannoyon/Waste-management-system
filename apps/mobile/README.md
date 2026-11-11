@@ -1,6 +1,6 @@
 # Clean Savar Mobile (`apps/mobile`)
 
-Unified Flutter mobile application for **Clean Savar (ক্লিন সাভার)** targeting Android & iOS with both **Citizen Mode (নাগরিক অ্যাপ)** and **Collector Mode (কর্মী অ্যাপ)** accessible via a top role switcher for testing.
+Unified Flutter mobile application for **Clean Savar (ক্লিন সাভার)** targeting Android & iOS with both **Citizen Mode (নাগরিক অ্যাপ)** and **Collector Mode (কর্মী অ্যাপ)** — debug role switcher in dev builds, OTP role-gated in release builds.
 
 ## Architecture
 
@@ -18,7 +18,10 @@ From `apps/mobile`:
 flutter create --platforms=android,ios --org bd.gov.savar --project-name clean_savar_mobile .
 flutter pub get
 flutter test
-flutter run
+flutter run --dart-define=API_BASE_URL=http://10.0.2.2:8080/api/v1
 ```
 
-> Note: On Android release builds, ensure `<uses-permission android:name="android.permission.INTERNET" />` and `<queries>` for `tel:` links are present in `android/app/src/main/AndroidManifest.xml`, and `LSApplicationQueriesSchemes` (`tel`) is included in `ios/Runner/Info.plist`.
+> Note: After generating native runner folders (`android/` and `ios/`), verify required permissions before release:
+> - `android/app/src/main/AndroidManifest.xml`: `INTERNET`, `CAMERA`, `ACCESS_FINE_LOCATION`, `ACCESS_COARSE_LOCATION`, and `<queries>` for `tel:` links.
+> - `ios/Runner/Info.plist`: `NSCameraUsageDescription`, `NSPhotoLibraryUsageDescription`, `NSLocationWhenInUseUsageDescription`, and `LSApplicationQueriesSchemes` (`tel`).
+> - Shared domain models, Ward `1–9` & Union `101–106` seeds, and OTP/track API contracts live in `packages/clean_savar_core`.

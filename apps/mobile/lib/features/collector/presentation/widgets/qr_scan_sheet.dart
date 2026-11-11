@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:mobile_scanner/mobile_scanner.dart';
 
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/models/route_stop.dart';
+import '../../../../core/services/device_services.dart';
 import '../../../../core/widgets/flat_card.dart';
 
 Future<bool?> showQrScanSheet(BuildContext context, {required RouteStop stop}) {
@@ -13,13 +16,69 @@ Future<bool?> showQrScanSheet(BuildContext context, {required RouteStop stop}) {
   );
 }
 
-class _QrScanSheet extends StatelessWidget {
+class _QrScanSheet extends ConsumerStatefulWidget {
   const _QrScanSheet({required this.stop});
 
   final RouteStop stop;
 
   @override
+  ConsumerState<_QrScanSheet> createState() => _QrScanSheetState();
+}
+
+class _QrScanSheetState extends ConsumerState<_QrScanSheet> {
+  MobileScannerController? _controller;
+  String? _scanFeedback;
+  bool _handledMatch = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final cameraEnabled = ref.read(qrCameraScannerEnabledProvider);
+    if (cameraEnabled && _controller == null) {
+      _controller = MobileScannerController(
+        detectionSpeed: DetectionSpeed.noDuplicates,
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller?.dispose();
+    super.dispose();
+  }
+
+  void _onBarcodeDetected(BarcodeCapture capture) {
+    if (_handledMatch) return;
+    for (final barcode in capture.barcodes) {
+      final raw = barcode.rawValue?.trim();
+      if (raw == null || raw.isEmpty) continue;
+
+      final expected = widget.stop.expectedQrCode.trim();
+      final matchesExpected =
+          raw.toUpperCase() == expected.toUpperCase() ||
+          raw.toUpperCase().contains(expected.toUpperCase());
+
+      if (matchesExpected) {
+        _handledMatch = true;
+        if (mounted) {
+          Navigator.of(context).pop(true);
+        }
+        return;
+      }
+
+      if (mounted) {
+        setState(() {
+          _scanFeedback =
+              'স্ক্যানকৃত কোড ($raw) এই বাসার ট্যাগের ($expected) সাথে মেলেনি';
+        });
+      }
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final cameraEnabled = ref.watch(qrCameraScannerEnabledProvider);
+
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
       child: Column(
@@ -46,7 +105,7 @@ class _QrScanSheet extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            '${stop.houseNumber} • ${stop.roadName}',
+            '${widget.stop.houseNumber} • ${widget.stop.roadName}',
             style: const TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w700,
@@ -55,28 +114,53 @@ class _QrScanSheet extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           FlatCard(
-            padding: const EdgeInsets.all(20),
+            padding: const EdgeInsets.all(16),
             color: AppColors.textPrimary,
             borderColor: AppColors.textPrimary,
             child: Column(
               children: [
-                SizedBox(
-                  width: 168,
-                  height: 168,
-                  child: CustomPaint(
-                    painter: _QrFramePainter(),
-                    child: const Center(
-                      child: Icon(
-                        Icons.qr_code_2_rounded,
-                        size: 112,
-                        color: Colors.white,
+                if (cameraEnabled && _controller != null)
+                  SizedBox(
+                    height: 210,
+                    width: double.infinity,
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          MobileScanner(
+                            controller: _controller!,
+                            onDetect: _onBarcodeDetected,
+                          ),
+                          Center(
+                            child: SizedBox(
+                              width: 150,
+                              height: 150,
+                              child: CustomPaint(painter: _QrFramePainter()),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
+                else
+                  SizedBox(
+                    width: 168,
+                    height: 168,
+                    child: CustomPaint(
+                      painter: _QrFramePainter(),
+                      child: const Center(
+                        child: Icon(
+                          Icons.qr_code_2_rounded,
+                          size: 112,
+                          color: Colors.white,
+                        ),
                       ),
                     ),
                   ),
-                ),
                 const SizedBox(height: 12),
                 Text(
-                  'ট্যাগ কোড: ${stop.expectedQrCode}',
+                  'ট্যাগ কোড: ${widget.stop.expectedQrCode}',
                   style: const TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.w700,
@@ -84,12 +168,14 @@ class _QrScanSheet extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 4),
-                const Text(
-                  'বিনের গায়ে থাকা QR স্টিকার ফ্রেমের ভেতরে ধরুন',
+                Text(
+                  _scanFeedback ?? 'বিনের গায়ে থাকা QR স্টিকার ফ্রেমের ভেতরে ধরুন',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: 13,
-                    color: AppColors.border,
+                    color: _scanFeedback != null
+                        ? const Color(0xFFFCA5A5)
+                        : AppColors.border,
                   ),
                 ),
               ],

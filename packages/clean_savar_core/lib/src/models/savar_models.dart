@@ -168,17 +168,17 @@ class DumpReportItem {
             .toList() ??
         const [];
     return DumpReportItem(
-      id: json['id'] as String,
-      trackingCode: json['tracking_code'] as String,
-      reporterPhone: json['reporter_phone'] as String,
-      wardId: (json['ward_id'] as num).toInt(),
-      wardNameBn: json['ward_name_bn'] as String,
-      titleBn: json['title_bn'] as String,
-      landmark: json['landmark'] as String,
-      severity: json['severity'] as String,
-      status: json['status'] as String,
-      lat: (json['lat'] as num).toDouble(),
-      lng: (json['lng'] as num).toDouble(),
+      id: (json['id'] ?? '').toString(),
+      trackingCode: (json['tracking_code'] ?? '').toString(),
+      reporterPhone: (json['reporter_phone'] ?? '').toString(),
+      wardId: (json['ward_id'] as num?)?.toInt() ?? 3,
+      wardNameBn: (json['ward_name_bn'] ?? '').toString(),
+      titleBn: (json['title_bn'] ?? '').toString(),
+      landmark: (json['landmark'] ?? '').toString(),
+      severity: (json['severity'] ?? 'medium').toString(),
+      status: (json['status'] ?? 'reported').toString(),
+      lat: (json['lat'] as num?)?.toDouble() ?? 23.8492,
+      lng: (json['lng'] as num?)?.toDouble() ?? 90.2546,
       photoUrls: photos,
       assignedVehicleCode: json['assigned_vehicle_code'] as String?,
     );
@@ -206,4 +206,111 @@ Color statusColor(String status) {
     'cancelled' || 'rejected' => CleanSavarColors.dangerRed,
     _ => CleanSavarColors.warningAmber,
   };
+}
+
+class CollectorVehicleItem {
+  const CollectorVehicleItem({
+    required this.id,
+    required this.code,
+    required this.driverNameBn,
+    required this.driverPhone,
+    required this.wardId,
+    required this.vehicleType,
+    required this.status,
+    required this.currentLat,
+    required this.currentLng,
+    required this.capacityKg,
+  });
+
+  final String id;
+  final String code;
+  final String driverNameBn;
+  final String driverPhone;
+  final int wardId;
+  final String vehicleType;
+  final String status;
+  final double currentLat;
+  final double currentLng;
+  final int capacityKg;
+
+  factory CollectorVehicleItem.fromJson(Map<String, dynamic> json) {
+    final latNum = (json['lat'] ?? json['current_lat']) as num?;
+    final lngNum = (json['lng'] ?? json['current_lng']) as num?;
+    return CollectorVehicleItem(
+      id: (json['id'] ?? '').toString(),
+      code: (json['code'] ?? '').toString(),
+      driverNameBn: (json['driver_name_bn'] ?? '').toString(),
+      driverPhone: (json['driver_phone'] ?? '').toString(),
+      wardId: (json['ward_id'] as num?)?.toInt() ?? 3,
+      vehicleType: (json['vehicle_type'] ?? 'rickshaw_van').toString(),
+      status: (json['status'] ?? 'available').toString(),
+      currentLat: latNum?.toDouble() ?? 23.8492,
+      currentLng: lngNum?.toDouble() ?? 90.2546,
+      capacityKg: (json['capacity_kg'] as num?)?.toInt() ?? 500,
+    );
+  }
+}
+
+class OtpChallengeResult {
+  const OtpChallengeResult({
+    required this.phone,
+    required this.role,
+    required this.expiresInSeconds,
+    this.devOtpPreview,
+    this.messageBn,
+  });
+
+  final String phone;
+  final String role;
+  final int expiresInSeconds;
+  final String? devOtpPreview;
+  final String? messageBn;
+
+  factory OtpChallengeResult.fromJson(Map<String, dynamic> json) {
+    return OtpChallengeResult(
+      phone: (json['phone'] ?? '').toString(),
+      role: (json['role'] as String?) ?? 'citizen',
+      expiresInSeconds: (json['expires_in_seconds'] as num?)?.toInt() ?? 300,
+      devOtpPreview: (json['otp_preview'] ?? json['dev_otp_preview']) as String?,
+      messageBn: (json['message_bn'] ?? json['message']) as String?,
+    );
+  }
+}
+
+class OtpAuthResult {
+  const OtpAuthResult({
+    required this.token,
+    required this.userId,
+    required this.phone,
+    required this.role,
+    this.nameBn,
+    this.wardId,
+    this.expiresAt,
+    this.vehicleId,
+  });
+
+  final String token;
+  final String userId;
+  final String phone;
+  final String role;
+  final String? nameBn;
+  final int? wardId;
+  final String? expiresAt;
+  final String? vehicleId;
+
+  factory OtpAuthResult.fromJson(Map<String, dynamic> json) {
+    final profile = json['profile'] as Map<String, dynamic>?;
+    final user = (profile?['user'] ?? json['user'] ?? json) as Map<String, dynamic>;
+    final rawToken = (json['access_token'] ?? json['token'] ?? '').toString();
+    return OtpAuthResult(
+      token: rawToken,
+      userId: (user['id'] ?? user['user_id'] ?? '').toString(),
+      phone: (user['phone'] ?? '').toString(),
+      role: (user['role'] as String?) ?? 'citizen',
+      nameBn: (user['full_name'] ?? user['name_bn']) as String?,
+      wardId: (user['ward_id'] as num?)?.toInt(),
+      expiresAt: json['expires_at'] as String?,
+      vehicleId: profile?['vehicle_id'] as String?,
+    );
+  }
 }

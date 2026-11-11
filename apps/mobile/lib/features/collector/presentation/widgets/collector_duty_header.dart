@@ -84,75 +84,81 @@ class CollectorDutyHeader extends ConsumerWidget {
         const SizedBox(height: 12),
 
         // Large Outdoor-Readable Duty Toggle (min 56px height)
-        Material(
-          color: collector.isOnDuty
-              ? AppColors.primaryGreen
-              : AppColors.textPrimary,
-          borderRadius: BorderRadius.circular(12),
-          child: InkWell(
-            onTap: () =>
-                ref.read(collectorStateProvider.notifier).toggleDuty(),
+        Semantics(
+          button: true,
+          toggled: collector.isOnDuty,
+          label: collector.isOnDuty
+              ? 'ডিউটি চালু আছে, বিরতি নিতে ট্যাপ করুন'
+              : 'ডিউটি ও জিপিএস চালু করতে ট্যাপ করুন',
+          child: Material(
+            color: collector.isOnDuty
+                ? AppColors.primaryGreen
+                : AppColors.textPrimary,
             borderRadius: BorderRadius.circular(12),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(minHeight: 60),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 12,
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      collector.isOnDuty
-                          ? Icons.radio_button_checked_rounded
-                          : Icons.play_circle_fill_rounded,
-                      color: Colors.white,
-                      size: 30,
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            collector.isOnDuty
-                                ? 'অনলাইন • ডিউটি চালু আছে'
-                                : 'কাজ শুরু করুন',
-                            style: const TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.w700,
-                              color: Colors.white,
-                              height: 1.25,
-                            ),
-                          ),
-                          Text(
-                            collector.isOnDuty
-                                ? 'বিরতি নিতে চাইলে ট্যাপ করুন'
-                                : 'ডিউটি ও জিপিএস চালু করতে ট্যাপ করুন',
-                            style: const TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w500,
-                              color: Colors.white,
-                              height: 1.3,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 8,
-                      ),
-                      decoration: BoxDecoration(
+            child: InkWell(
+              onTap: () =>
+                  ref.read(collectorStateProvider.notifier).toggleDuty(),
+              borderRadius: BorderRadius.circular(12),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(minHeight: 60),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        collector.isOnDuty
+                            ? Icons.radio_button_checked_rounded
+                            : Icons.play_circle_fill_rounded,
                         color: Colors.white,
-                        borderRadius: BorderRadius.circular(8),
+                        size: 30,
                       ),
-                      child: Text(
-                        collector.isOnDuty ? 'অনলাইন' : 'শুরু',
-                        style: TextStyle(
-                          fontSize: 14,
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              collector.isOnDuty
+                                  ? 'অনলাইন • ডিউটি চালু আছে'
+                                  : 'কাজ শুরু করুন',
+                              style: const TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w700,
+                                color: Colors.white,
+                                height: 1.25,
+                              ),
+                            ),
+                            Text(
+                              collector.isOnDuty
+                                  ? 'বিরতি নিতে চাইলে ট্যাপ করুন'
+                                  : 'ডিউটি ও জিপিএস চালু করতে ট্যাপ করুন',
+                              style: const TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w500,
+                                color: Colors.white,
+                                height: 1.3,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          collector.isOnDuty ? 'অনলাইন' : 'শুরু',
+                          style: TextStyle(
+                            fontSize: 14,
                           fontWeight: FontWeight.w700,
                           color: collector.isOnDuty
                               ? AppColors.primaryGreenDark
@@ -165,6 +171,7 @@ class CollectorDutyHeader extends ConsumerWidget {
               ),
             ),
           ),
+        ),
         ),
         const SizedBox(height: 10),
 

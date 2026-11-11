@@ -1,9 +1,13 @@
+import 'dart:async';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/models/hotspot_report.dart';
 import '../../../../core/providers/citizen_state_provider.dart';
+import '../../../../core/services/device_services.dart';
 import '../../../../core/utils/bangla_formatters.dart';
 import '../../../../core/widgets/flat_card.dart';
 
@@ -29,8 +33,17 @@ class _ReportGarbageSheetState extends ConsumerState<ReportGarbageSheet> {
     ReportIssueCategory.roadsideGarbage,
   };
 
-  bool _hasPhoto = false;
-  int _gpsJitterStep = 0;
+  CapturedPhoto? _capturedPhoto;
+  double? _liveLat;
+  double? _liveLng;
+  bool _isLocating = false;
+  bool _isCapturingPhoto = false;
+
+  @override
+  void initState() {
+    super.initState();
+    Future.microtask(() => _refreshGps(silent: true));
+  }
 
   @override
   void dispose() {
@@ -38,15 +51,11 @@ class _ReportGarbageSheetState extends ConsumerState<ReportGarbageSheet> {
     super.dispose();
   }
 
-  double get _currentLat {
-    final baseLat = ref.read(citizenStateProvider).selectedWard.lat;
-    return baseLat + (_gpsJitterStep * 0.0003);
-  }
+  double get _currentLat =>
+      _liveLat ?? ref.read(citizenStateProvider).selectedWard.lat;
 
-  double get _currentLng {
-    final baseLng = ref.read(citizenStateProvider).selectedWard.lng;
-    return baseLng + (_gpsJitterStep * 0.0002);
-  }
+  double get _currentLng =>
+      _liveLng ?? ref.read(citizenStateProvider).selectedWard.lng;
 
   void _toggleCategory(ReportIssueCategory category) {
     setState(() {
@@ -60,16 +69,56 @@ class _ReportGarbageSheetState extends ConsumerState<ReportGarbageSheet> {
     });
   }
 
-  void _captureSimulatedPhoto() {
-    setState(() {
-      _hasPhoto = true;
-    });
+  Future<void> _capturePhoto({bool fromGallery = false}) async {
+    if (_isCapturingPhoto) return;
+    setState(() => _isCapturingPhoto = true);
+    try {
+      final photo = await ref
+          .read(deviceCameraServiceProvider)
+          .captureCompressedPhoto(fromGallery: fromGallery);
+      if (!mounted) return;
+      if (photo != null) {
+        setState(() => _capturedPhoto = photo);
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isCapturingPhoto = false);
+      }
+    }
   }
 
-  void _refreshGps() {
-    setState(() {
-      _gpsJitterStep = (_gpsJitterStep + 1) % 4;
-    });
+  Future<void> _refreshGps({bool silent = false}) async {
+    if (_isLocating) return;
+    setState(() => _isLocating = true);
+    try {
+      final fix = await ref.read(deviceLocationServiceProvider).getCurrentLocation();
+      if (!mounted) return;
+      if (fix != null) {
+        setState(() {
+          _liveLat = fix.lat;
+          _liveLng = fix.lng;
+        });
+        unawaited(
+          ref
+              .read(citizenStateProvider.notifier)
+              .selectWardByCoordinates(fix.lat, fix.lng),
+        );
+      } else if (!silent && mounted) {
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(
+            const SnackBar(
+              content: Text(
+                'ডিভাইস জিপিএস পাওয়া যায়নি; নির্বাচিত ওয়ার্ডের অবস্থান ব্যবহার করা হচ্ছে।',
+              ),
+            ),
+          );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLocating = false);
+      }
+    }
   }
 
   void _submitReport() {
@@ -79,8 +128,9 @@ class _ReportGarbageSheetState extends ConsumerState<ReportGarbageSheet> {
           note: _noteController.text,
           lat: _currentLat,
           lng: _currentLng,
-          hasPhoto: _hasPhoto,
-          photoMetaLabel: _hasPhoto ? '1280×960 • ২৪০ KB JPEG' : null,
+          hasPhoto: _capturedPhoto != null,
+          photoMetaLabel: _capturedPhoto?.metaLabel,
+          photoPath: _capturedPhoto?.path,
         );
 
     final messenger = ScaffoldMessenger.of(context);
@@ -101,8 +151,8 @@ class _ReportGarbageSheetState extends ConsumerState<ReportGarbageSheet> {
     final selectedWard = ref.watch(
       citizenStateProvider.select((state) => state.selectedWard),
     );
-    final lat = selectedWard.lat + (_gpsJitterStep * 0.0003);
-    final lng = selectedWard.lng + (_gpsJitterStep * 0.0002);
+    final lat = _liveLat ?? selectedWard.lat;
+    final lng = _liveLng ?? selectedWard.lng;
     final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
 
     return Padding(
@@ -145,11 +195,13 @@ class _ReportGarbageSheetState extends ConsumerState<ReportGarbageSheet> {
             ),
             const SizedBox(height: 8),
 
-            // 1. One-tap camera capture placeholder
+            // 1. One-tap camera capture with device compression
             _CameraCaptureCard(
-              hasPhoto: _hasPhoto,
-              onCaptureTap: _captureSimulatedPhoto,
-              onClearTap: () => setState(() => _hasPhoto = false),
+              photo: _capturedPhoto,
+              isBusy: _isCapturingPhoto,
+              onCaptureTap: () => unawaited(_capturePhoto()),
+              onGalleryTap: () => unawaited(_capturePhoto(fromGallery: true)),
+              onClearTap: () => setState(() => _capturedPhoto = null),
             ),
             const SizedBox(height: 12),
 
@@ -204,9 +256,9 @@ class _ReportGarbageSheetState extends ConsumerState<ReportGarbageSheet> {
                     ),
                   ),
                   TextButton.icon(
-                    onPressed: _refreshGps,
+                    onPressed: _isLocating ? null : () => unawaited(_refreshGps()),
                     icon: const Icon(Icons.refresh_rounded, size: 18),
-                    label: const Text('জিপিএস'),
+                    label: Text(_isLocating ? 'খুঁজছে...' : 'জিপিএস'),
                   ),
                 ],
               ),
@@ -276,63 +328,83 @@ class _ReportGarbageSheetState extends ConsumerState<ReportGarbageSheet> {
 
 class _CameraCaptureCard extends StatelessWidget {
   const _CameraCaptureCard({
-    required this.hasPhoto,
+    required this.photo,
+    required this.isBusy,
     required this.onCaptureTap,
+    required this.onGalleryTap,
     required this.onClearTap,
   });
 
-  final bool hasPhoto;
+  final CapturedPhoto? photo;
+  final bool isBusy;
   final VoidCallback onCaptureTap;
+  final VoidCallback onGalleryTap;
   final VoidCallback onClearTap;
 
   @override
   Widget build(BuildContext context) {
-    if (!hasPhoto) {
-      return FlatCard(
-        onTap: onCaptureTap,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
-        color: AppColors.scaffoldBg,
-        borderColor: AppColors.borderStrong,
-        child: const Row(
-          children: [
-            CircleAvatar(
-              radius: 26,
-              backgroundColor: AppColors.primaryGreenTint,
-              child: Icon(
-                Icons.camera_alt_outlined,
-                size: 26,
-                color: AppColors.primaryGreen,
-              ),
-            ),
-            SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'এক ট্যাপে ছবি তুলুন (ক্যামেরা)',
-                    style: TextStyle(
-                      fontSize: 15.5,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.textPrimary,
-                    ),
+    if (photo == null) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          FlatCard(
+            onTap: isBusy ? null : onCaptureTap,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+            color: AppColors.scaffoldBg,
+            borderColor: AppColors.borderStrong,
+            child: const Row(
+              children: [
+                CircleAvatar(
+                  radius: 26,
+                  backgroundColor: AppColors.primaryGreenTint,
+                  child: Icon(
+                    Icons.camera_alt_outlined,
+                    size: 26,
+                    color: AppColors.primaryGreen,
                   ),
-                  SizedBox(height: 3),
-                  Text(
-                    'কম্প্রেসড ছবি (১২৮০ পিক্সেল • ~২৪০ KB) দ্রুত আপলোড হবে',
-                    style: TextStyle(
-                      fontSize: 12.5,
-                      color: AppColors.textSecondary,
-                      height: 1.35,
-                    ),
+                ),
+                SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'এক ট্যাপে ছবি তুলুন (ক্যামেরা)',
+                        style: TextStyle(
+                          fontSize: 15.5,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                      SizedBox(height: 3),
+                      Text(
+                        'কম্প্রেসড ছবি (১২৮০ পিক্সেল • ~২৪০ KB) দ্রুত আপলোড হবে',
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          color: AppColors.textSecondary,
+                          height: 1.35,
+                        ),
+                      ),
+                    ],
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton.icon(
+              onPressed: isBusy ? null : onGalleryTap,
+              icon: const Icon(Icons.photo_library_outlined, size: 17),
+              label: const Text('অথবা গ্যালারি থেকে ছবি দিন'),
+            ),
+          ),
+        ],
       );
     }
+
+    final photoPath = photo!.path;
+    final hasLocalFile = photoPath != null && File(photoPath).existsSync();
 
     return FlatCard(
       padding: const EdgeInsets.all(12),
@@ -340,25 +412,30 @@ class _CameraCaptureCard extends StatelessWidget {
       borderColor: AppColors.primaryGreen,
       child: Row(
         children: [
-          Container(
-            width: 56,
-            height: 56,
-            decoration: BoxDecoration(
+          ClipRRect(
+            borderRadius: BorderRadius.circular(10),
+            child: Container(
+              width: 56,
+              height: 56,
               color: AppColors.primaryGreenDark,
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: const Icon(
-              Icons.photo_camera_back_rounded,
-              color: Colors.white,
-              size: 28,
+              child: hasLocalFile
+                  ? Image.file(
+                      File(photoPath),
+                      fit: BoxFit.cover,
+                    )
+                  : const Icon(
+                      Icons.photo_camera_back_rounded,
+                      color: Colors.white,
+                      size: 28,
+                    ),
             ),
           ),
           const SizedBox(width: 12),
-          const Expanded(
+          Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
+                const Text(
                   'ছবি সংযুক্ত হয়েছে ✓',
                   style: TextStyle(
                     fontSize: 15,
@@ -366,10 +443,10 @@ class _CameraCaptureCard extends StatelessWidget {
                     color: AppColors.primaryGreenDark,
                   ),
                 ),
-                SizedBox(height: 2),
+                const SizedBox(height: 2),
                 Text(
-                  '1280×960 • ২৪০ KB JPEG (জিও-ট্যাগড)',
-                  style: TextStyle(
+                  '${photo!.metaLabel} (জিও-ট্যাগড)',
+                  style: const TextStyle(
                     fontSize: 12.5,
                     color: AppColors.textSecondary,
                   ),

@@ -29,6 +29,18 @@ class _RequestPickupSheetState extends ConsumerState<RequestPickupSheet> {
   WasteCategory _selectedCategory = WasteCategory.household;
   PickupSlot _selectedSlot = PickupSlot.morning;
   int _estimatedBags = 2;
+  String _scheduleType = 'one_time';
+  String _preferredDay = 'friday';
+
+  static const List<(String, String)> _weekDays = [
+    ('saturday', 'শনি'),
+    ('sunday', 'রবি'),
+    ('monday', 'সোম'),
+    ('tuesday', 'মঙ্গল'),
+    ('wednesday', 'বুধ'),
+    ('thursday', 'বৃহঃ'),
+    ('friday', 'শুক্র'),
+  ];
 
   @override
   void initState() {
@@ -51,6 +63,9 @@ class _RequestPickupSheetState extends ConsumerState<RequestPickupSheet> {
           category: _selectedCategory,
           slot: _selectedSlot,
           estimatedBags: _estimatedBags,
+          scheduleType: _scheduleType,
+          preferredDay:
+              _scheduleType == 'recurring_weekly' ? _preferredDay : null,
           notes: _notesController.text,
         );
 
@@ -184,6 +199,61 @@ class _RequestPickupSheetState extends ConsumerState<RequestPickupSheet> {
                   ),
               ],
             ),
+            const SizedBox(height: 14),
+            const Text(
+              'সময়সূচির ধরন',
+              style: TextStyle(
+                fontSize: 14.5,
+                fontWeight: FontWeight.w700,
+                color: AppColors.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                ChoiceChip(
+                  label: const Text('একবার'),
+                  selected: _scheduleType == 'one_time',
+                  selectedColor: AppColors.primaryGreenTint,
+                  onSelected: (_) => setState(() => _scheduleType = 'one_time'),
+                ),
+                ChoiceChip(
+                  label: const Text('প্রতি সপ্তাহে'),
+                  selected: _scheduleType == 'recurring_weekly',
+                  selectedColor: AppColors.primaryGreenTint,
+                  onSelected: (_) =>
+                      setState(() => _scheduleType = 'recurring_weekly'),
+                ),
+              ],
+            ),
+            if (_scheduleType == 'recurring_weekly') ...[
+              const SizedBox(height: 10),
+              const Text(
+                'পছন্দের সাপ্তাহিক দিন',
+                style: TextStyle(
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: [
+                  for (final (dayCode, dayLabelBn) in _weekDays)
+                    ChoiceChip(
+                      label: Text(dayLabelBn),
+                      selected: _preferredDay == dayCode,
+                      selectedColor: AppColors.primaryGreenTint,
+                      onSelected: (_) =>
+                          setState(() => _preferredDay = dayCode),
+                    ),
+                ],
+              ),
+            ],
             const SizedBox(height: 14),
             Row(
               children: [

@@ -61,12 +61,15 @@ class _RouteStopCardState extends ConsumerState<RouteStopCard> {
         : value.toStringAsFixed(1);
   }
 
-  double _parseWeightOrDefault() {
+  double? _parseValidWeight() {
     final parsed = BanglaFormatters.parseBanglaDouble(_weightController.text);
-    if (parsed == null || parsed <= 0) {
-      return widget.stop.weightKg ?? 3.0;
+    if (parsed != null && parsed > 0) {
+      return parsed;
     }
-    return parsed;
+    if (widget.stop.weightKg != null && widget.stop.weightKg! > 0) {
+      return widget.stop.weightKg;
+    }
+    return null;
   }
 
   void _setQuickWeight(double kg) {
@@ -93,7 +96,19 @@ class _RouteStopCardState extends ConsumerState<RouteStopCard> {
   }
 
   void _handleComplete() {
-    final weight = _parseWeightOrDefault();
+    final weight = _parseValidWeight();
+    if (weight == null) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(
+            content: Text(
+              'অনুগ্রহ করে আনুমানিক ওজন (কেজি) লিখুন বা দ্রুত ওজন বাটন চাপুন।',
+            ),
+          ),
+        );
+      return;
+    }
     _weightController.text = _formatPlainWeight(weight);
     ref.read(collectorStateProvider.notifier).completeStop(
           widget.stop.id,
@@ -195,26 +210,30 @@ class _RouteStopCardState extends ConsumerState<RouteStopCard> {
           const SizedBox(height: 12),
 
           // High-contrast Citizen Phone Call Button (min 52px)
-          SizedBox(
-            height: 52,
-            child: OutlinedButton.icon(
-              onPressed: () => PhoneCaller.call(
-                context,
-                phoneNumber: stop.residentPhone,
-                contactName: stop.residentName,
-              ),
-              style: OutlinedButton.styleFrom(
-                minimumSize: const Size(double.infinity, 52),
-                backgroundColor: AppColors.infoBlueTint,
-                foregroundColor: AppColors.infoBlueDark,
-                side: const BorderSide(color: AppColors.infoBlue, width: 1.5),
-              ),
-              icon: const Icon(Icons.call, size: 22),
-              label: Text(
-                'নাগরিককে কল করুন (${stop.residentPhone})',
-                style: const TextStyle(
-                  fontSize: 15.5,
-                  fontWeight: FontWeight.w700,
+          Semantics(
+            button: true,
+            label: '${stop.residentName}-কে ফোন করুন ${stop.residentPhone}',
+            child: SizedBox(
+              height: 52,
+              child: OutlinedButton.icon(
+                onPressed: () => PhoneCaller.call(
+                  context,
+                  phoneNumber: stop.residentPhone,
+                  contactName: stop.residentName,
+                ),
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size(double.infinity, 52),
+                  backgroundColor: AppColors.infoBlueTint,
+                  foregroundColor: AppColors.infoBlueDark,
+                  side: const BorderSide(color: AppColors.infoBlue, width: 1.5),
+                ),
+                icon: const Icon(Icons.call, size: 22),
+                label: Text(
+                  'নাগরিককে কল করুন (${stop.residentPhone})',
+                  style: const TextStyle(
+                    fontSize: 15.5,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ),
             ),

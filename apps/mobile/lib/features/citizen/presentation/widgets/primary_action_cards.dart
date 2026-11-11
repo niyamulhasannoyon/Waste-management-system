@@ -20,8 +20,11 @@ class PrimaryActionCards extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Expanded(
-            child: FlatCard(
-              onTap: onRequestPickup,
+            child: Semantics(
+              button: true,
+              label: 'বাসার ময়লা দিন — পিকআপ গাড়ি বুক করুন',
+              child: FlatCard(
+                onTap: onRequestPickup,
               padding: const EdgeInsets.all(14),
               borderColor: AppColors.primaryGreenBorder,
               child: Column(
@@ -88,10 +91,14 @@ class PrimaryActionCards extends StatelessWidget {
               ),
             ),
           ),
+          ),
           const SizedBox(width: 12),
           Expanded(
-            child: FlatCard(
-              onTap: onReportGarbage,
+            child: Semantics(
+              button: true,
+              label: 'রাস্তার ময়লা রিপোর্ট করুন — ছবি ও জিপিএসসহ জানান',
+              child: FlatCard(
+                onTap: onReportGarbage,
               padding: const EdgeInsets.all(14),
               borderColor: AppColors.warningAmberBorder,
               child: Column(

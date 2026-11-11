@@ -84,47 +84,53 @@ class CitizenTopBar extends ConsumerWidget {
           ),
         ),
         const SizedBox(width: 12),
-        Material(
-          color: AppColors.cardSurface,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-            side: const BorderSide(color: AppColors.border, width: 1),
-          ),
-          child: InkWell(
-            borderRadius: BorderRadius.circular(12),
-            onTap: () {
-              ref.read(citizenStateProvider.notifier).markNotificationsRead();
-              _showNotificationsSheet(context, citizen.notifications);
-            },
-            child: SizedBox(
-              width: 48,
-              height: 48,
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  const Icon(
-                    Icons.notifications_outlined,
-                    size: 24,
-                    color: AppColors.textPrimary,
-                  ),
-                  if (citizen.hasUnreadNotifications)
-                    Positioned(
-                      top: 11,
-                      right: 12,
-                      child: Container(
-                        width: 9,
-                        height: 9,
-                        decoration: BoxDecoration(
-                          color: AppColors.dangerRed,
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: AppColors.cardSurface,
-                            width: 1.5,
+        Semantics(
+          button: true,
+          label: citizen.hasUnreadNotifications
+              ? 'নতুন নোটিফিকেশন রয়েছে, দেখতে ট্যাপ করুন'
+              : 'নোটিফিকেশন দেখুন',
+          child: Material(
+            color: AppColors.cardSurface,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+              side: const BorderSide(color: AppColors.border, width: 1),
+            ),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(12),
+              onTap: () {
+                ref.read(citizenStateProvider.notifier).markNotificationsRead();
+                _showNotificationsSheet(context, citizen.notifications);
+              },
+              child: SizedBox(
+                width: 48,
+                height: 48,
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    const Icon(
+                      Icons.notifications_outlined,
+                      size: 24,
+                      color: AppColors.textPrimary,
+                    ),
+                    if (citizen.hasUnreadNotifications)
+                      Positioned(
+                        top: 11,
+                        right: 12,
+                        child: Container(
+                          width: 9,
+                          height: 9,
+                          decoration: BoxDecoration(
+                            color: AppColors.dangerRed,
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: AppColors.cardSurface,
+                              width: 1.5,
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
