@@ -1,0 +1,57 @@
+services:
+  postgres:
+    image: postgis/postgis:16-3.4-alpine
+    container_name: clean_savar_api_postgis
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-clean_savar}
+      POSTGRES_USER: ${POSTGRES_USER:-clean_savar}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-clean_savar_dev_password}
+    ports:
+      - "5432:5432"
+    # Low-RAM PostgreSQL tuning for fast startup and ~100-200MB footprint
+    command:
+      - "postgres"
+      - "-c"
+      - "shared_buffers=64MB"
+      - "-c"
+      - "work_mem=4MB"
+      - "-c"
+      - "maintenance_work_mem=32MB"
+      - "-c"
+      - "effective_cache_size=128MB"
+      - "-c"
+      - "max_connections=50"
+      - "-c"
+      - "wal_buffers=2MB"
+    mem_limit: 256m
+    volumes:
+      - clean_savar_pg_data:/var/lib/postgresql/data
+      - ./migrations:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-clean_savar} -d ${POSTGRES_DB:-clean_savar}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    profiles: ["api"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: clean_savar_rust_api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-clean_savar}:${POSTGRES_PASSWORD:-clean_savar_dev_password}@postgres:5432/${POSTGRES_DB:-clean_savar}
+      API_BIND_ADDR: 0.0.0.0:8080
+      OTP_DEV_MODE: ${OTP_DEV_MODE:-true}
+      REQUIRE_AUTH: ${REQUIRE_AUTH:-false}
+    ports:
+      - "8080:8080"
+    mem_limit: 128m
+
+volumes:
+  clean_savar_pg_data:
