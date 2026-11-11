@@ -1,0 +1,22 @@
+services:
+  postgres:
+    image: postgis/postgis:16-3.4-alpine
+    container_name: clean_savar_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: clean_savar
+      POSTGRES_USER: clean_savar
+      POSTGRES_PASSWORD: clean_savar_dev_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+      - ./apps/api/migrations:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U clean_savar -d clean_savar"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  pg_data:
