@@ -1,455 +1,581 @@
 'use client';
 
+import React, { useEffect, useState } from 'react';
+import Image from 'next/image';
 import Link from 'next/link';
-import { useRef, useState, type ChangeEvent, type FormEvent } from 'react';
-import { Camera, CheckCircle2, LocateFixed, Upload } from 'lucide-react';
+import {
+  AlertTriangle,
+  Camera,
+  CheckCircle2,
+  Loader2,
+  LocateFixed,
+  ShieldCheck,
+  Trash2,
+  Upload,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { FormField } from '@/components/ui/form-field';
-import { NativeDialog } from '@/components/ui/native-dialog';
-import { createDumpReport, resolveWardByCoords, uploadDumpPhoto } from '@/lib/api-client';
-import { SAVAR_WARDS_SEED, SEVERITY_OPTIONS } from '@/lib/savar-data';
-import type { DumpReportRecord, ReportSeverity } from '@/lib/types';
-import { normalizeBdPhone } from '@/lib/utils';
+import { useCleanSavar } from '@/context/CleanSavarContext';
+import {
+  ApiError,
+  createDumpReport,
+  resolveWardByCoords,
+  uploadDumpPhoto,
+} from '@/lib/api-client';
+import { SAVAR_CENTER, SAVAR_WARDS_SEED, SEVERITY_OPTIONS } from '@/lib/savar-data';
+import type { CreateDumpReportResponse, ReportSeverity } from '@/lib/types';
+import { normalizeBdPhone, resolveMediaUrl, toBanglaDigits } from '@/lib/utils';
 
-type ReportErrors = Partial<Record<'title_bn' | 'landmark' | 'reporter_phone' | 'photo', string>>;
+interface UploadedPhotoItem {
+  url: string;
+  previewSrc: string;
+  name: string;
+}
 
-export default function ReportDumpPage() {
-  const formRef = useRef<HTMLFormElement>(null);
+export default function ReportPage() {
+  const { profile, wards, openAuthModal, announce, refreshPublicData } = useCleanSavar();
+  const wardList = wards.length > 0 ? wards : SAVAR_WARDS_SEED;
 
-  const [titleBn, setTitleBn] = useState('');
-  const [landmark, setLandmark] = useState('');
-  const [descriptionBn, setDescriptionBn] = useState('');
-  const [reporterName, setReporterName] = useState('');
-  const [reporterPhone, setReporterPhone] = useState('');
-  const [wardId, setWardId] = useState<number>(2);
+  const [reporterName, setReporterName] = useState<string>('');
+  const [reporterPhone, setReporterPhone] = useState<string>('');
+  const [wardId, setWardId] = useState<number>(SAVAR_WARDS_SEED[2]!.id);
+  const [titleBn, setTitleBn] = useState<string>('');
+  const [landmark, setLandmark] = useState<string>('');
+  const [descriptionBn, setDescriptionBn] = useState<string>('');
   const [severity, setSeverity] = useState<ReportSeverity>('high');
+
   const [coords, setCoords] = useState<{ lat: number; lng: number }>({
-    lat: 23.855,
-    lng: 90.255,
+    lat: SAVAR_WARDS_SEED[2]!.centroid_lat,
+    lng: SAVAR_WARDS_SEED[2]!.centroid_lng,
   });
-  const [gpsNotice, setGpsNotice] = useState<string>('সাভার বাজার পিন (ডিফল্ট) — GPS দিয়ে সঠিক করুন');
+  const [gpsStatus, setGpsStatus] = useState<string | null>(null);
+  const [isLocating, setIsLocating] = useState<boolean>(false);
 
-  const [photoFile, setPhotoFile] = useState<File | null>(null);
-  const [photoPreviewUrl, setPhotoPreviewUrl] = useState<string | null>(null);
-  const [errors, setErrors] = useState<ReportErrors>({});
+  const [photos, setPhotos] = useState<UploadedPhotoItem[]>([]);
+  const [isUploading, setIsUploading] = useState<boolean>(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+
   const [touched, setTouched] = useState<Record<string, boolean>>({});
-  const [submitting, setSubmitting] = useState(false);
-  const [createdReport, setCreatedReport] = useState<DumpReportRecord | null>(null);
+  const [submittedAttempt, setSubmittedAttempt] = useState<boolean>(false);
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [reportReceipt, setReportReceipt] = useState<CreateDumpReportResponse | null>(null);
 
-  const validateField = (field: keyof ReportErrors, value: string): string | undefined => {
-    if (field === 'title_bn' && value.trim().length < 4) {
-      return 'জায়গা ও ময়লার ধরন সম্পর্কে সংক্ষেপে লিখুন।';
+  useEffect(() => {
+    if (!profile) return;
+    setReporterName((prev) => prev || profile.user.full_name);
+    setReporterPhone((prev) => prev || profile.user.phone);
+    if (profile.user.ward_id) {
+      const matched = wardList.find((w) => w.id === profile.user.ward_id);
+      if (matched) {
+        setWardId(matched.id);
+        setCoords({ lat: matched.centroid_lat, lng: matched.centroid_lng });
+      }
     }
-    if (field === 'landmark' && value.trim().length < 3) {
-      return 'কাছাকাছি পরিচিত কোনো মোড় বা দোকানের নাম লিখুন।';
-    }
-    if (field === 'reporter_phone' && !normalizeBdPhone(value)) {
-      return '১১ সংখ্যার সঠিক মোবাইল নম্বর দিন (যেমন: 01711000000)।';
-    }
-    return undefined;
-  };
+  }, [profile, wardList]);
 
-  const handlePhotoChange = (e: ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
-      setErrors((prev) => ({ ...prev, photo: 'শুধুমাত্র JPG, PNG বা WebP ছবি নির্বাচন করুন।' }));
+  function handleWardSelect(nextWardId: number) {
+    setWardId(nextWardId);
+    const ward = wardList.find((w) => w.id === nextWardId);
+    if (ward) {
+      setCoords({ lat: ward.centroid_lat, lng: ward.centroid_lng });
+    }
+  }
+
+  function handleGpsLocate() {
+    if (typeof navigator === 'undefined' || !navigator.geolocation) {
+      setGpsStatus('ব্রাউজার GPS সমর্থন করে না; এলাকার তালিকা থেকে ওয়ার্ড নির্বাচন করুন।');
       return;
     }
-    if (file.size > 5 * 1024 * 1024) {
-      setErrors((prev) => ({ ...prev, photo: 'ছবির সাইজ ৫ মেগাবাইটের কম হতে হবে।' }));
-      return;
-    }
-    setPhotoFile(file);
-    setErrors((prev) => ({ ...prev, photo: undefined }));
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === 'string') setPhotoPreviewUrl(reader.result);
-    };
-    reader.readAsDataURL(file);
-  };
-
-  const handleGpsPin = () => {
-    if (!navigator.geolocation) {
-      setGpsNotice('ব্রাউজারে GPS পাওয়া যায়নি; তালিকা থেকে ওয়ার্ড বেছে নিন।');
-      return;
-    }
-    setGpsNotice('আপনার অবস্থান বের করা হচ্ছে...');
+    setIsLocating(true);
+    setGpsStatus(null);
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
         const lat = Number(pos.coords.latitude.toFixed(6));
         const lng = Number(pos.coords.longitude.toFixed(6));
         setCoords({ lat, lng });
-        const ward = await resolveWardByCoords(lat, lng);
-        setWardId(ward.ward_id);
-        setGpsNotice(`শনাক্তকৃত এলাকা: ${ward.name_bn} (${lat}, ${lng})`);
+        try {
+          const resolved = await resolveWardByCoords(lat, lng);
+          setWardId(resolved.ward_id);
+          setGpsStatus(`GPS অবস্থান পাওয়া গেছে: ${resolved.name_bn}`);
+        } catch {
+          setGpsStatus('GPS কোঅর্ডিনেট যুক্ত হয়েছে।');
+        } finally {
+          setIsLocating(false);
+        }
       },
       () => {
-        setGpsNotice('লোকেশন অনুমতি মেলেনি; ওয়ার্ড তালিকা থেকে এলাকা বেছে নিন।');
+        setIsLocating(false);
+        setGpsStatus('GPS পাওয়া যায়নি; নির্বাচিত ওয়ার্ডের কেন্দ্রবিন্দু ব্যবহার করা হবে।');
       },
-      { enableHighAccuracy: true, timeout: 6000 },
+      { enableHighAccuracy: true, timeout: 7000 },
     );
-  };
+  }
 
-  const handleWardSelect = (nextWardId: number) => {
-    setWardId(nextWardId);
-    const matched = SAVAR_WARDS_SEED.find((w) => w.id === nextWardId);
-    if (matched) {
-      setCoords({ lat: matched.centroid_lat, lng: matched.centroid_lng });
-    }
-  };
+  async function handlePhotoFiles(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? []);
+    e.target.value = '';
+    if (files.length === 0) return;
 
-  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const nextErrors: ReportErrors = {
-      title_bn: validateField('title_bn', titleBn),
-      landmark: validateField('landmark', landmark),
-      reporter_phone: validateField('reporter_phone', reporterPhone),
-    };
-    setErrors(nextErrors);
-    setTouched({ title_bn: true, landmark: true, reporter_phone: true });
-
-    const firstBad = (['title_bn', 'landmark', 'reporter_phone'] as const).find(
-      (k) => nextErrors[k],
-    );
-    if (firstBad) {
-      formRef.current?.querySelector<HTMLElement>(`#${firstBad}`)?.focus();
+    if (!profile) {
+      openAuthModal('ছবি আপলোড করতে অনুগ্রহ করে প্রথমে মোবাইল OTP দিয়ে লগইন করুন।');
       return;
     }
 
-    setSubmitting(true);
-    try {
-      const uploadedUrls: string[] = [];
-      if (photoFile) {
-        const url = await uploadDumpPhoto(photoFile);
-        if (url) uploadedUrls.push(url);
-      }
-
-      const res = await createDumpReport({
-        reporter_name: reporterName,
-        reporter_phone: reporterPhone,
-        ward_id: wardId,
-        title_bn: titleBn,
-        description_bn: descriptionBn,
-        landmark,
-        severity,
-        lat: coords.lat,
-        lng: coords.lng,
-        photo_urls: uploadedUrls,
-      });
-
-      setCreatedReport(res.data);
-      setTitleBn('');
-      setLandmark('');
-      setDescriptionBn('');
-      setPhotoFile(null);
-      setPhotoPreviewUrl(null);
-      setTouched({});
-      setErrors({});
-    } finally {
-      setSubmitting(false);
+    const remainingSlots = Math.max(0, 5 - photos.length);
+    const batch = files.slice(0, remainingSlots);
+    if (batch.length === 0) {
+      setUploadError('সর্বোচ্চ ৫টি ছবি যুক্ত করা যাবে।');
+      return;
     }
-  };
+
+    setUploadError(null);
+    setIsUploading(true);
+    try {
+      const uploadedItems: UploadedPhotoItem[] = [];
+      for (const file of batch) {
+        const res = await uploadDumpPhoto(file);
+        const safePreview = resolveMediaUrl(res.url) ?? res.url;
+        uploadedItems.push({ url: res.url, previewSrc: safePreview, name: file.name });
+      }
+      setPhotos((prev) => [...prev, ...uploadedItems]);
+      announce(`${toBanglaDigits(uploadedItems.length)}টি ছবি আপলোড সম্পন্ন হয়েছে।`);
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) {
+        openAuthModal('ছবি আপলোডের জন্য পুনরায় মোবাইল OTP লগইন করুন।');
+      } else {
+        setUploadError(
+          err instanceof ApiError
+            ? err.messageBn
+            : 'ছবি আপলোড করা যায়নি (JPEG/PNG/WebP, সর্বোচ্চ ৮ মেগাবাইট)।',
+        );
+      }
+    } finally {
+      setIsUploading(false);
+    }
+  }
+
+  const showErr = (k: string) => submittedAttempt || Boolean(touched[k]);
+  const titleError =
+    showErr('title') && titleBn.trim().length < 4
+      ? 'ময়লার স্তূপ সম্পর্কে সংক্ষিপ্ত শিরোনাম লিখুন।'
+      : undefined;
+  const landmarkError =
+    showErr('landmark') && landmark.trim().length < 3
+      ? 'সঠিক স্থান বা নিকটবর্তী পরিচিত স্থাপনা লিখুন।'
+      : undefined;
+  const descError =
+    showErr('description') && descriptionBn.trim().length < 8
+      ? 'অবস্থার সংক্ষিপ্ত বিবরণ লিখুন (কমপক্ষে ৮ অক্ষর)।'
+      : undefined;
+  const normalizedPhone = normalizeBdPhone(reporterPhone);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setSubmittedAttempt(true);
+    setSubmitError(null);
+
+    if (
+      titleBn.trim().length < 4 ||
+      landmark.trim().length < 3 ||
+      descriptionBn.trim().length < 8
+    ) {
+      return;
+    }
+
+    if (!profile) {
+      openAuthModal('অভিযোগ জমা দিতে মোবাইল OTP লগইন করুন।');
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const created = await createDumpReport({
+        reporter_name: reporterName.trim() || undefined,
+        reporter_phone: normalizedPhone || undefined,
+        ward_id: wardId,
+        title_bn: titleBn.trim(),
+        description_bn: descriptionBn.trim(),
+        landmark: landmark.trim(),
+        severity,
+        lat: coords.lat || SAVAR_CENTER.lat,
+        lng: coords.lng || SAVAR_CENTER.lng,
+        photo_urls: photos.map((p) => p.url),
+      });
+      setReportReceipt(created);
+      announce(`ময়লার রিপোর্ট জমা হয়েছে। কোড ${created.report.tracking_code}`);
+      await refreshPublicData();
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) {
+        openAuthModal('সেশন মেয়াদ শেষ — পুনরায় লগইন করুন।');
+        return;
+      }
+      setSubmitError(
+        err instanceof ApiError ? err.messageBn : 'রিপোর্ট জমা দেওয়া যায়নি।',
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6">
-      <div className="space-y-1.5">
-        <h1 id="main-content" tabIndex={-1} className="text-2xl font-bold text-[#0F172A]">
-          ময়লার ছবি তুলে জানান
-        </h1>
-        <p className="text-sm text-[#475569]">
-          রাস্তার পাশে, ড্রেনের মুখে বা খোলা জায়গায় জমে থাকা ময়লার ছবি ও লোকেশন পাঠালে দ্রুত
-          পরিচ্ছন্নতা টিম পাঠানো হবে।
-        </p>
+    <div className="space-y-8">
+      <div className="flex flex-col justify-between gap-4 border-b border-[#E2E8F0] pb-5 sm:flex-row sm:items-end">
+        <div className="space-y-1">
+          <div className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#15803D]">
+            <Camera className="h-4 w-4" aria-hidden="true" />
+            জিও-ট্যাগড নাগরিক অভিযোগ
+          </div>
+          <h1 className="text-2xl font-bold text-[#0F172A] sm:text-3xl">
+            অবৈধ ময়লার স্তূপ রিপোর্ট করুন
+          </h1>
+          <p className="max-w-2xl text-sm text-[#475569]">
+            সর্বোচ্চ ৫টি ছবি ও জিপিএস অবস্থানসহ অভিযোগ জমা দিন। আপলোডকৃত ছবির EXIF গোপনীয়তা স্বয়ংক্রিয়ভাবে মুছে ফেলা হয়।
+          </p>
+        </div>
+        <Link
+          href="/track"
+          className="inline-flex min-h-10 items-center rounded-md border border-[#CBD5E1] bg-white px-4 text-sm font-medium text-[#0F172A] hover:bg-[#F8FAFC]"
+        >
+          অভিযোগ ট্র্যাক করুন
+        </Link>
       </div>
 
-      <form ref={formRef} onSubmit={handleSubmit} noValidate className="cs-card space-y-6 p-5 sm:p-6">
-        {/* Photo Capture Input */}
-        <div className="space-y-2">
-          <label htmlFor="dump-photo" className="block text-sm font-semibold text-[#0F172A]">
-            ময়লার স্তূপের ছবি (ক্যামেরা বা গ্যালারি)
-          </label>
-          <p className="text-xs text-[#475569]">
-            সর্বোচ্চ ৫ মেগাবাইট (JPG, PNG বা WebP) — ফোনের ক্যামেরা দিয়ে সরাসরি তুলতে পারেন
+      {!profile ? (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-[#BBF7D0] bg-[#F0FDF4] px-4 py-3 text-sm text-[#14532D]">
+          <p className="flex items-center gap-2 font-medium">
+            <ShieldCheck className="h-4 w-4 shrink-0 text-[#15803D]" aria-hidden="true" />
+            ছবি আপলোড ও রিপোর্ট জমা দেওয়ার জন্য মোবাইল OTP লগইন প্রয়োজন।
           </p>
-
-          <label
-            htmlFor="dump-photo"
-            className="flex min-h-36 cursor-pointer flex-col items-center justify-center gap-2 rounded-md border border-dashed border-[#94A3B8] bg-[#F8FAFC] p-4 text-center hover:border-[#15803D] hover:bg-[#F0FDF4]"
+          <Button
+            type="button"
+            size="sm"
+            onClick={() => openAuthModal('অভিযোগ জমা দিতে মোবাইল OTP যাচাই করুন।')}
           >
-            {photoPreviewUrl ? (
-              <div className="w-full space-y-2">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={photoPreviewUrl}
-                  alt="আপলোড করা ময়লার স্তূপের প্রিভিউ"
-                  className="mx-auto max-h-52 rounded border border-[#E2E8F0] object-cover"
-                />
-                <span className="font-metric block text-xs text-[#14532D]">
-                  {photoFile?.name} ({Math.round((photoFile?.size ?? 0) / 1024)} KB)
-                </span>
-              </div>
-            ) : (
-              <>
-                <span className="flex h-11 w-11 items-center justify-center rounded-full border border-[#BBF7D0] bg-white text-[#15803D]">
-                  <Upload className="h-5 w-5" aria-hidden="true" />
-                </span>
-                <span className="text-sm font-semibold text-[#0F172A]">
-                  ছবি তুলুন বা ফাইল বেছে নিন
-                </span>
-              </>
-            )}
-          </label>
-          <input
-            id="dump-photo"
-            name="photo"
-            type="file"
-            accept="image/jpeg,image/png,image/webp"
-            capture="environment"
-            onChange={handlePhotoChange}
-            className="visually-hidden"
-          />
-          {errors.photo ? (
-            <p className="text-xs font-medium text-[#DC2626]">{errors.photo}</p>
-          ) : null}
+            OTP লগইন করুন
+          </Button>
         </div>
+      ) : null}
 
-        {/* GPS Pin + Ward */}
-        <div className="space-y-3 rounded-md border border-[#E2E8F0] bg-[#F8FAFC] p-4">
-          <div className="flex flex-wrap items-center justify-between gap-2">
+      {reportReceipt ? (
+        <section
+          aria-labelledby="report-receipt-title"
+          className="cs-card max-w-2xl space-y-4 border-[#BBF7D0] bg-[#F0FDF4]/60 p-6"
+        >
+          <div className="flex items-start gap-3">
+            <CheckCircle2 className="mt-0.5 h-6 w-6 shrink-0 text-[#15803D]" aria-hidden="true" />
             <div>
-              <span className="block text-sm font-semibold text-[#0F172A]">জিপিএস লোকেশন ও ওয়ার্ড</span>
-              <span className="font-mixed text-xs text-[#475569]">{gpsNotice}</span>
+              <h2 id="report-receipt-title" className="text-lg font-bold text-[#0F172A]">
+                অভিযোগ সফলভাবে নথিভুক্ত হয়েছে!
+              </h2>
+              <p className="mt-0.5 text-sm text-[#334155]">
+                ট্র্যাকিং কোড:{' '}
+                <strong className="font-metric rounded bg-white px-2 py-0.5 text-[#14532D]">
+                  {reportReceipt.report.tracking_code}
+                </strong>
+              </p>
             </div>
-            <Button type="button" variant="secondary" size="sm" onClick={handleGpsPin}>
-              <LocateFixed className="h-4 w-4 text-[#15803D]" aria-hidden="true" />
-              <span>জিপিএস পিন নিন</span>
+          </div>
+
+          {reportReceipt.is_duplicate ? (
+            <div className="flex items-start gap-2 rounded-md border border-[#FDE68A] bg-[#FFFBEB] p-3 text-xs text-[#92400E]">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+              <p>
+                কাছাকাছি এলাকায় (প্রায়{' '}
+                <strong className="font-metric">
+                  {toBanglaDigits(Math.round(reportReceipt.duplicate_distance_meters ?? 25))}
+                </strong>{' '}
+                মিটারের মধ্যে) পূর্বের একটি সক্রিয় অভিযোগ রয়েছে। আপনার রিপোর্টটি অগ্রাধিকার বৃদ্ধির জন্য সেটির সাথে যুক্ত করা হয়েছে।
+              </p>
+            </div>
+          ) : null}
+
+          <div className="flex flex-wrap gap-3">
+            <Link
+              href={`/track?code=${encodeURIComponent(reportReceipt.report.tracking_code)}`}
+              className="inline-flex min-h-11 items-center rounded-md bg-[#15803D] px-4 text-sm font-semibold text-white hover:bg-[#14532D]"
+            >
+              অভিযোগের অগ্রগতি দেখুন
+            </Link>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => {
+                setReportReceipt(null);
+                setTitleBn('');
+                setLandmark('');
+                setDescriptionBn('');
+                setPhotos([]);
+                setSubmittedAttempt(false);
+                setTouched({});
+              }}
+            >
+              নতুন রিপোর্ট জমা দিন
             </Button>
           </div>
+        </section>
+      ) : (
+        <form onSubmit={handleSubmit} noValidate className="cs-card max-w-3xl space-y-5 p-5 sm:p-6">
+          {submitError ? (
+            <div
+              role="alert"
+              className="rounded-md border border-[#FECACA] bg-[#FEF2F2] px-4 py-3 text-sm font-medium text-[#B91C1C]"
+            >
+              {submitError}
+            </div>
+          ) : null}
 
-          <FormField id="report-ward" label="সাভার পৌরসভা ওয়ার্ড" required>
-            {(props) => (
-              <select
-                {...props}
-                value={wardId}
-                onChange={(e) => handleWardSelect(Number(e.target.value))}
-                className="cs-select bg-white"
-              >
-                {SAVAR_WARDS_SEED.map((w) => (
-                  <option key={w.id} value={w.id}>
-                    {w.name_bn}
-                  </option>
-                ))}
-              </select>
-            )}
-          </FormField>
-        </div>
-
-        <FormField
-          id="title_bn"
-          label="সংক্ষিপ্ত শিরোনাম"
-          required
-          hint="যেমন: নয়া বাজার গলির মুখে খোলা ময়লার স্তূপ"
-          error={errors.title_bn}
-        >
-          {(props) => (
-            <input
-              {...props}
-              type="text"
-              required
-              value={titleBn}
-              onChange={(e) => {
-                setTitleBn(e.target.value);
-                if (touched.title_bn) {
-                  setErrors((prev) => ({
-                    ...prev,
-                    title_bn: validateField('title_bn', e.target.value),
-                  }));
-                }
-              }}
-              onBlur={(e) => {
-                setTouched((prev) => ({ ...prev, title_bn: true }));
-                setErrors((prev) => ({
-                  ...prev,
-                  title_bn: validateField('title_bn', e.target.value),
-                }));
-              }}
-              className="cs-input"
-            />
-          )}
-        </FormField>
-
-        <FormField
-          id="landmark"
-          label="কাছাকাছি পরিচিত জায়গা"
-          required
-          hint="যেমন: সাভার বাজার ওভারব্রিজের উত্তর পাশ"
-          error={errors.landmark}
-        >
-          {(props) => (
-            <input
-              {...props}
-              type="text"
-              required
-              value={landmark}
-              onChange={(e) => {
-                setLandmark(e.target.value);
-                if (touched.landmark) {
-                  setErrors((prev) => ({
-                    ...prev,
-                    landmark: validateField('landmark', e.target.value),
-                  }));
-                }
-              }}
-              onBlur={(e) => {
-                setTouched((prev) => ({ ...prev, landmark: true }));
-                setErrors((prev) => ({
-                  ...prev,
-                  landmark: validateField('landmark', e.target.value),
-                }));
-              }}
-              className="cs-input"
-            />
-          )}
-        </FormField>
-
-        {/* Severity Radios */}
-        <fieldset className="space-y-2.5">
-          <legend className="text-sm font-semibold text-[#0F172A]">জরুরি মাত্রা</legend>
-          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
-            {SEVERITY_OPTIONS.map((opt) => (
-              <label
-                key={opt.value}
-                className="flex min-h-12 cursor-pointer items-start gap-2.5 rounded-md border border-[#E2E8F0] bg-white p-3 has-[:checked]:border-[#15803D] has-[:checked]:bg-[#F0FDF4]"
-              >
+          <div className="grid gap-4 sm:grid-cols-2">
+            <FormField id="rep-name" label="রিপোর্টকারীর নাম">
+              {(a11y) => (
                 <input
-                  type="radio"
-                  name="severity"
-                  value={opt.value}
-                  checked={severity === opt.value}
-                  onChange={() => setSeverity(opt.value)}
-                  className="mt-1 h-4 w-4 accent-[#15803D]"
+                  {...a11y}
+                  type="text"
+                  value={reporterName}
+                  onChange={(e) => setReporterName(e.target.value)}
+                  placeholder="আপনার নাম"
+                  className="cs-input"
                 />
-                <span>
-                  <span className="block text-sm font-semibold text-[#0F172A]">{opt.label}</span>
-                  <span className="block text-xs text-[#475569]">{opt.hint}</span>
-                </span>
-              </label>
-            ))}
+              )}
+            </FormField>
+
+            <FormField id="rep-phone" label="মোবাইল নম্বর" hint="আপডেট জানাতে ব্যবহৃত হবে">
+              {(a11y) => (
+                <input
+                  {...a11y}
+                  type="tel"
+                  inputMode="tel"
+                  value={reporterPhone}
+                  onChange={(e) => setReporterPhone(e.target.value)}
+                  placeholder="01715-883210"
+                  className="cs-input font-metric"
+                />
+              )}
+            </FormField>
           </div>
-        </fieldset>
 
-        <FormField id="description_bn" label="বিস্তারিত বিবরণ (ঐচ্ছিক)" hint="কতদিন ধরে জমে আছে বা কী ধরনের আবর্জনা">
-          {(props) => (
-            <textarea
-              {...props}
-              value={descriptionBn}
-              onChange={(e) => setDescriptionBn(e.target.value)}
-              className="cs-textarea"
-            />
-          )}
-        </FormField>
+          <div className="space-y-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <label htmlFor="rep-ward" className="text-sm font-medium text-[#0F172A]">
+                সাভার ওয়ার্ড বা ইউনিয়ন ও GPS কোঅর্ডিনেট <span className="text-[#B91C1C]">*</span>
+              </label>
+              <Button
+                type="button"
+                variant="tint"
+                size="sm"
+                onClick={handleGpsLocate}
+                disabled={isLocating}
+              >
+                {isLocating ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+                ) : (
+                  <LocateFixed className="h-3.5 w-3.5" aria-hidden="true" />
+                )}
+                বর্তমান GPS নিন
+              </Button>
+            </div>
+            <select
+              id="rep-ward"
+              value={wardId}
+              onChange={(e) => handleWardSelect(Number(e.target.value))}
+              className="cs-input"
+            >
+              {wardList.map((w) => (
+                <option key={w.id} value={w.id}>
+                  {w.name_bn}
+                </option>
+              ))}
+            </select>
+            <p className="font-metric text-xs text-[#475569]">
+              অবস্থান: {coords.lat.toFixed(4)}, {coords.lng.toFixed(4)}
+              {gpsStatus ? ` — ${gpsStatus}` : ''}
+            </p>
+          </div>
 
-        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-          <FormField id="reporter_name" label="আপনার নাম (ঐচ্ছিক)">
-            {(props) => (
+          <FormField
+            id="rep-title"
+            label="সমস্যার শিরোনাম"
+            required
+            hint="সংক্ষেপে লিখুন (যেমন: থানা রোড কাঁচাবাজার মোড়ে স্তূপ)"
+            error={titleError}
+          >
+            {(a11y) => (
               <input
-                {...props}
+                {...a11y}
                 type="text"
-                autoComplete="name"
-                value={reporterName}
-                onChange={(e) => setReporterName(e.target.value)}
+                required
+                minLength={4}
+                value={titleBn}
+                data-touched={touched.title ? 'true' : 'false'}
+                onChange={(e) => setTitleBn(e.target.value)}
+                onBlur={() => setTouched((prev) => ({ ...prev, title: true }))}
                 className="cs-input"
               />
             )}
           </FormField>
 
           <FormField
-            id="reporter_phone"
-            label="মোবাইল নম্বর"
+            id="rep-landmark"
+            label="নির্দিষ্ট স্থান বা ল্যান্ডমার্ক"
             required
-            hint="সমাধান হলে আপডেট জানাতে, যেমন: 01711000000"
-            error={errors.reporter_phone}
+            hint="পরিচ্ছন্নতা টিমের খুঁজে পাওয়ার জন্য নিকটবর্তী পরিচিত জায়গা"
+            error={landmarkError}
           >
-            {(props) => (
+            {(a11y) => (
               <input
-                {...props}
-                type="tel"
-                inputMode="tel"
-                autoComplete="tel"
+                {...a11y}
+                type="text"
                 required
-                value={reporterPhone}
-                onChange={(e) => {
-                  setReporterPhone(e.target.value);
-                  if (touched.reporter_phone) {
-                    setErrors((prev) => ({
-                      ...prev,
-                      reporter_phone: validateField('reporter_phone', e.target.value),
-                    }));
-                  }
-                }}
-                onBlur={(e) => {
-                  setTouched((prev) => ({ ...prev, reporter_phone: true }));
-                  setErrors((prev) => ({
-                    ...prev,
-                    reporter_phone: validateField('reporter_phone', e.target.value),
-                  }));
-                }}
-                className="cs-input font-metric"
+                minLength={3}
+                value={landmark}
+                data-touched={touched.landmark ? 'true' : 'false'}
+                onChange={(e) => setLandmark(e.target.value)}
+                onBlur={() => setTouched((prev) => ({ ...prev, landmark: true }))}
+                className="cs-input"
               />
             )}
           </FormField>
-        </div>
 
-        <div className="flex justify-end border-t border-[#E2E8F0] pt-4">
-          <Button type="submit" variant="primary" size="lg" disabled={submitting}>
-            <Camera className="h-5 w-5" aria-hidden="true" />
-            <span>{submitting ? 'জমা হচ্ছে...' : 'রিপোর্ট পাঠান'}</span>
-          </Button>
-        </div>
-      </form>
+          <fieldset className="space-y-1.5">
+            <legend className="text-sm font-medium text-[#0F172A]">জরুরি মাত্রা</legend>
+            <div className="grid gap-2 sm:grid-cols-3">
+              {SEVERITY_OPTIONS.map((opt) => {
+                const selected = severity === opt.value;
+                return (
+                  <label
+                    key={opt.value}
+                    className={`flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-xs font-semibold transition-colors ${
+                      selected
+                        ? 'border-[#15803D] bg-[#F0FDF4] text-[#14532D]'
+                        : 'border-[#CBD5E1] bg-white text-[#475569]'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="report-severity"
+                      value={opt.value}
+                      checked={selected}
+                      onChange={() => setSeverity(opt.value)}
+                      className="accent-[#15803D]"
+                    />
+                    {opt.label}
+                  </label>
+                );
+              })}
+            </div>
+          </fieldset>
 
-      <NativeDialog
-        open={Boolean(createdReport)}
-        onClose={() => setCreatedReport(null)}
-        title="ময়লার রিপোর্ট জমা হয়েছে"
-      >
-        {createdReport ? (
-          <div className="space-y-4">
-            <div className="flex items-start gap-3 rounded-md border border-[#BBF7D0] bg-[#F0FDF4] p-4">
-              <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-[#15803D]" aria-hidden="true" />
-              <div className="space-y-1 text-sm">
-                <p className="font-semibold text-[#14532D]">
-                  ধন্যবাদ! আপনার রিপোর্টটি সাভার পৌরসভা টিমের কাছে পৌঁছে গেছে।
-                </p>
-                <p className="text-[#475569]">
-                  রিপোর্ট কোড:{' '}
-                  <strong lang="en" className="font-metric text-base text-[#0F172A]">
-                    {createdReport.tracking_code}
-                  </strong>
+          <FormField
+            id="rep-desc"
+            label="বিস্তারিত বিবরণ"
+            required
+            hint="কতদিন ধরে জমা আছে এবং কী ধরনের আবর্জনা (কমপক্ষে ৮ অক্ষর)"
+            error={descError}
+          >
+            {(a11y) => (
+              <textarea
+                {...a11y}
+                rows={3}
+                required
+                minLength={8}
+                value={descriptionBn}
+                data-touched={touched.description ? 'true' : 'false'}
+                onChange={(e) => setDescriptionBn(e.target.value)}
+                onBlur={() => setTouched((prev) => ({ ...prev, description: true }))}
+                className="cs-input min-h-24 py-2"
+              />
+            )}
+          </FormField>
+
+          {/* Multi-photo Upload (max 5 photos) */}
+          <div className="space-y-2.5 rounded-md border border-[#E2E8F0] bg-[#F8FAFC] p-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <label htmlFor="rep-photos" className="text-sm font-semibold text-[#0F172A]">
+                  ঘটনাস্থলের ছবি আপলোড ({toBanglaDigits(photos.length)}/৫)
+                </label>
+                <p className="text-xs text-[#475569]">
+                  JPEG, PNG বা WebP · প্রতি ছবি সর্বোচ্চ ৮ মেগাবাইট
                 </p>
               </div>
+
+              <label
+                htmlFor="rep-photos"
+                className={`inline-flex min-h-10 cursor-pointer items-center gap-2 rounded-md border border-[#15803D] bg-white px-3.5 text-xs font-semibold text-[#14532D] hover:bg-[#F0FDF4] ${
+                  photos.length >= 5 || isUploading ? 'pointer-events-none opacity-50' : ''
+                }`}
+              >
+                {isUploading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                ) : (
+                  <Upload className="h-4 w-4" aria-hidden="true" />
+                )}
+                {isUploading ? 'আপলোড হচ্ছে...' : 'ছবি যুক্ত করুন'}
+              </label>
+              <input
+                id="rep-photos"
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                multiple
+                onChange={handlePhotoFiles}
+                className="sr-only"
+              />
             </div>
 
-            <div className="flex flex-wrap justify-end gap-2">
-              <Button
-                type="button"
-                variant="secondary"
-                autoFocus
-                onClick={() => setCreatedReport(null)}
-              >
-                বন্ধ করুন
-              </Button>
-              <Link
-                href={`/track?q=${encodeURIComponent(createdReport.tracking_code)}`}
-                className="inline-flex min-h-11 items-center justify-center rounded-md border border-[#15803D] bg-[#15803D] px-4 py-2 text-sm font-semibold text-white hover:bg-[#14532D]"
-              >
-                অগ্রগতি দেখুন
-              </Link>
-            </div>
+            {uploadError ? (
+              <p role="alert" className="text-xs font-medium text-[#B91C1C]">
+                {uploadError}
+              </p>
+            ) : null}
+
+            {photos.length > 0 ? (
+              <div className="grid grid-cols-2 gap-3 pt-1 sm:grid-cols-5">
+                {photos.map((photo, idx) => (
+                  <div
+                    key={photo.url}
+                    className="group relative overflow-hidden rounded-md border border-[#CBD5E1] bg-white"
+                  >
+                    <Image
+                      src={photo.previewSrc}
+                      alt={`আপলোডকৃত ময়লার ছবি ${toBanglaDigits(idx + 1)}`}
+                      width={160}
+                      height={96}
+                      unoptimized
+                      className="h-24 w-full object-cover"
+                    />
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setPhotos((prev) => prev.filter((item) => item.url !== photo.url))
+                      }
+                      aria-label={`ছবি ${toBanglaDigits(idx + 1)} মুছে ফেলুন`}
+                      className="absolute top-1 right-1 inline-flex h-7 w-7 items-center justify-center rounded-full bg-[#0F172A]/80 text-white hover:bg-[#B91C1C]"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : null}
           </div>
-        ) : null}
-      </NativeDialog>
+
+          <Button
+            type="submit"
+            size="lg"
+            className="w-full"
+            disabled={isSubmitting || isUploading}
+          >
+            {isSubmitting ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                রিপোর্ট জমা হচ্ছে...
+              </>
+            ) : (
+              'অভিযোগ জমা দিন'
+            )}
+          </Button>
+        </form>
+      )}
     </div>
   );
 }

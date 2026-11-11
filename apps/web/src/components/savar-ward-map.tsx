@@ -1,42 +1,48 @@
 'use client';
 
+import React from 'react';
 import type {
   CollectorVehicleRecord,
   DumpReportRecord,
   PickupRequestRecord,
+  PublicHotspotRecord,
   WardSummary,
 } from '@/lib/types';
+import { toBanglaDigits } from '@/lib/utils';
 
 interface SavarWardMapProps {
   wards: WardSummary[];
-  pickups: PickupRequestRecord[];
-  reports: DumpReportRecord[];
-  vehicles: CollectorVehicleRecord[];
+  pickups?: PickupRequestRecord[];
+  reports?: (DumpReportRecord | PublicHotspotRecord)[];
+  vehicles?: CollectorVehicleRecord[];
   selectedWardId: number | null;
   onSelectWard: (wardId: number | null) => void;
 }
 
-const MIN_LAT = 23.838;
-const MAX_LAT = 23.894;
-const MIN_LNG = 90.240;
-const MAX_LNG = 90.284;
+const MIN_LAT = 23.824;
+const MAX_LAT = 23.884;
+const MIN_LNG = 90.242;
+const MAX_LNG = 90.278;
 
 function project(lat: number, lng: number): { x: number; y: number } {
   const clampedLng = Math.min(MAX_LNG, Math.max(MIN_LNG, lng));
   const clampedLat = Math.min(MAX_LAT, Math.max(MIN_LAT, lat));
-  const x = ((clampedLng - MIN_LNG) / (MAX_LNG - MIN_LNG)) * 560 + 20;
-  const y = 340 - ((clampedLat - MIN_LAT) / (MAX_LAT - MIN_LAT)) * 300;
+  const x = ((clampedLng - MIN_LNG) / (MAX_LNG - MIN_LNG)) * 540 + 30;
+  const y = 330 - ((clampedLat - MIN_LAT) / (MAX_LAT - MIN_LAT)) * 290;
   return { x, y };
 }
 
 export function SavarWardMap({
   wards,
-  pickups,
-  reports,
-  vehicles,
+  pickups = [],
+  reports = [],
+  vehicles = [],
   selectedWardId,
   onSelectWard,
 }: SavarWardMapProps) {
+  const pourashavaWards = wards.filter((w) => w.id <= 9);
+  const unionZones = wards.filter((w) => w.id > 100);
+
   return (
     <section aria-labelledby="savar-spatial-map-heading" className="cs-card p-4 sm:p-5">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
@@ -45,7 +51,7 @@ export function SavarWardMap({
             সাভার পৌরসভা ওয়ার্ড ম্যাপ (PostGIS কোঅর্ডিনেট)
           </h2>
           <p className="text-xs text-[#475569]">
-            যেকোনো ওয়ার্ডে ক্লিক করে সেই এলাকার পিকআপ ও ময়লার রিপোর্ট আলাদা করুন
+            যেকোনো ওয়ার্ড বা ইউনিয়নে ক্লিক করে সেই এলাকার পিকআপ ও ময়লার রিপোর্ট আলাদা করুন
           </p>
         </div>
 
@@ -72,7 +78,6 @@ export function SavarWardMap({
           viewBox="0 0 600 360"
           className="h-auto w-full"
         >
-          {/* Subtle coordinate grid */}
           {[80, 160, 240, 320].map((y) => (
             <line key={y} x1="16" y1={y} x2="584" y2={y} stroke="#E2E8F0" strokeWidth="1" />
           ))}
@@ -80,7 +85,6 @@ export function SavarWardMap({
             <line key={x} x1={x} y1="16" x2={x} y2="344" stroke="#E2E8F0" strokeWidth="1" />
           ))}
 
-          {/* Dhaka-Aricha Highway reference line */}
           <path
             d="M 190 345 L 250 220 L 310 125 L 405 18"
             fill="none"
@@ -88,27 +92,36 @@ export function SavarWardMap({
             strokeWidth="6"
             strokeLinecap="round"
           />
-          <text x="315" y="110" fill="#64748B" fontSize="10" fontFamily="Inter, sans-serif">
+          <text x="315" y="110" fill="#475569" fontSize="10" fontFamily="Inter, sans-serif">
             Dhaka-Aricha Hwy (N5)
           </text>
 
-          {/* Ward zone hubs */}
-          {wards.map((ward) => {
+          {pourashavaWards.map((ward) => {
             const pt = project(ward.centroid_lat, ward.centroid_lng);
             const selected = selectedWardId === ward.id;
             return (
               <g
                 key={ward.id}
+                role="button"
+                tabIndex={0}
+                aria-pressed={selected}
+                aria-label={`${ward.name_bn}`}
                 onClick={() => onSelectWard(selected ? null : ward.id)}
-                className="cursor-pointer"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    onSelectWard(selected ? null : ward.id);
+                  }
+                }}
+                className="cursor-pointer focus:outline-none"
               >
                 <circle
                   cx={pt.x}
                   cy={pt.y}
-                  r={selected ? 26 : 22}
+                  r={selected ? 25 : 21}
                   fill={selected ? '#DCFCE7' : '#FFFFFF'}
-                  stroke={selected ? '#15803D' : '#CBD5E1'}
-                  strokeWidth={selected ? 2 : 1}
+                  stroke={selected ? '#15803D' : '#94A3B8'}
+                  strokeWidth={selected ? 2.5 : 1.25}
                 />
                 <text
                   x={pt.x}
@@ -119,22 +132,21 @@ export function SavarWardMap({
                   fontWeight="700"
                   fontFamily="Inter, sans-serif"
                 >
-                  W{ward.id}
+                  W{ward.ward_number ?? ward.id}
                 </text>
                 <text
                   x={pt.x}
                   y={pt.y + 11}
                   textAnchor="middle"
                   fill="#475569"
-                  fontSize="9"
+                  fontSize="8.5"
                 >
-                  {ward.zone_label_bn}
+                  {toBanglaDigits(ward.pending_pickups + ward.open_reports)} সক্রিয়
                 </text>
               </g>
             );
           })}
 
-          {/* Pending Pickup Requests */}
           {pickups
             .filter((p) => p.status !== 'collected' && p.status !== 'cancelled')
             .map((p) => {
@@ -154,7 +166,6 @@ export function SavarWardMap({
               );
             })}
 
-          {/* Open Dump Reports */}
           {reports
             .filter((r) => r.status !== 'cleared' && r.status !== 'rejected')
             .map((r) => {
@@ -174,7 +185,6 @@ export function SavarWardMap({
               );
             })}
 
-          {/* Collector Vehicles */}
           {vehicles.map((v) => {
             const pt = project(v.lat, v.lng);
             return (
@@ -194,6 +204,39 @@ export function SavarWardMap({
             );
           })}
         </svg>
+      </div>
+
+      {/* Surrounding Upazila Unions + Reset Filter Chips */}
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <span className="text-xs font-semibold text-[#475569]">ইউনিয়ন ও ফিল্টার:</span>
+        <button
+          type="button"
+          onClick={() => onSelectWard(null)}
+          className={`rounded border px-2.5 py-1 text-xs font-medium transition-colors ${
+            selectedWardId === null
+              ? 'border-[#15803D] bg-[#F0FDF4] text-[#14532D]'
+              : 'border-[#CBD5E1] bg-white text-[#475569] hover:bg-[#F8FAFC]'
+          }`}
+        >
+          সকল এলাকা ({toBanglaDigits(wards.length)}টি)
+        </button>
+        {unionZones.map((u) => {
+          const selected = selectedWardId === u.id;
+          return (
+            <button
+              key={u.id}
+              type="button"
+              onClick={() => onSelectWard(selected ? null : u.id)}
+              className={`rounded border px-2.5 py-1 text-xs font-medium transition-colors ${
+                selected
+                  ? 'border-[#15803D] bg-[#F0FDF4] text-[#14532D]'
+                  : 'border-[#CBD5E1] bg-white text-[#475569] hover:bg-[#F8FAFC]'
+              }`}
+            >
+              {u.zone_label_bn}
+            </button>
+          );
+        })}
       </div>
     </section>
   );

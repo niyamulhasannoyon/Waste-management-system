@@ -1,275 +1,300 @@
 @import "tailwindcss";
 
 :root {
-  --bg-page: #f8fafc;
-  --bg-surface: #ffffff;
-  --border-subtle: #e2e8f0;
-  --brand-primary: #15803d;
-  --brand-deep: #14532d;
-  --brand-tint: #f0fdf4;
-  --text-primary: #0f172a;
-  --text-secondary: #475569;
-  --status-warning: #d97706;
-  --status-danger: #dc2626;
-  --status-info: #0284c7;
+  --cs-bg: #f8fafc;
+  --cs-surface: #ffffff;
+  --cs-ink: #0f172a;
+  --cs-muted: #475569;
+  --cs-primary: #15803d;
+  --cs-primary-dark: #14532d;
+  --cs-primary-tint: #f0fdf4;
+  --cs-border: #e2e8f0;
+  --cs-border-strong: #cbd5e1;
+  --cs-danger: #b91c1c;
+  --cs-warning: #b45309;
+  --font-sans: var(--font-hind-siliguri), var(--font-inter), system-ui, -apple-system, sans-serif;
 }
 
 @layer base {
   html {
-    background-color: var(--bg-page);
-    color: var(--text-primary);
-    font-family: var(--font-hind-siliguri), var(--font-inter), system-ui, sans-serif;
-    line-height: 1.6;
-    scrollbar-gutter: stable;
     scroll-behavior: smooth;
-    scroll-padding-top: 5.5rem;
-    color-scheme: light;
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    html {
-      scroll-behavior: auto;
-    }
+    background-color: var(--cs-bg);
+    color: var(--cs-ink);
   }
 
   body {
-    background-color: var(--bg-page);
-    color: var(--text-primary);
-    min-block-size: 100dvh;
-    text-align: start;
-    overflow-wrap: break-word;
-    font-size-adjust: from-font;
+    font-family: var(--font-sans);
+    background-color: var(--cs-bg);
+    color: var(--cs-ink);
+    line-height: 1.65;
     -webkit-font-smoothing: antialiased;
   }
 
-  @supports not (font-size-adjust: from-font) {
-    body {
-      line-height: 1.65;
-    }
-  }
-
-  h1,
-  h2,
-  h3,
-  th {
-    text-wrap: balance;
-  }
-
-  p {
-    text-wrap: pretty;
-  }
-
-  :where(a:any-link, button, input, select, textarea, summary, [tabindex]):focus-visible {
-    outline: 2px solid var(--brand-primary);
+  :focus-visible {
+    outline: 2px solid var(--cs-primary);
     outline-offset: 2px;
   }
 }
 
-/* Mixed Bangla + English/Numeric stabilization (visually-stable-mixed-fonts) */
-.font-mixed {
-  font-size-adjust: from-font;
-}
-
-@supports not (font-size-adjust: from-font) {
-  .font-mixed {
-    line-height: 1.65;
-  }
-}
-
-.font-latin,
 .font-metric {
   font-family: var(--font-inter), var(--font-hind-siliguri), system-ui, sans-serif;
   font-variant-numeric: tabular-nums;
-  font-size-adjust: from-font;
 }
 
-.cs-field {
-  font: inherit;
-  font-size: max(1rem, 1em);
-  min-block-size: 48px;
-}
-
-.cs-field:is(:user-invalid, .user-invalid-fallback) {
-  border-color: #b91c1c;
-  background-color: #fef2f2;
-}
-
-dialog:modal {
-  overscroll-behavior: contain;
-}
-
-dialog::backdrop {
-  overflow: hidden;
-  overscroll-behavior: contain;
-  background: rgb(15 23 42 / 0.42);
-}
-
-/* Accessible visually hidden utility with skip-link :focus-within opt-out */
-.visually-hidden:where(:not(:focus-within, :active)) {
-  position: absolute !important;
-  clip-path: inset(50%) !important;
-  overflow: hidden !important;
-  width: 1px !important;
-  height: 1px !important;
-  margin: -1px !important;
-  padding: 0 !important;
-  border: 0 !important;
-  white-space: nowrap !important;
-}
-
-.skip-link:focus {
+.cs-skip-link {
   position: fixed;
-  inset-block-start: 0.75rem;
-  inset-inline-start: 0.75rem;
-  z-index: 60;
-  background: var(--brand-primary);
+  top: -100%;
+  left: 1rem;
+  z-index: 100;
+  border-radius: 0.375rem;
+  background-color: var(--cs-primary-dark);
   color: #ffffff;
   padding: 0.625rem 1rem;
-  border-radius: 0.375rem;
+  font-size: 0.875rem;
   font-weight: 600;
+  transition: top 120ms ease;
 }
 
-/* Crisp flat card & control surfaces */
+.cs-skip-link:focus {
+  top: 1rem;
+}
+
 .cs-card {
-  background-color: var(--bg-surface);
-  border: 1px solid var(--border-subtle);
+  background-color: var(--cs-surface);
+  border: 1px solid var(--cs-border);
   border-radius: 0.5rem;
+  box-shadow: 0 1px 2px 0 rgb(15 23 42 / 0.04);
 }
 
-/* Form controls: minimum 48px target height & >=16px text to prevent mobile zoom */
-.cs-input,
-.cs-select,
-.cs-textarea {
-  font: inherit;
-  font-size: max(1rem, 1em);
-  min-block-size: 48px;
-  border: 1px solid #cbd5e1;
-  border-radius: 0.375rem;
-  background-color: #ffffff;
-  color: var(--text-primary);
-  padding: 0.625rem 0.75rem;
-  inline-size: 100%;
-  box-sizing: border-box;
-}
-
-.cs-textarea {
-  min-block-size: 96px;
-}
-
-@media (pointer: coarse) {
-  .cs-input,
-  .cs-select {
-    min-block-size: 52px;
-  }
-}
-
-/* Defer validation styling until user has interacted & committed (validate-input-after-interaction) */
-:is(.cs-input, .cs-select, .cs-textarea):is(:user-invalid, .user-invalid-fallback),
-:is(.cs-input, .cs-select, .cs-textarea)[aria-invalid="true"] {
-  border-color: var(--status-danger);
-  background-color: #fef2f2;
-}
-
-:is(.cs-input, .cs-select, .cs-textarea):user-valid {
-  border-color: var(--brand-primary);
-}
-
-/* Native modal dialog top-layer containment without body overflow locks */
+/* Native <dialog> centered modal & mobile drawer with discrete @starting-style transitions */
 dialog.cs-dialog {
+  max-height: min(92dvh, 780px);
+  width: min(92vw, 34rem);
   margin: auto;
-  max-inline-size: min(32rem, calc(100vw - 2rem));
-  inline-size: 100%;
-  border: 1px solid var(--border-subtle);
-  border-radius: 0.625rem;
-  background: var(--bg-surface);
-  color: var(--text-primary);
+  border-radius: 0.75rem;
+  border: 1px solid var(--cs-border-strong);
+  background-color: var(--cs-surface);
+  color: var(--cs-ink);
   padding: 0;
-  box-shadow: 0 1px 2px 0 rgb(15 23 42 / 0.08);
+  overscroll-behavior: contain;
+  opacity: 0;
+  transform: scale(0.97) translateY(6px);
+  transition:
+    opacity 160ms ease,
+    transform 160ms ease,
+    display 160ms allow-discrete,
+    overlay 160ms allow-discrete;
 }
 
-dialog.cs-dialog:modal {
-  overscroll-behavior: contain;
+dialog.cs-dialog[open] {
+  opacity: 1;
+  transform: scale(1) translateY(0);
+}
+
+@starting-style {
+  dialog.cs-dialog[open] {
+    opacity: 0;
+    transform: scale(0.97) translateY(6px);
+  }
 }
 
 dialog.cs-dialog::backdrop {
-  background: rgb(15 23 42 / 0.42);
   overflow: hidden;
   overscroll-behavior: contain;
+  background-color: rgb(15 23 42 / 0);
+  transition:
+    background-color 160ms ease,
+    display 160ms allow-discrete,
+    overlay 160ms allow-discrete;
 }
 
-/* Responsive Data Table via container query */
+dialog.cs-dialog[open]::backdrop {
+  background-color: rgb(15 23 42 / 0.48);
+}
+
+@starting-style {
+  dialog.cs-dialog[open]::backdrop {
+    background-color: rgb(15 23 42 / 0);
+  }
+}
+
+/* Mobile navigation drawer rendered in top layer via dialog.showModal() */
+dialog.cs-drawer {
+  position: fixed;
+  inset-block: 0;
+  inset-inline-start: auto;
+  inset-inline-end: 0;
+  margin: 0;
+  width: min(86vw, 21rem);
+  max-width: 100%;
+  height: 100dvh;
+  max-height: 100dvh;
+  border: 0;
+  border-inline-start: 1px solid var(--cs-border);
+  background-color: var(--cs-surface);
+  color: var(--cs-ink);
+  padding: 0;
+  overscroll-behavior: contain;
+  opacity: 0;
+  transform: translateX(100%);
+  transition:
+    transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    opacity 180ms ease,
+    display 220ms allow-discrete,
+    overlay 220ms allow-discrete;
+}
+
+dialog.cs-drawer[open] {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+@starting-style {
+  dialog.cs-drawer[open] {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+}
+
+dialog.cs-drawer::backdrop {
+  overflow: hidden;
+  overscroll-behavior: contain;
+  background-color: rgb(15 23 42 / 0);
+  transition:
+    background-color 220ms ease,
+    display 220ms allow-discrete,
+    overlay 220ms allow-discrete;
+}
+
+dialog.cs-drawer[open]::backdrop {
+  background-color: rgb(15 23 42 / 0.45);
+}
+
+@starting-style {
+  dialog.cs-drawer[open]::backdrop {
+    background-color: rgb(15 23 42 / 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  dialog.cs-dialog,
+  dialog.cs-dialog::backdrop,
+  dialog.cs-drawer,
+  dialog.cs-drawer::backdrop {
+    transition: none;
+  }
+}
+
+/* Accessible form controls: show error borders only after interaction or explicit submit */
+@layer components {
+  .cs-input {
+    width: 100%;
+    min-height: 2.75rem;
+    border-radius: 0.375rem;
+    border: 1px solid var(--cs-border-strong);
+    background-color: #ffffff;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.9375rem;
+    color: var(--cs-ink);
+    transition: border-color 140ms ease, box-shadow 140ms ease;
+  }
+
+  .cs-input:focus {
+    outline: none;
+    border-color: var(--cs-primary);
+    box-shadow: 0 0 0 3px rgb(21 128 61 / 0.14);
+  }
+
+  .cs-input[aria-invalid='true'],
+  .cs-input[data-touched='true']:user-invalid {
+    border-color: var(--cs-danger);
+    box-shadow: 0 0 0 2px rgb(185 28 28 / 0.12);
+  }
+}
+
+/* Container-query responsive data table -> mobile card layout */
 .cs-table-wrapper {
-  overflow-x: auto;
-  max-inline-size: 100%;
   container-type: inline-size;
-  background: var(--bg-surface);
-  border: 1px solid var(--border-subtle);
-  border-radius: 0.5rem;
+  width: 100%;
 }
 
 .cs-table {
-  inline-size: 100%;
-  border-collapse: separate;
-  border-spacing: 0;
-  text-align: start;
-}
-
-.cs-table thead {
-  position: sticky;
-  inset-block-start: 0;
-  z-index: 2;
-  background-color: #f8fafc;
-}
-
-.cs-table th,
-.cs-table td {
-  padding: 0.75rem 1rem;
-  border-block-end: 1px solid var(--border-subtle);
-  vertical-align: top;
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 0.875rem;
 }
 
 .cs-table thead th {
-  font-size: 0.8125rem;
-  font-weight: 600;
-  color: var(--text-secondary);
+  border-bottom: 1px solid var(--cs-border);
+  background-color: #f8fafc;
+  padding: 0.75rem 0.875rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--cs-muted);
   white-space: nowrap;
 }
 
-@container (width < 640px) {
-  .cs-table,
-  .cs-table thead,
-  .cs-table tbody,
-  .cs-table tr,
-  .cs-table th,
-  .cs-table td {
-    display: block;
+.cs-table tbody tr {
+  border-bottom: 1px solid var(--cs-border);
+}
+
+.cs-table tbody tr:last-child {
+  border-bottom: 0;
+}
+
+.cs-table tbody td {
+  padding: 0.875rem;
+  vertical-align: top;
+  color: var(--cs-ink);
+}
+
+@container (width < 680px) {
+  .cs-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
 
-  .cs-table thead {
-    display: none;
+  .cs-table tbody,
+  .cs-table tr,
+  .cs-table td {
+    display: block;
+    width: 100%;
   }
 
   .cs-table tbody tr {
-    border-block-end: 1px solid var(--border-subtle);
-    padding-block: 0.5rem;
+    margin-bottom: 0.75rem;
+    border: 1px solid var(--cs-border);
+    border-radius: 0.5rem;
+    background-color: #ffffff;
+    padding: 0.5rem 0.75rem;
   }
 
-  .cs-table tbody tr:last-child {
-    border-block-end: 0;
+  .cs-table tbody td {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.45rem 0;
+    border-bottom: 1px dashed #e2e8f0;
+    text-align: right;
   }
 
-  .cs-table th,
-  .cs-table td {
-    border-block-end: 0;
-    padding: 0.375rem 1rem;
+  .cs-table tbody td:last-child {
+    border-bottom: 0;
+    justify-content: flex-end;
   }
 
-  .cs-table tbody th[data-label]::before,
-  .cs-table tbody td[data-label]::before {
-    content: attr(data-label) ": ";
+  .cs-table tbody td::before {
+    content: attr(data-label);
+    font-size: 0.75rem;
     font-weight: 600;
-    color: var(--text-secondary);
-    display: inline-block;
-    margin-inline-end: 0.35rem;
+    color: var(--cs-muted);
+    text-align: left;
+    flex-shrink: 0;
   }
 }

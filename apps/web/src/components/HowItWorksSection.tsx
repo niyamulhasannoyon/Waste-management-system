@@ -1,74 +1,82 @@
-import React from "react";
+import React from 'react';
+import Link from 'next/link';
+import { CalendarClock, Camera, ClipboardCheck } from 'lucide-react';
 
 const STEPS = [
   {
-    number: "০১",
-    title: "তথ্য বা ছবি জমা দিন",
+    number: '০১',
+    title: 'পিকআপ বা ছবি দিন',
     description:
-      "রাস্তার পাশে জমে থাকা ময়লার ছবি ও জিপিএস পিন পাঠান অথবা বাসাবাড়ির ময়লা নেওয়ার জন্য পছন্দের সময় ও বর্জ্যের ধরন বেছে নিন।",
-    meta: "সময় লাগে ১ মিনিটেরও কম",
+      'একবার বা সাপ্তাহিক পিকআপ স্লট নির্বাচন করুন, অথবা রাস্তার ময়লার ছবি ও জিপিএস অবস্থান জমা দিন।',
+    href: '/pickup',
+    cta: 'পিকআপ ফরম খুলুন',
+    icon: CalendarClock,
   },
   {
-    number: "০২",
-    title: "ওয়ার্ড টিমে দ্রুত অ্যাসাইন",
+    number: '০২',
+    title: 'অবস্থান ও ডুপ্লিকেট যাচাই',
     description:
-      "আপনার রিকোয়েস্টটি স্বয়ংক্রিয়ভাবে সাভার পৌরসভার নির্ধারিত ওয়ার্ড বা ইউনিয়ন পরিষদের দায়িত্বপ্রাপ্ত সুপারভাইজার ও ভ্যান টিমের কাছে পৌঁছে যায়।",
-    meta: "তাৎক্ষণিক রুট সমন্বয়",
+      'PostGIS স্বয়ংক্রিয়ভাবে সাভারের সঠিক ওয়ার্ড/ইউনিয়ন শনাক্ত করে এবং নিকটবর্তী সংগ্রহ গাড়ি নির্ধারণ করে।',
+    href: '/report',
+    cta: 'ছবিসহ রিপোর্ট করুন',
+    icon: Camera,
   },
   {
-    number: "০৩",
-    title: "সংগ্রহ ও পরিচ্ছন্নতা নিশ্চিত",
+    number: '০৩',
+    title: 'সরাসরি ট্র্যাক ও প্রমাণ',
     description:
-      "নির্ধারিত সময়ের মধ্যে পরিচ্ছন্নতাকর্মীরা ময়লা সংগ্রহ করে জৈব বর্জ্য কম্পোস্ট প্ল্যান্টে এবং প্লাস্টিক-কাগজ রিসাইক্লিং হাবে পাঠান।",
-    meta: "লাইভ স্ট্যাটাস ট্র্যাকিং",
+      'CS-PK বা CS-DR ট্র্যাকিং কোড দিয়ে প্রতিটি ধাপের অগ্রগতি ও মাঠপর্যায়ের পরিচ্ছন্নতার প্রমাণ দেখুন।',
+    href: '/track',
+    cta: 'ট্র্যাকিং দেখুন',
+    icon: ClipboardCheck,
   },
 ] as const;
 
 export function HowItWorksSection() {
   return (
-    <section
-      id="how-it-works"
-      className="border-b border-slate-200 bg-white py-12 sm:py-16"
-    >
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div className="max-w-2xl">
-          <p className="text-xs font-bold uppercase tracking-wider text-[#15803D]">
-            কীভাবে কাজ করে
-          </p>
-          <h2 className="mt-1 text-2xl font-bold text-slate-900 sm:text-3xl">
-            ৩টি সহজ ধাপে পরিচ্ছন্ন পাড়া-মহল্লা
-          </h2>
-          <p className="mt-2 text-base text-slate-600">
-            কোনো জটিল ধাপ নেই — নাগরিকের তথ্য সরাসরি সাভারের মাঠ পর্যায়ের
-            পরিচ্ছন্নতা টিমের কাজের তালিকায় যুক্ত হয়।
-          </p>
+    <section aria-labelledby="how-it-works-heading" className="py-10 sm:py-12">
+      <div className="mx-auto max-w-6xl px-4 sm:px-6">
+        <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h2 id="how-it-works-heading" className="text-2xl font-bold text-[#0F172A]">
+              কীভাবে ক্লিন সাভার কাজ করে
+            </h2>
+            <p className="mt-1 text-sm text-[#475569]">
+              নাগরিক, মাঠপর্যায়ের কালেক্টর ও পৌরসভা কন্ট্রোল রুমের স্বচ্ছ ডিজিটাল কর্মপ্রবাহ
+            </p>
+          </div>
         </div>
 
-        <ol className="mt-8 grid grid-cols-1 gap-6 md:grid-cols-3">
-          {STEPS.map((step) => (
-            <li
-              key={step.number}
-              className="flex flex-col justify-between rounded-lg border border-slate-300 bg-[#F8FAFC] p-6"
-            >
-              <div>
-                <div className="flex items-baseline justify-between border-b border-slate-200 pb-4">
-                  <span className="text-4xl font-bold tabular-nums tracking-tight text-[#15803D]">
-                    {step.number}
-                  </span>
-                  <span className="text-xs font-semibold text-slate-600">
-                    {step.meta}
-                  </span>
+        <div className="grid gap-4 md:grid-cols-3">
+          {STEPS.map((step) => {
+            const Icon = step.icon;
+            return (
+              <article key={step.number} className="cs-card flex flex-col justify-between p-5">
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="flex h-10 w-10 items-center justify-center rounded-md border border-[#BBF7D0] bg-[#F0FDF4] text-[#15803D]">
+                      <Icon className="h-5 w-5" aria-hidden="true" />
+                    </span>
+                    <span className="font-metric text-xs font-bold tracking-wider text-[#14532D]">
+                      ধাপ {step.number}
+                    </span>
+                  </div>
+                  <h3 className="text-base font-bold text-[#0F172A]">{step.title}</h3>
+                  <p className="text-sm leading-relaxed text-[#475569]">{step.description}</p>
                 </div>
-                <h3 className="mt-4 text-lg font-bold text-slate-900">
-                  {step.title}
-                </h3>
-                <p className="mt-2 text-sm leading-relaxed text-slate-700">
-                  {step.description}
-                </p>
-              </div>
-            </li>
-          ))}
-        </ol>
+
+                <div className="mt-4 border-t border-[#E2E8F0] pt-3">
+                  <Link
+                    href={step.href}
+                    className="text-sm font-semibold text-[#15803D] hover:text-[#14532D] hover:underline"
+                  >
+                    {step.cta} →
+                  </Link>
+                </div>
+              </article>
+            );
+          })}
+        </div>
       </div>
     </section>
   );

@@ -7,6 +7,7 @@ interface NativeDialogProps {
   open: boolean;
   onClose: () => void;
   title: string;
+  description?: string;
   closeOnBackdrop?: boolean;
   children: ReactNode;
 }
@@ -19,11 +20,13 @@ export function NativeDialog({
   open,
   onClose,
   title,
+  description,
   closeOnBackdrop = true,
   children,
 }: NativeDialogProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const titleId = useId();
+  const descId = useId();
 
   useEffect(() => {
     const el = dialogRef.current;
@@ -79,13 +82,21 @@ export function NativeDialog({
     <dialog
       ref={dialogRef}
       aria-labelledby={titleId}
+      aria-describedby={description ? descId : undefined}
       className="cs-dialog"
       {...(closeOnBackdrop ? ({ closedby: 'any' } as Record<string, string>) : {})}
     >
-      <div className="flex items-center justify-between border-b border-[#E2E8F0] px-5 py-4">
-        <h2 id={titleId} className="text-lg font-semibold text-[#0F172A]">
-          {title}
-        </h2>
+      <div className="flex items-start justify-between gap-3 border-b border-[#E2E8F0] px-5 py-4">
+        <div className="space-y-0.5">
+          <h2 id={titleId} className="text-lg font-semibold text-[#0F172A]">
+            {title}
+          </h2>
+          {description ? (
+            <p id={descId} className="text-xs text-[#475569]">
+              {description}
+            </p>
+          ) : null}
+        </div>
         <button
           type="button"
           onClick={() => dialogRef.current?.close('close-button')}
