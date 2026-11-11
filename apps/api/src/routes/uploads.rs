@@ -1,13 +1,19 @@
 use axum::{
     extract::{Multipart, State},
-    http::StatusCode,
+    http::{HeaderMap, StatusCode},
     Json,
 };
+use image::{imageops::FilterType, ImageFormat};
 use serde::Serialize;
+use std::io::Cursor;
 use tokio::fs;
 use uuid::Uuid;
 
-use crate::{db::AppState, error::AppError};
+use crate::{
+    auth::{extract_client_ip, require_role, Role},
+    db::AppState,
+    error::AppError,
+};
 
 #[derive(Serialize)]
 pub struct PhotoUploadResponse {
@@ -17,22 +23,93 @@ pub struct PhotoUploadResponse {
     pub size_bytes: usize,
 }
 
-fn detect_image_extension(bytes: &[u8]) -> Option<(&'static str, &'static str)> {
+#[derive(Clone, Copy)]
+enum InputKind {
+    Jpeg,
+    Png,
+    Webp,
+}
+
+fn detect_image_kind(bytes: &[u8]) -> Option<InputKind> {
     if bytes.starts_with(&[0xFF, 0xD8, 0xFF]) {
-        Some(("jpg", "image/jpeg"))
+        Some(InputKind::Jpeg)
     } else if bytes.starts_with(&[0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]) {
-        Some(("png", "image/png"))
+        Some(InputKind::Png)
     } else if bytes.len() >= 12 && &bytes[0..4] == b"RIFF" && &bytes[8..12] == b"WEBP" {
-        Some(("webp", "image/webp"))
+        Some(InputKind::Webp)
     } else {
         None
     }
 }
 
+/// Decode, dimension-bound, strip EXIF/GPS metadata, and re-encode uploaded image pixels safely.
+fn sanitize_and_reencode_image(
+    bytes: &[u8],
+    kind: InputKind,
+) -> Result<(Vec<u8>, &'static str, &'static str), AppError> {
+    let img = image::load_from_memory(bytes).map_err(|_| {
+        AppError::validation(
+            "Invalid or corrupted image file.",
+            "ছবিটি পড়া যায়নি বা ক্ষতিগ্রস্ত। অনুগ্রহ করে সঠিক JPG, PNG বা WebP ছবি দিন।",
+        )
+    })?;
+
+    let w = img.width();
+    let h = img.height();
+    if w == 0 || h == 0 || w > 8000 || h > 8000 {
+        return Err(AppError::validation(
+            "Image dimensions must be between 1×1 and 8000×8000 pixels.",
+            "ছবির রেজোলিউশন সঠিক নয় (সর্বোচ্চ ৮০০০×৮০০০ পিক্সেল)।",
+        ));
+    }
+
+    let resized = if w > 1600 || h > 1600 {
+        img.resize(1600, 1600, FilterType::Triangle)
+    } else {
+        img
+    };
+
+    let mut clean_bytes = Vec::new();
+    match kind {
+        InputKind::Png => {
+            resized
+                .write_to(&mut Cursor::new(&mut clean_bytes), ImageFormat::Png)
+                .map_err(|e| AppError::Internal(format!("png encode error: {e}")))?;
+            Ok((clean_bytes, "png", "image/png"))
+        }
+        InputKind::Jpeg | InputKind::Webp => {
+            let rgb = image::DynamicImage::ImageRgb8(resized.to_rgb8());
+            rgb.write_to(&mut Cursor::new(&mut clean_bytes), ImageFormat::Jpeg)
+                .map_err(|e| AppError::Internal(format!("jpeg encode error: {e}")))?;
+            Ok((clean_bytes, "jpg", "image/jpeg"))
+        }
+    }
+}
+
+/// `POST /api/v1/uploads/photo`
+/// Authenticated, rate-limited, EXIF-stripping image upload endpoint.
 pub async fn upload_photo(
     State(state): State<AppState>,
+    headers: HeaderMap,
     mut multipart: Multipart,
 ) -> Result<(StatusCode, Json<PhotoUploadResponse>), AppError> {
+    let auth_user = require_role(
+        &state,
+        &headers,
+        &[Role::Citizen, Role::Collector, Role::Admin],
+    )
+    .await?;
+
+    let ip = extract_client_ip(&headers);
+    state
+        .rate_limiter
+        .check(&format!("upload_user:{}", auth_user.user_id), 25, 600)
+        .await?;
+    state
+        .rate_limiter
+        .check(&format!("upload_ip:{ip}"), 40, 600)
+        .await?;
+
     fs::create_dir_all(&state.upload_dir)
         .await
         .map_err(|e| AppError::Internal(format!("failed to prepare upload dir: {e}")))?;
@@ -68,17 +145,23 @@ pub async fn upload_photo(
             });
         }
 
-        let (ext, mime) = detect_image_extension(&data).ok_or_else(|| {
+        let kind = detect_image_kind(&data).ok_or_else(|| {
             AppError::validation(
                 "Only JPEG, PNG, or WebP images are accepted.",
                 "শুধুমাত্র JPG, PNG অথবা WebP ছবি আপলোড করা যাবে।",
             )
         })?;
 
+        let raw_vec = data.to_vec();
+        let (clean_bytes, ext, mime) =
+            tokio::task::spawn_blocking(move || sanitize_and_reencode_image(&raw_vec, kind))
+                .await
+                .map_err(|e| AppError::Internal(format!("image worker panicked: {e}")))??;
+
         let object_key = format!("{}.{ext}", Uuid::new_v4());
         let file_path = std::path::Path::new(&state.upload_dir).join(&object_key);
 
-        fs::write(&file_path, &data)
+        fs::write(&file_path, &clean_bytes)
             .await
             .map_err(|e| AppError::Internal(format!("failed writing photo: {e}")))?;
 
@@ -91,7 +174,7 @@ pub async fn upload_photo(
                 object_key,
                 url,
                 mime_type: mime.to_string(),
-                size_bytes: data.len(),
+                size_bytes: clean_bytes.len(),
             }),
         ));
     }
@@ -100,4 +183,28 @@ pub async fn upload_photo(
         "Missing 'photo' multipart field.",
         "অনুগ্রহ করে একটি ময়লার ছবি সংযুক্ত করুন।",
     ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use image::{ImageBuffer, Rgb};
+
+    #[test]
+    fn detects_magic_bytes_and_reencodes_without_metadata() {
+        let img = ImageBuffer::from_pixel(4, 4, Rgb([34u8, 139u8, 34u8]));
+        let mut raw_png = Vec::new();
+        image::DynamicImage::ImageRgb8(img)
+            .write_to(&mut Cursor::new(&mut raw_png), ImageFormat::Png)
+            .expect("encode png");
+
+        assert!(matches!(detect_image_kind(&raw_png), Some(InputKind::Png)));
+        assert!(detect_image_kind(b"not an image").is_none());
+
+        let (clean, ext, mime) =
+            sanitize_and_reencode_image(&raw_png, InputKind::Png).expect("reencode");
+        assert_eq!(ext, "png");
+        assert_eq!(mime, "image/png");
+        assert!(detect_image_kind(&clean).is_some());
+    }
 }

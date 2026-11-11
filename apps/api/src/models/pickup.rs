@@ -7,6 +7,7 @@ use uuid::Uuid;
 pub struct PickupRequestRecord {
     pub id: Uuid,
     pub tracking_code: String,
+    pub user_id: Option<Uuid>,
     pub citizen_name: String,
     pub citizen_phone: String,
     pub ward_id: i16,
@@ -15,27 +16,35 @@ pub struct PickupRequestRecord {
     pub landmark: String,
     pub waste_type: String,
     pub slot: String,
+    pub schedule_type: String,
+    pub preferred_day: Option<String>,
     pub estimated_bags: i16,
+    pub weight_kg: Option<f64>,
     pub status: String,
     pub lat: f64,
     pub lng: f64,
     pub assigned_vehicle_id: Option<Uuid>,
     pub assigned_vehicle_code: Option<String>,
     pub notes: String,
+    pub completion_photo_url: Option<String>,
+    pub completed_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct CreatePickupRequest {
-    pub citizen_name: String,
-    pub citizen_phone: String,
+    pub citizen_name: Option<String>,
+    pub citizen_phone: Option<String>,
     pub ward_id: Option<i16>,
     pub address_line: String,
     #[serde(default)]
     pub landmark: String,
     pub waste_type: String,
     pub slot: String,
+    #[serde(default = "default_schedule_type")]
+    pub schedule_type: String,
+    pub preferred_day: Option<String>,
     #[serde(default = "default_bags")]
     pub estimated_bags: i16,
     pub lat: Option<f64>,
@@ -48,23 +57,24 @@ fn default_bags() -> i16 {
     2
 }
 
+fn default_schedule_type() -> String {
+    "one_time".to_string()
+}
+
 #[derive(Debug, Deserialize)]
 pub struct ListPickupsQuery {
     pub ward_id: Option<i16>,
     pub status: Option<String>,
     pub phone: Option<String>,
+    pub q: Option<String>,
+    pub page: Option<i64>,
     pub limit: Option<i64>,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct UpdatePickupStatusRequest {
     pub status: String,
+    pub weight_kg: Option<f64>,
     #[serde(default)]
     pub note_bn: String,
-    #[serde(default = "default_actor")]
-    pub actor_label: String,
-}
-
-fn default_actor() -> String {
-    "সাভার পৌরসভা অপস".to_string()
 }
