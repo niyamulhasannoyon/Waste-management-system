@@ -41,4 +41,32 @@ abstract final class BanglaFormatters {
     }
     return '${formatInt(count)}টি তথ্য আপলোডের অপেক্ষায়';
   }
+
+  /// Parses numbers typed with either ASCII (0-9) or Bangla (০-৯) digits.
+  static double? parseBanglaDouble(String input) {
+    final trimmed = input.trim();
+    if (trimmed.isEmpty) {
+      return null;
+    }
+
+    const banglaToAscii = {
+      '০': '0',
+      '১': '1',
+      '২': '2',
+      '৩': '3',
+      '৪': '4',
+      '৫': '5',
+      '৬': '6',
+      '৭': '7',
+      '৮': '8',
+      '৯': '9',
+    };
+
+    final buffer = StringBuffer();
+    for (var i = 0; i < trimmed.length; i++) {
+      final ch = trimmed[i];
+      buffer.write(banglaToAscii[ch] ?? ch);
+    }
+    return double.tryParse(buffer.toString());
+  }
 }
