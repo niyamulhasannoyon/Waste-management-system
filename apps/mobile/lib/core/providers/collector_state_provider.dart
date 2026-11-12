@@ -80,7 +80,7 @@ class CollectorStateNotifier extends Notifier<CollectorState> {
       _hydrated = true;
       Future.microtask(_hydrateFromStorageAndServer);
     }
-    return CollectorState(
+    return const CollectorState(
       workerName: kDebugMode ? 'মোঃ আলমগীর (ডেমো)' : 'পরিচ্ছন্নতাকর্মী',
       vehicleCode: kDebugMode ? 'SV-VAN-04' : '—',
       routeLabel: kDebugMode
@@ -89,7 +89,7 @@ class CollectorStateNotifier extends Notifier<CollectorState> {
       isOnDuty: false,
       isNetworkOnline: true,
       pendingSyncCount: 0,
-      stops: kDebugMode ? SavarSeedData.initialRouteStops : const [],
+      stops: kDebugMode ? SavarSeedData.initialRouteStops : [],
     );
   }
 

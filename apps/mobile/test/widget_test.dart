@@ -245,11 +245,13 @@ void main() {
       200,
       scrollable: find.byType(Scrollable).first,
     );
+    await tester.pumpAndSettle();
     expect(find.text('QR স্ক্যান করুন'), findsWidgets);
     expect(find.text('সংগ্রহ সম্পন্ন'), findsWidgets);
 
     // Completing without entering or choosing weight prompts explicit validation
     await tester.ensureVisible(find.text('সংগ্রহ সম্পন্ন').first);
+    await tester.pumpAndSettle();
     await tester.tap(find.text('সংগ্রহ সম্পন্ন').first);
     await tester.pump();
     expect(
@@ -259,17 +261,35 @@ void main() {
 
     // Choose quick weight chip (৫ কেজি) and mark stop completed while offline
     await tester.ensureVisible(find.text('৫ কেজি').first);
+    await tester.pumpAndSettle();
     await tester.tap(find.text('৫ কেজি').first);
     await tester.pump();
 
     await tester.ensureVisible(find.text('সংগ্রহ সম্পন্ন').first);
+    await tester.pumpAndSettle();
     await tester.tap(find.text('সংগ্রহ সম্পন্ন').first);
     await tester.pumpAndSettle();
+
+    // Completing the tall stop shrinks the card above the scroll offset; scroll back up cleanly.
+    await tester.scrollUntilVisible(
+      find.text('বাসা ১৪'),
+      -200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.ensureVisible(find.text('বাসা ১৪'));
+    await tester.pumpAndSettle();
     expect(find.textContaining('সংগ্রহ সম্পন্ন • ৫ কেজি'), findsWidgets);
+
+    await tester.scrollUntilVisible(
+      find.text('নেট: অফলাইন'),
+      -200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.ensureVisible(find.text('নেট: অফলাইন'));
+    await tester.pumpAndSettle();
     expect(find.text('১টি তথ্য আপলোডের অপেক্ষায়'), findsOneWidget);
 
     // Restoring connectivity flushes the queued action cleanly
-    await tester.ensureVisible(find.text('নেট: অফলাইন'));
     await tester.tap(find.text('নেট: অফলাইন'));
     await tester.pumpAndSettle();
     expect(find.text('সব তথ্য সিঙ্ক সম্পন্ন'), findsOneWidget);
@@ -289,6 +309,8 @@ void main() {
       200,
       scrollable: find.byType(Scrollable).first,
     );
+    await tester.ensureVisible(find.text('QR স্ক্যান করুন').first);
+    await tester.pumpAndSettle();
     await tester.tap(find.text('QR স্ক্যান করুন').first);
     await tester.pumpAndSettle();
 
@@ -346,6 +368,8 @@ void main() {
       200,
       scrollable: find.byType(Scrollable).first,
     );
+    await tester.ensureVisible(find.text('OTP পাঠান'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('OTP পাঠান'));
     await tester.pumpAndSettle();
 
