@@ -25,15 +25,21 @@
 
 ---
 
-## Web UI Redesign (Before vs After Summary)
+## Implementation Status Matrix
 
-| Area | Before Audit State | After Phase 3 Redesign |
+Honest breakdown of current platform capabilities vs remaining backlog (see [`docs/CHANGELOG.md`](docs/CHANGELOG.md) for historical UI audit notes):
+
+| Capability | Status | Notes |
 | --- | --- | --- |
-| **Header & Navigation** | Dual unaligned nav bars / crowded action clutter | Unified sticky navbar (`<= 68px`), single mobile `<dialog>` drawer, notification badge, OTP session pill |
-| **Auth & Protected Portals** | Unauthenticated role switches / direct demo impersonation | Server-enforced Phone OTP modal/page (`/login`) with Bangladeshi phone normalization, WebOTP support, and role-gated access (`/collector`, `/partner`, `/admin`) |
-| **Typography & Theme** | Inconsistent contrast & mixed legacy tokens | Eco-Municipal flat tokens (`#F8FAFC` / `#FFFFFF` / `#E2E8F0` / `#15803D`), WCAG AA contrast, balanced `Hind Siliguri` + tabular `Inter` numerals |
-| **Coverage & Forms** | Partial Savar ward data & eager red validation | Canonical Savar Wards `1–9` + Unions `101–106`, post-interaction validation, accessible native `<dialog>`, zero mobile horizontal overflow (`scrollWidth <= innerWidth` verified at `390px`) |
-| **Tracking & Offline** | Silent mock fallbacks pretending writes succeeded | Clear offline preview notice on public reads; real errors surfaced on mutating routes without faking persistence |
+| Citizen Pickup Scheduling (`/pickup` & mobile) | **Implemented** | One-time & `recurring_weekly` bookings stored in PostgreSQL; queued offline on mobile. |
+| Dump Reporting, Photo Upload & EXIF Stripping | **Implemented** | Magic-byte validation, header dimension bounds (`<= 8000px`), JPEG/PNG/WebP re-encoding, `5 MB` cap (`MAX_UPLOAD_BYTES`). |
+| `50m` PostGIS Duplicate Clustering & Ward Resolve | **Implemented** | `ST_Contains` / `ST_Distance` ward matching and `ST_DWithin` complaint clustering in PostGIS. |
+| Phone OTP Auth, Sessions & RBAC | **Partial** | HMAC-SHA256 OTP & bearer tokens are enforced server-side; **SMS gateway delivery is not yet wired** (`OTP_DEV_MODE` logs/previews in dev only). |
+| Collector Route Completion, QR & Offline Sync | **Partial** | Idempotent server sync, QR bin-tag verification & weight logging work across web/mobile; release push notifications (FCM) are not yet added. |
+| Recycling Partner Lot Workflow (`/partner`) | **Implemented** | Browse, filter, create (`admin`), claim, and record collection (`collected`) on `CS-LOT-*` lots with ownership checks. |
+| Admin Nearest-Vehicle Dispatch & CSV Export | **Partial** | PostGIS worker matching & formula-injection-safe CSV export work; immutable DB audit-log table & retention jobs await approval. |
+| Full Stack Containers & CI Pipeline | **Implemented** | `docker-compose.yml` (`postgres` + `api` + `web`), `apps/api/Dockerfile`, `apps/web/Dockerfile`, `.github/workflows/ci.yml`. |
+| Production Hardening Backlog (Schema/Deps) | **Missing** | OpenAPI codegen (`utoipa`), constant-time OTP compare (`subtle`), structured JSON logs, `flutter_secure_storage`, Playwright E2E, PostGIS GIST `geography` index migration (`0003_*`). |
 
 ---
 
@@ -42,12 +48,10 @@
 | Layer | Technologies |
 | --- | --- |
 | **Backend API** | Rust (2021), Axum 0.7, SQLx 0.8, Tokio, `tower-http`, `hmac`/`sha2`, `image` 0.25 |
-| **Database & GIS** | PostgreSQL 16 + PostGIS 3.4 (SRID 4326 `MultiPolygon`/`Point`, GIST indexes) |
+| **PostgreSQL / PostGIS** | Docker image `postgis/postgis:16-3.4-alpine` (`apps/api/migrations/`) |
 | **Web Portal** | Next.js 15 (App Router), React 19, TypeScript (strict), Tailwind CSS v4, Lucide Icons, Vitest + Testing Library |
 | **Mobile App** | Flutter SDK (Dart `>=3.5.0`), Riverpod, `geolocator`, `image_picker`, `mobile_scanner`, `shared_preferences` |
-| **CI/CD & Containers** | Docker Compose (`postgis/postgis:16-3.4-alpine`), GitHub Actions (`.github/workflows/ci.yml`) |
-
----
+| **CI/CD & Containers** | Docker Compose (`postgres` + `api` + `web`), `.nvmrc` (Node 22), GitHub Actions (`.github/workflows/ci.yml`) |
 
 ## Project Structure
 
@@ -55,14 +59,21 @@
 .
 ├── .github/workflows/ci.yml        # CI pipeline (Rust/PostGIS, Next.js Web, Flutter Mobile)
 ├── .env.example                    # Environment configuration template
-├── docker-compose.yml              # Local PostgreSQL 16 + PostGIS 3.4 container
+├── .nvmrc                          # Pins Node.js 22 for web development & Vitest
+├── CONTRIBUTING.md                 # Development & PR guidelines
+├── SECURITY.md                     # Vulnerability disclosure & security controls
+├── docker-compose.yml              # PostgreSQL 16 + PostGIS, Rust API, and Next.js Web services
 ├── LICENSE                         # MIT License
-├── docs/ARCHITECTURE.md            # Detailed geospatial, security & UI architecture
+├── docs/
+│   ├── API.md                      # Endpoint reference & error/idempotency contracts
+│   ├── ARCHITECTURE.md             # Detailed geospatial, security & UI architecture
+│   ├── CHANGELOG.md                # Audit remediations & historical UI summary
+│   └── openapi.yaml                # OpenAPI 3.0 specification for /api/v1
 ├── apps/
-│   ├── api/                        # Unified Rust Axum + SQLx PostGIS REST API
+│   ├── api/                        # Unified Rust Axum + SQLx PostGIS REST API (+ Dockerfile)
 │   │   ├── migrations/             # 0001_init_postgis.sql, 0002_seed_savar_wards.sql
 │   │   └── src/                    # auth, config, db, error, models, routes/
-│   ├── web/                        # Next.js 15 Citizen, Collector, Partner & Admin Web Portal
+│   ├── web/                        # Next.js 15 Citizen, Collector, Partner & Admin Web Portal (+ Dockerfile)
 │   │   ├── src/app/                # /, /login, /pickup, /report, /track, /collector, /partner, /admin
 │   │   ├── src/components/         # Reusable design system & portal modules
 │   │   └── src/__tests__/          # Vitest unit, API client & component suites
@@ -83,11 +94,13 @@ Copy `.env.example` to `.env` before running the backend or web app (`AUTH_SECRE
 | --- | --- | --- |
 | `POSTGRES_DB` / `POSTGRES_USER` / `POSTGRES_PASSWORD` | PostgreSQL container credentials | `clean_savar` |
 | `DATABASE_URL` | PostgreSQL + PostGIS connection URI | `postgres://clean_savar:...@localhost:5432/clean_savar` |
+| `APP_ENV` | `development` or `production` (fails closed on insecure flags in `production`) | `development` |
 | `AUTH_SECRET` | `>=32`-byte HMAC secret for OTP & Bearer token hashing (`openssl rand -hex 32`) | *(required unless `ALLOW_INSECURE_DEV_DEFAULTS=true`)* |
 | `OTP_DEV_MODE` | Returns `otp_preview` in challenge response for local dev only | `false` |
-| `ADMIN_BOOTSTRAP_PHONES` | Comma-separated phone numbers granted `admin` role via OTP | `01711-240100` |
+| `ADMIN_BOOTSTRAP_PHONES` | Comma-separated phone numbers granted `admin` role via OTP (leave blank by default) | *(empty)* |
+| `TRUSTED_PROXY_IPS` | Comma-separated reverse proxy IPs trusted for forwarded client IP headers | *(empty)* |
 | `API_BIND_ADDR` | Rust Axum bind address | `0.0.0.0:8080` |
-| `CORS_ALLOWED_ORIGINS` | Allowed browser origins for CORS | `http://localhost:3000,http://127.0.0.1:3000` |
+| `CORS_ALLOWED_ORIGINS` | Allowed browser origins for CORS (wildcard `*` rejected) | `http://localhost:3000,http://127.0.0.1:3000` |
 | `UPLOAD_DIR` / `PUBLIC_UPLOAD_BASE_URL` / `MAX_UPLOAD_BYTES` | Local upload storage path, public base URL, and max image size | `./uploads`, `http://localhost:8080/uploads`, `5242880` |
 | `NEXT_PUBLIC_API_URL` | API base URL used by `apps/web` | `http://localhost:8080/api/v1` |
 
@@ -95,11 +108,20 @@ Copy `.env.example` to `.env` before running the backend or web app (`AUTH_SECRE
 
 ## Local Setup & Verification
 
-### 1. Start PostgreSQL 16 + PostGIS
+### Option A: Full Stack with Docker Compose
 
 ```bash
 cp .env.example .env
-# Set a local POSTGRES_PASSWORD and AUTH_SECRET (e.g. openssl rand -hex 32)
+# Set POSTGRES_PASSWORD and a >=32-byte AUTH_SECRET (e.g. openssl rand -hex 32)
+docker compose up -d --build
+```
+
+Services start on `127.0.0.1:5432` (PostGIS), `127.0.0.1:8080` (Rust API), and `127.0.0.1:3000` (Next.js Web).
+
+### Option B: Database Container Only (`postgres`)
+
+```bash
+cp .env.example .env
 docker compose up -d postgres
 ```
 
@@ -161,11 +183,12 @@ Seeded Savar test accounts (all log in via real Phone OTP when `OTP_DEV_MODE=tru
 
 ---
 
-## Contributing
+## Documentation & Contributing
 
-1. Fork or branch from `main` in small, focused commits.
-2. Keep database migrations additive inside `apps/api/migrations/` and mirror shared domain contracts across `apps/web/src/lib/` and `packages/clean_savar_core/`.
-3. Run the relevant checks (`cargo clippy`/`cargo test`, `npm run typecheck && npm run lint && npm test && npm run build`, `flutter analyze && flutter test`) before opening a PR.
+- API contract & OpenAPI spec: [`docs/API.md`](docs/API.md) and [`docs/openapi.yaml`](docs/openapi.yaml)
+- Architecture & GIS notes: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
+- Contributing workflow & local verification: [`CONTRIBUTING.md`](CONTRIBUTING.md)
+- Security policy & reporting: [`SECURITY.md`](SECURITY.md)
 
 ## License
 

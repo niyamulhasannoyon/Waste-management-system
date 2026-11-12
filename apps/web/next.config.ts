@@ -22,6 +22,7 @@ if (configuredApi) {
 }
 
 const nextConfig: NextConfig = {
+  output: 'standalone',
   outputFileTracingRoot: path.join(__dirname, '../..'),
   images: {
     unoptimized: true,
