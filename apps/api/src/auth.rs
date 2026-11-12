@@ -103,15 +103,15 @@ impl RateLimiter {
     }
 }
 
-/// Extract a client identifier for rate limiting (prefers left-most X-Forwarded-For / X-Real-IP).
+/// Extract a trusted client identifier populated by peer-IP middleware.
+/// Raw caller-supplied `X-Forwarded-For` / `X-Real-IP` headers are ignored unless
+/// verified against `TRUSTED_PROXY_IPS` in `main.rs` middleware.
 pub fn extract_client_ip(headers: &HeaderMap) -> String {
     headers
-        .get("x-forwarded-for")
+        .get("x-resolved-client-ip")
         .and_then(|v| v.to_str().ok())
-        .and_then(|s| s.split(',').next())
         .map(str::trim)
         .filter(|s| !s.is_empty())
-        .or_else(|| headers.get("x-real-ip").and_then(|v| v.to_str().ok()).map(str::trim))
         .unwrap_or("unknown")
         .to_string()
 }
@@ -307,5 +307,21 @@ mod tests {
         let tok = generate_session_token();
         assert!(tok.starts_with("cs_"));
         assert_eq!(tok.len(), 67);
+    }
+
+    #[test]
+    fn extract_client_ip_ignores_untrusted_forwarded_headers() {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            "x-forwarded-for",
+            axum::http::HeaderValue::from_static("1.2.3.4"),
+        );
+        assert_eq!(extract_client_ip(&headers), "unknown");
+
+        headers.insert(
+            "x-resolved-client-ip",
+            axum::http::HeaderValue::from_static("103.4.145.10"),
+        );
+        assert_eq!(extract_client_ip(&headers), "103.4.145.10");
     }
 }

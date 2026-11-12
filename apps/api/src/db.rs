@@ -1,6 +1,7 @@
+use rand::{rngs::OsRng, RngCore};
 use sha2::{Digest, Sha256};
 use sqlx::{postgres::PgPoolOptions, PgPool, Postgres, Transaction};
-use std::fmt::Write as _;
+use std::{fmt::Write as _, net::IpAddr};
 use uuid::Uuid;
 
 use crate::{auth::RateLimiter, config::AppConfig, error::AppError};
@@ -12,6 +13,7 @@ pub struct AppState {
     pub upload_dir: String,
     pub public_upload_base_url: String,
     pub max_upload_bytes: usize,
+    pub trusted_proxy_ips: Vec<IpAddr>,
     pub auth_secret: String,
     pub otp_dev_mode: bool,
     pub otp_ttl_seconds: i64,
@@ -35,6 +37,7 @@ impl AppState {
             upload_dir: cfg.upload_dir.clone(),
             public_upload_base_url: cfg.public_upload_base_url.clone(),
             max_upload_bytes: cfg.max_upload_bytes,
+            trusted_proxy_ips: cfg.trusted_proxy_ips.clone(),
             auth_secret: cfg.auth_secret.clone(),
             otp_dev_mode: cfg.otp_dev_mode,
             otp_ttl_seconds: cfg.otp_ttl_seconds,
@@ -211,6 +214,33 @@ pub fn validate_uploaded_photo_url(raw: &str, public_upload_base_url: &str) -> R
     Ok(format!("/uploads/{file_part}"))
 }
 
+/// Escape SQL `LIKE`/`ILIKE` metacharacters (`\`, `%`, `_`) so user search input matches literally.
+pub fn escape_ilike_pattern(raw: &str) -> String {
+    let mut out = String::with_capacity(raw.len() + 4);
+    for ch in raw.chars() {
+        match ch {
+            '\\' | '%' | '_' => {
+                out.push('\\');
+                out.push(ch);
+            }
+            _ => out.push(ch),
+        }
+    }
+    out
+}
+
+/// Generate a non-sequential public tracking code (`<PREFIX>-<05d>-<6-char CSPRNG suffix>`, <= 24 chars).
+pub fn generate_tracking_code(prefix: &str, seq_num: i64) -> String {
+    const ALPHABET: &[u8] = b"ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+    let mut entropy = [0u8; 6];
+    OsRng.fill_bytes(&mut entropy);
+    let mut suffix = String::with_capacity(6);
+    for byte in entropy {
+        suffix.push(ALPHABET[(byte as usize) % ALPHABET.len()] as char);
+    }
+    format!("{prefix}-{seq_num:05}-{suffix}")
+}
+
 /// Hash arbitrary string input with cryptographic SHA-256 (lowercase hex).
 pub fn sha256_hex(input: &str) -> String {
     let digest = Sha256::digest(input.as_bytes());
@@ -321,5 +351,15 @@ mod tests {
     #[test]
     fn masks_phone_safely() {
         assert_eq!(mask_phone("01715-883210"), "01715-••••10");
+    }
+
+    #[test]
+    fn escapes_ilike_wildcards_and_generates_random_codes() {
+        assert_eq!(escape_ilike_pattern(r"50%_off\zone"), r"50\%\_off\\zone");
+        let a = generate_tracking_code("CS-PK", 42);
+        let b = generate_tracking_code("CS-PK", 42);
+        assert!(a.starts_with("CS-PK-00042-"));
+        assert_eq!(a.len(), 18);
+        assert_ne!(a, b);
     }
 }

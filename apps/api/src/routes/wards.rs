@@ -1,7 +1,7 @@
 use axum::{
     extract::{Query, State},
-    http::{header, HeaderMap, HeaderValue},
-    response::IntoResponse,
+    http::{header, HeaderMap, HeaderValue, StatusCode},
+    response::{IntoResponse, Response},
     Json,
 };
 
@@ -14,7 +14,10 @@ use crate::{
 
 /// `GET /api/v1/wards`
 /// Single-pass aggregated ward & union list (eliminates N+1 subqueries) with ETag caching.
-pub async fn list_wards(State(state): State<AppState>) -> Result<impl IntoResponse, AppError> {
+pub async fn list_wards(
+    State(state): State<AppState>,
+    req_headers: HeaderMap,
+) -> Result<Response, AppError> {
     let wards = sqlx::query_as::<_, WardSummary>(
         r#"
         WITH pickup_counts AS (
@@ -77,7 +80,19 @@ pub async fn list_wards(State(state): State<AppState>) -> Result<impl IntoRespon
         headers.insert(header::ETAG, etag);
     }
 
-    Ok((headers, Json(wards)))
+    if req_headers
+        .get(header::IF_NONE_MATCH)
+        .and_then(|v| v.to_str().ok())
+        .is_some_and(|raw| {
+            raw.split(',')
+                .map(str::trim)
+                .any(|tag| tag == "*" || tag == etag_value)
+        })
+    {
+        return Ok((StatusCode::NOT_MODIFIED, headers).into_response());
+    }
+
+    Ok((headers, Json(wards)).into_response())
 }
 
 /// `GET /api/v1/wards/resolve`
@@ -161,7 +176,8 @@ async fn compute_analytics(state: &AppState) -> Result<AnalyticsSummary, AppErro
             COALESCE((
                 SELECT SUM(weight_kg)::float8
                 FROM task_completions
-                WHERE completed_at >= CURRENT_DATE AND weight_kg IS NOT NULL
+                WHERE completed_at >= (date_trunc('day', NOW() AT TIME ZONE 'Asia/Dhaka') AT TIME ZONE 'Asia/Dhaka')
+                  AND weight_kg IS NOT NULL
             ), 0.0) AS collected_weight_today_kg,
             (SELECT COUNT(*) FROM collector_vehicles WHERE status != 'offline') AS active_vehicles,
             COALESCE((

@@ -120,14 +120,19 @@ async fn process_sync_item(
             error: None,
             result: Some(res),
         },
-        Err(err) => SyncBatchResultItem {
-            idempotency_key: clean_key,
-            task_id: item.task_id,
-            ok: false,
-            replay: false,
-            error: Some(err.to_string()),
-            result: None,
-        },
+        Err(err) => {
+            if matches!(err, AppError::Database(_) | AppError::Internal(_)) {
+                tracing::error!(task_id = %item.task_id, error = %err, "collector batch sync item failed");
+            }
+            SyncBatchResultItem {
+                idempotency_key: clean_key,
+                task_id: item.task_id,
+                ok: false,
+                replay: false,
+                error: Some(err.client_safe_message()),
+                result: None,
+            }
+        }
     }
 }
 
@@ -371,8 +376,15 @@ async fn execute_complete_task(
             .execute(&mut *tx)
             .await?;
 
-            // Cascade clearance to clustered child duplicates.
-            sqlx::query(
+            // Cascade clearance to clustered child duplicates and notify each child reporter.
+            #[derive(sqlx::FromRow)]
+            struct ClearedChild {
+                id: Uuid,
+                tracking_code: String,
+                user_id: Option<Uuid>,
+            }
+
+            let cleared_children = sqlx::query_as::<_, ClearedChild>(
                 r#"
                 UPDATE dump_reports
                 SET status = 'cleared',
@@ -381,13 +393,30 @@ async fn execute_complete_task(
                     updated_at = $3
                 WHERE duplicate_of = $1
                   AND status IN ('reported', 'verified', 'dispatched')
+                RETURNING id, tracking_code, user_id
                 "#,
             )
             .bind(task_id)
             .bind(&final_photo)
             .bind(now)
-            .execute(&mut *tx)
+            .fetch_all(&mut *tx)
             .await?;
+
+            for child in cleared_children {
+                let child_body = format!(
+                    "আপনার অভিযোগ {} পরিষ্কার সম্পন্ন হয়েছে।",
+                    child.tracking_code
+                );
+                create_notification(
+                    &mut tx,
+                    child.user_id,
+                    "জায়গাটি পরিষ্কার হয়েছে",
+                    &child_body,
+                    "dump_report",
+                    child.id,
+                )
+                .await?;
+            }
 
             release_vehicle_if_idle(&mut tx, final_vehicle_id).await?;
 

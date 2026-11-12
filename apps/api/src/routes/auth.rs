@@ -76,13 +76,12 @@ pub async fn otp_login(
 
     let mut tx = state.pool.begin().await?;
 
-    // Cooldown: prevent spamming fresh OTPs every second to reset the attempt counter.
+    // Cooldown: prevent spamming or immediately re-issuing fresh OTPs after exhausting attempts.
     let recent_otp: Option<Uuid> = sqlx::query_scalar(
         r#"
         SELECT id
         FROM otp_codes
         WHERE phone = $1
-          AND consumed_at IS NULL
           AND created_at > NOW() - INTERVAL '30 seconds'
         LIMIT 1
         "#,
@@ -130,7 +129,10 @@ pub async fn otp_login(
     .await?;
 
     tx.commit().await?;
-    tracing::info!(phone = %phone, "issued HMAC-hashed OTP challenge");
+    tracing::info!(
+        phone = %crate::db::mask_phone(&phone),
+        "issued HMAC-hashed OTP challenge"
+    );
 
     Ok((
         StatusCode::OK,

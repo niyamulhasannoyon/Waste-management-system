@@ -8,11 +8,11 @@ use sqlx::types::Json as SqlxJson;
 use uuid::Uuid;
 
 use crate::{
-    auth::{extract_optional_auth, require_role, AuthUser, Role},
+    auth::{extract_client_ip, extract_optional_auth, require_role, AuthUser, Role},
     db::{
-        create_notification, ensure_ward_exists, mask_phone, normalize_bd_phone,
-        release_vehicle_if_idle, resolve_ward_id_and_match, validate_coords,
-        validate_uploaded_photo_url, AppState,
+        create_notification, ensure_ward_exists, escape_ilike_pattern, generate_tracking_code,
+        mask_phone, normalize_bd_phone, release_vehicle_if_idle, resolve_ward_id_and_match,
+        validate_coords, validate_uploaded_photo_url, AppState,
     },
     error::AppError,
     models::{
@@ -171,7 +171,7 @@ pub async fn list_reports(
         .as_deref()
         .map(str::trim)
         .filter(|s| !s.is_empty())
-        .map(|s| format!("%{s}%"));
+        .map(|s| format!("%{}%", escape_ilike_pattern(s)));
 
     let owner_user_id: Option<Uuid> = if auth_user.role == Role::Citizen {
         Some(auth_user.user_id)
@@ -230,9 +230,9 @@ pub async fn list_reports(
            )
            AND (
                $10::TEXT IS NULL
-               OR dr.tracking_code ILIKE $10
-               OR dr.title_bn ILIKE $10
-               OR dr.landmark ILIKE $10
+               OR dr.tracking_code ILIKE $10 ESCAPE '\\'
+               OR dr.title_bn ILIKE $10 ESCAPE '\\'
+               OR dr.landmark ILIKE $10 ESCAPE '\\'
            )
          ORDER BY
            CASE dr.severity WHEN 'critical' THEN 1 WHEN 'high' THEN 2 ELSE 3 END ASC,
@@ -410,7 +410,7 @@ pub async fn create_report(
     let seq_num: i64 = sqlx::query_scalar("SELECT nextval('report_tracking_seq')")
         .fetch_one(&mut *tx)
         .await?;
-    let tracking_code = format!("CS-DR-{seq_num:05}");
+    let tracking_code = generate_tracking_code("CS-DR", seq_num);
     let id = Uuid::new_v4();
 
     sqlx::query(
@@ -482,8 +482,21 @@ pub async fn track_by_code(
     Path(code): Path<String>,
     Query(verify): Query<TrackVerifyQuery>,
 ) -> Result<Json<TrackedReportResponse>, AppError> {
+    let ip = extract_client_ip(&headers);
+    state
+        .rate_limiter
+        .check(&format!("track_ip:{ip}"), 60, 600)
+        .await?;
+
     let auth_user = extract_optional_auth(&state, &headers).await?;
     let normalized_code = code.trim().to_uppercase();
+    if verify.phone.as_deref().is_some_and(|p| !p.trim().is_empty()) {
+        state
+            .rate_limiter
+            .check(&format!("track_verify:{normalized_code}:{ip}"), 8, 900)
+            .await?;
+    }
+
     let sql = format!("{REPORT_SELECT_BASE} WHERE dr.tracking_code = $1");
 
     let mut report = sqlx::query_as::<_, DumpReportRecord>(&sql)
@@ -509,9 +522,15 @@ pub async fn track_by_code(
     if !is_authorized {
         report.reporter_phone = mask_phone(&report.reporter_phone);
         report.reporter_name = "সাভারের নাগরিক".to_string();
+        report.landmark = "গোপনীয় স্থান (লগইন বা ফোন যাচাইয়ে দৃশ্যমান)".to_string();
+        report.description_bn = "লগইন অথবা ফোন নম্বর যাচাই করলে বিস্তারিত বিবরণ দেখা যাবে।".to_string();
+        report.photo_urls = SqlxJson(Vec::new());
+        report.resolved_photo_url = None;
+        report.lat = (report.lat * 100.0).round() / 100.0;
+        report.lng = (report.lng * 100.0).round() / 100.0;
     }
 
-    let events = sqlx::query_as::<_, StatusEventRecord>(
+    let mut events = sqlx::query_as::<_, StatusEventRecord>(
         r#"
         SELECT id, entity_type, entity_id, from_status, to_status, actor_label, note_bn, created_at
         FROM status_events
@@ -522,6 +541,12 @@ pub async fn track_by_code(
     .bind(report.id)
     .fetch_all(&state.pool)
     .await?;
+
+    if !is_authorized {
+        for ev in &mut events {
+            ev.actor_label = "সিস্টেম/টিম".to_string();
+        }
+    }
 
     Ok(Json(TrackedReportResponse { report, events }))
 }
@@ -613,9 +638,16 @@ pub async fn update_report_status(
     .execute(&mut *tx)
     .await?;
 
-    // Cascade terminal cleared/rejected resolution to clustered child duplicates.
+    // Cascade terminal cleared/rejected resolution to clustered child duplicates and notify child reporters.
     if matches!(payload.status.as_str(), "cleared" | "rejected") {
-        sqlx::query(
+        #[derive(sqlx::FromRow)]
+        struct CascadedChild {
+            id: Uuid,
+            tracking_code: String,
+            user_id: Option<Uuid>,
+        }
+
+        let cascaded_children = sqlx::query_as::<_, CascadedChild>(
             r#"
             UPDATE dump_reports
             SET status = $2,
@@ -624,13 +656,31 @@ pub async fn update_report_status(
                 updated_at = NOW()
             WHERE duplicate_of = $1
               AND status IN ('reported', 'verified', 'dispatched')
+            RETURNING id, tracking_code, user_id
             "#,
         )
         .bind(id)
         .bind(&payload.status)
         .bind(&resolved_photo_url)
-        .execute(&mut *tx)
+        .fetch_all(&mut *tx)
         .await?;
+
+        for child in cascaded_children {
+            let child_body = format!(
+                "আপনার অভিযোগ {} এর বর্তমান অবস্থা: {}।",
+                child.tracking_code,
+                report_status_bn(&payload.status)
+            );
+            create_notification(
+                &mut tx,
+                child.user_id,
+                "ময়লার অভিযোগ আপডেট",
+                &child_body,
+                "dump_report",
+                child.id,
+            )
+            .await?;
+        }
 
         release_vehicle_if_idle(&mut tx, row.assigned_vehicle_id).await?;
     }

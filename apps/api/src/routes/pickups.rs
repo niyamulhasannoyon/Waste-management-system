@@ -7,10 +7,11 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::{
-    auth::{extract_optional_auth, require_role, AuthUser, Role},
+    auth::{extract_client_ip, extract_optional_auth, require_role, AuthUser, Role},
     db::{
-        create_notification, ensure_ward_exists, mask_phone, normalize_bd_phone,
-        release_vehicle_if_idle, resolve_ward_id_and_match, validate_coords, AppState,
+        create_notification, ensure_ward_exists, escape_ilike_pattern, generate_tracking_code,
+        mask_phone, normalize_bd_phone, release_vehicle_if_idle, resolve_ward_id_and_match,
+        validate_coords, AppState,
     },
     error::AppError,
     models::{
@@ -123,7 +124,7 @@ pub async fn list_pickups(
         .as_deref()
         .map(str::trim)
         .filter(|s| !s.is_empty())
-        .map(|s| format!("%{s}%"));
+        .map(|s| format!("%{}%", escape_ilike_pattern(s)));
 
     let phone_filter = match auth_user.role {
         Role::Citizen => Some(auth_user.phone.clone()),
@@ -183,9 +184,9 @@ pub async fn list_pickups(
            )
            AND (
                $6::TEXT IS NULL
-               OR pr.tracking_code ILIKE $6
-               OR pr.address_line ILIKE $6
-               OR pr.landmark ILIKE $6
+               OR pr.tracking_code ILIKE $6 ESCAPE '\\'
+               OR pr.address_line ILIKE $6 ESCAPE '\\'
+               OR pr.landmark ILIKE $6 ESCAPE '\\'
            )
          ORDER BY pr.created_at DESC
          LIMIT $7 OFFSET $8"
@@ -364,7 +365,7 @@ pub async fn create_pickup(
     let seq_num: i64 = sqlx::query_scalar("SELECT nextval('pickup_tracking_seq')")
         .fetch_one(&mut *tx)
         .await?;
-    let tracking_code = format!("CS-PK-{seq_num:05}");
+    let tracking_code = generate_tracking_code("CS-PK", seq_num);
     let id = Uuid::new_v4();
 
     sqlx::query(
@@ -425,8 +426,21 @@ pub async fn track_by_code(
     Path(code): Path<String>,
     Query(verify): Query<TrackVerifyQuery>,
 ) -> Result<Json<TrackedPickupResponse>, AppError> {
+    let ip = extract_client_ip(&headers);
+    state
+        .rate_limiter
+        .check(&format!("track_ip:{ip}"), 60, 600)
+        .await?;
+
     let auth_user = extract_optional_auth(&state, &headers).await?;
     let normalized_code = code.trim().to_uppercase();
+    if verify.phone.as_deref().is_some_and(|p| !p.trim().is_empty()) {
+        state
+            .rate_limiter
+            .check(&format!("track_verify:{normalized_code}:{ip}"), 8, 900)
+            .await?;
+    }
+
     let sql = format!("{PICKUP_SELECT_BASE} WHERE pr.tracking_code = $1");
 
     let mut pickup = sqlx::query_as::<_, PickupRequestRecord>(&sql)
@@ -453,10 +467,14 @@ pub async fn track_by_code(
         pickup.citizen_name = "সাভারের নাগরিক".to_string();
         pickup.citizen_phone = mask_phone(&pickup.citizen_phone);
         pickup.address_line = "গোপনীয় ঠিকানা (যাচাইকৃত লগইন বা ফোন নম্বরে দৃশ্যমান)".to_string();
+        pickup.landmark = "গোপনীয় স্থান".to_string();
         pickup.notes = String::new();
+        pickup.completion_photo_url = None;
+        pickup.lat = (pickup.lat * 100.0).round() / 100.0;
+        pickup.lng = (pickup.lng * 100.0).round() / 100.0;
     }
 
-    let events = sqlx::query_as::<_, StatusEventRecord>(
+    let mut events = sqlx::query_as::<_, StatusEventRecord>(
         r#"
         SELECT id, entity_type, entity_id, from_status, to_status, actor_label, note_bn, created_at
         FROM status_events
@@ -467,6 +485,12 @@ pub async fn track_by_code(
     .bind(pickup.id)
     .fetch_all(&state.pool)
     .await?;
+
+    if !is_authorized {
+        for ev in &mut events {
+            ev.actor_label = "সিস্টেম/টিম".to_string();
+        }
+    }
 
     Ok(Json(TrackedPickupResponse { pickup, events }))
 }

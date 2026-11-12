@@ -1,15 +1,17 @@
-use std::env;
+use std::{env, net::IpAddr};
 
 /// Runtime configuration loaded from environment variables.
 /// Fails closed if required secrets/database config are missing outside explicit dev mode.
 #[derive(Clone, Debug)]
 pub struct AppConfig {
+    pub app_env: String,
     pub database_url: String,
     pub bind_addr: String,
     pub upload_dir: String,
     pub public_upload_base_url: String,
     pub max_upload_bytes: usize,
     pub cors_allowed_origins: Vec<String>,
+    pub trusted_proxy_ips: Vec<IpAddr>,
     pub auth_secret: String,
     pub otp_dev_mode: bool,
     pub otp_ttl_seconds: i64,
@@ -22,7 +24,24 @@ pub struct AppConfig {
 impl AppConfig {
     /// Load configuration safely from environment variables.
     pub fn from_env() -> Result<Self, String> {
+        let app_env = env::var("APP_ENV")
+            .unwrap_or_else(|_| "development".to_string())
+            .trim()
+            .to_ascii_lowercase();
+        let is_production = matches!(app_env.as_str(), "production" | "prod");
         let allow_dev_defaults = parse_bool_env("ALLOW_INSECURE_DEV_DEFAULTS", false);
+        let otp_dev_mode = parse_bool_env("OTP_DEV_MODE", false);
+
+        if is_production && allow_dev_defaults {
+            return Err(
+                "ALLOW_INSECURE_DEV_DEFAULTS cannot be enabled when APP_ENV=production".to_string(),
+            );
+        }
+        if is_production && otp_dev_mode {
+            return Err(
+                "OTP_DEV_MODE cannot be enabled when APP_ENV=production".to_string(),
+            );
+        }
 
         let database_url = match env::var("DATABASE_URL") {
             Ok(val) if !val.trim().is_empty() => val,
@@ -74,14 +93,28 @@ impl AppConfig {
             .unwrap_or(5 * 1024 * 1024)
             .clamp(64 * 1024, 15 * 1024 * 1024);
 
-        let cors_allowed_origins = env::var("CORS_ALLOWED_ORIGINS")
+        let cors_allowed_origins: Vec<String> = env::var("CORS_ALLOWED_ORIGINS")
             .unwrap_or_else(|_| "http://localhost:3000,http://127.0.0.1:3000".to_string())
             .split(',')
             .map(|s| s.trim().to_string())
             .filter(|s| !s.is_empty())
             .collect();
 
-        let otp_dev_mode = parse_bool_env("OTP_DEV_MODE", false);
+        if cors_allowed_origins.iter().any(|origin| origin == "*") {
+            return Err("CORS_ALLOWED_ORIGINS cannot contain wildcard '*'".to_string());
+        }
+
+        let trusted_proxy_ips: Vec<IpAddr> = env::var("TRUSTED_PROXY_IPS")
+            .unwrap_or_default()
+            .split(',')
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(|s| {
+                s.parse::<IpAddr>()
+                    .map_err(|_| format!("Invalid IP address in TRUSTED_PROXY_IPS: {s}"))
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+
         let otp_ttl_seconds = parse_i64_env("OTP_TTL_SECONDS", 300).clamp(60, 1800);
         let session_ttl_seconds =
             parse_i64_env("SESSION_TTL_SECONDS", 604_800).clamp(300, 31_536_000);
@@ -98,12 +131,14 @@ impl AppConfig {
             .collect();
 
         Ok(Self {
+            app_env,
             database_url,
             bind_addr,
             upload_dir,
             public_upload_base_url,
             max_upload_bytes,
             cors_allowed_origins,
+            trusted_proxy_ips,
             auth_secret,
             otp_dev_mode,
             otp_ttl_seconds,

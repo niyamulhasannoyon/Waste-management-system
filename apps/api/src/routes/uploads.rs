@@ -3,7 +3,7 @@ use axum::{
     http::{HeaderMap, StatusCode},
     Json,
 };
-use image::{imageops::FilterType, ImageFormat};
+use image::{imageops::FilterType, ImageFormat, ImageReader, Limits};
 use serde::Serialize;
 use std::io::Cursor;
 use tokio::fs;
@@ -47,21 +47,41 @@ fn sanitize_and_reencode_image(
     bytes: &[u8],
     kind: InputKind,
 ) -> Result<(Vec<u8>, &'static str, &'static str), AppError> {
-    let img = image::load_from_memory(bytes).map_err(|_| {
-        AppError::validation(
-            "Invalid or corrupted image file.",
-            "ছবিটি পড়া যায়নি বা ক্ষতিগ্রস্ত। অনুগ্রহ করে সঠিক JPG, PNG বা WebP ছবি দিন।",
-        )
-    })?;
+    let src_format = match kind {
+        InputKind::Jpeg => ImageFormat::Jpeg,
+        InputKind::Png => ImageFormat::Png,
+        InputKind::Webp => ImageFormat::WebP,
+    };
 
-    let w = img.width();
-    let h = img.height();
+    let (w, h) = ImageReader::with_format(Cursor::new(bytes), src_format)
+        .into_dimensions()
+        .map_err(|_| {
+            AppError::validation(
+                "Invalid or corrupted image file.",
+                "ছবিটি পড়া যায়নি বা ক্ষতিগ্রস্ত। অনুগ্রহ করে সঠিক JPG, PNG বা WebP ছবি দিন।",
+            )
+        })?;
+
     if w == 0 || h == 0 || w > 8000 || h > 8000 {
         return Err(AppError::validation(
             "Image dimensions must be between 1×1 and 8000×8000 pixels.",
             "ছবির রেজোলিউশন সঠিক নয় (সর্বোচ্চ ৮০০০×৮০০০ পিক্সেল)।",
         ));
     }
+
+    let mut limits = Limits::default();
+    limits.max_image_width = Some(8000);
+    limits.max_image_height = Some(8000);
+    limits.max_alloc = Some(128 * 1024 * 1024);
+
+    let mut reader = ImageReader::with_format(Cursor::new(bytes), src_format);
+    reader.limits(limits);
+    let img = reader.decode().map_err(|_| {
+        AppError::validation(
+            "Invalid or oversized image payload.",
+            "ছবিটি ডিকোড করা যায়নি বা অনুমোদিত মেমরি সীমা অতিক্রম করেছে।",
+        )
+    })?;
 
     let resized = if w > 1600 || h > 1600 {
         img.resize(1600, 1600, FilterType::Triangle)
@@ -139,9 +159,15 @@ pub async fn upload_photo(
         }
 
         if data.len() > state.max_upload_bytes {
+            let max_mb = (state.max_upload_bytes as f64) / (1024.0 * 1024.0);
+            let max_mb_label = if state.max_upload_bytes % (1024 * 1024) == 0 {
+                format!("{}", state.max_upload_bytes / (1024 * 1024))
+            } else {
+                format!("{max_mb:.1}")
+            };
             return Err(AppError::PayloadTooLarge {
                 message: format!("Photo exceeds {} bytes limit.", state.max_upload_bytes),
-                message_bn: "ছবির সাইজ ৫ মেগাবাইটের বেশি হওয়া যাবে না।".to_string(),
+                message_bn: format!("ছবির সাইজ {max_mb_label} মেগাবাইটের বেশি হওয়া যাবে না।"),
             });
         }
 

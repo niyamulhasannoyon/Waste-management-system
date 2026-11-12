@@ -112,6 +112,20 @@ impl AppError {
             message_bn: message_bn.into(),
         }
     }
+
+    pub fn client_safe_message(&self) -> String {
+        match self {
+            Self::Validation { message, .. }
+            | Self::Unauthorized { message, .. }
+            | Self::Forbidden { message, .. }
+            | Self::NotFound { message, .. }
+            | Self::Conflict { message, .. }
+            | Self::TooManyRequests { message, .. }
+            | Self::PayloadTooLarge { message, .. } => message.clone(),
+            Self::Database(_) => "A database error occurred while processing this item.".to_string(),
+            Self::Internal(_) => "Internal server error.".to_string(),
+        }
+    }
 }
 
 impl IntoResponse for AppError {
