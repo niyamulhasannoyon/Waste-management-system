@@ -40,6 +40,7 @@ jobs:
         run: |
           psql -h 127.0.0.1 -U clean_savar -d clean_savar -v ON_ERROR_STOP=1 -f apps/api/migrations/0001_init_postgis.sql
           psql -h 127.0.0.1 -U clean_savar -d clean_savar -v ON_ERROR_STOP=1 -f apps/api/migrations/0002_seed_savar_wards.sql
+          psql -h 127.0.0.1 -U clean_savar -d clean_savar -v ON_ERROR_STOP=1 -f apps/api/migrations/0003_indexes_audit_retention.sql
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable

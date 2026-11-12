@@ -281,6 +281,42 @@ pub async fn create_notification(
     Ok(())
 }
 
+/// Insert an immutable audit trail event inside either a pool or open transaction.
+#[allow(clippy::too_many_arguments)]
+pub async fn record_audit_log<'e, E>(
+    executor: E,
+    actor_user_id: Option<Uuid>,
+    actor_role: Option<&str>,
+    action: &str,
+    entity_type: Option<&str>,
+    entity_id: Option<Uuid>,
+    ip_address: Option<&str>,
+    metadata: serde_json::Value,
+) -> Result<(), AppError>
+where
+    E: sqlx::Executor<'e, Database = Postgres>,
+{
+    sqlx::query(
+        r#"
+        INSERT INTO audit_logs (
+            actor_user_id, actor_role, action, entity_type, entity_id, ip_address, metadata
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        "#,
+    )
+    .bind(actor_user_id)
+    .bind(actor_role)
+    .bind(action)
+    .bind(entity_type)
+    .bind(entity_id)
+    .bind(ip_address)
+    .bind(metadata)
+    .execute(executor)
+    .await?;
+
+    Ok(())
+}
+
 /// Check if a vehicle still has any active non-terminal pickup or dump report; if none, free it.
 pub async fn release_vehicle_if_idle(
     tx: &mut Transaction<'_, Postgres>,

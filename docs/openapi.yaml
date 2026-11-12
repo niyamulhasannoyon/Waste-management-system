@@ -227,6 +227,34 @@ paths:
       responses:
         "204":
           description: Session revoked
+  /auth/erase:
+    post:
+      summary: Anonymize authenticated user PII and revoke sessions
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Account anonymized
+        "403":
+          description: Admin self-erasure disallowed
+  /admin/retention/purge:
+    post:
+      summary: Execute expired transient token cleanup and retention anonymization (Admin only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: retention_days
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 30
+            maximum: 3650
+      responses:
+        "200":
+          description: Purge counts returned
+        "403":
+          description: Admin role required
   /wards:
     get:
       summary: List canonical Savar wards and unions

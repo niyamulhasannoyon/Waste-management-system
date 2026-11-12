@@ -1,5 +1,5 @@
 use axum::{
-    extract::State,
+    extract::{Query, State},
     http::{HeaderMap, StatusCode},
     Json,
 };
@@ -9,13 +9,14 @@ use uuid::Uuid;
 use crate::{
     auth::{
         constant_time_eq, extract_client_ip, generate_otp_code, generate_session_token,
-        hmac_hash_hex, require_auth, Role,
+        hmac_hash_hex, require_auth, require_role, Role,
     },
-    db::{ensure_ward_exists, normalize_bd_phone, AppState},
+    db::{ensure_ward_exists, mask_phone, normalize_bd_phone, record_audit_log, AppState},
     error::AppError,
     models::auth::{
-        AuthenticatedProfile, OtpLoginRequest, OtpLoginResponse, OtpVerifyRequest,
-        OtpVerifyResponse, UserRecord,
+        AccountEraseResponse, AuthenticatedProfile, OtpLoginRequest, OtpLoginResponse,
+        OtpVerifyRequest, OtpVerifyResponse, RetentionPurgeQuery, RetentionPurgeResponse,
+        UserRecord,
     },
 };
 
@@ -211,6 +212,17 @@ pub async fn verify_otp(
             .bind(otp_row.id)
             .execute(&mut *tx)
             .await?;
+        record_audit_log(
+            &mut *tx,
+            None,
+            None,
+            "otp_lockout",
+            Some("otp_code"),
+            Some(otp_row.id),
+            Some(&ip),
+            serde_json::json!({ "masked_phone": mask_phone(&phone) }),
+        )
+        .await?;
         tx.commit().await?;
         return Err(AppError::too_many_requests(
             "Too many incorrect OTP attempts. Request a new OTP.",
@@ -224,6 +236,20 @@ pub async fn verify_otp(
             .bind(otp_row.id)
             .execute(&mut *tx)
             .await?;
+        record_audit_log(
+            &mut *tx,
+            None,
+            None,
+            "otp_failed",
+            Some("otp_code"),
+            Some(otp_row.id),
+            Some(&ip),
+            serde_json::json!({
+                "masked_phone": mask_phone(&phone),
+                "attempt": otp_row.attempts + 1,
+            }),
+        )
+        .await?;
         tx.commit().await?;
         return Err(AppError::unauthorized(
             "Verification code does not match.",
@@ -335,6 +361,18 @@ pub async fn verify_otp(
     .execute(&mut *tx)
     .await?;
 
+    record_audit_log(
+        &mut *tx,
+        Some(user.id),
+        Some(user.role.as_str()),
+        "otp_verified",
+        Some("user"),
+        Some(user.id),
+        Some(&ip),
+        serde_json::json!({ "masked_phone": mask_phone(&phone) }),
+    )
+    .await?;
+
     tx.commit().await?;
 
     Ok(Json(OtpVerifyResponse {
@@ -378,11 +416,189 @@ pub async fn logout(
     headers: HeaderMap,
 ) -> Result<StatusCode, AppError> {
     let auth_user = require_auth(&state, &headers).await?;
+    let ip = extract_client_ip(&headers);
 
     sqlx::query("UPDATE auth_sessions SET revoked_at = NOW() WHERE token_hash = $1")
         .bind(&auth_user.token_hash)
         .execute(&state.pool)
         .await?;
 
+    record_audit_log(
+        &state.pool,
+        Some(auth_user.user_id),
+        Some(auth_user.role.as_str()),
+        "session_logout",
+        Some("user"),
+        Some(auth_user.user_id),
+        Some(&ip),
+        serde_json::json!({}),
+    )
+    .await?;
+
     Ok(StatusCode::NO_CONTENT)
+}
+
+/// `POST /api/v1/auth/erase`
+/// Anonymizes the authenticated user's PII across profile, pickup requests, and dump reports,
+/// snaps pickup coordinates to ward centroid, and revokes all active bearer sessions.
+pub async fn erase_account(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Result<Json<AccountEraseResponse>, AppError> {
+    let auth_user = require_auth(&state, &headers).await?;
+    if auth_user.role == Role::Admin {
+        return Err(AppError::forbidden(
+            "Administrator accounts cannot self-erase directly.",
+            "অ্যাডমিন অ্যাকাউন্ট সরাসরি মুছে ফেলা যাবে না; আগে দায়িত্ব হস্তান্তর করুন।",
+        ));
+    }
+
+    let ip = extract_client_ip(&headers);
+    let mut tx = state.pool.begin().await?;
+
+    // Unlink any assigned fleet/partner references before anonymizing user identity.
+    sqlx::query("UPDATE collector_vehicles SET user_id = NULL, updated_at = NOW() WHERE user_id = $1")
+        .bind(auth_user.user_id)
+        .execute(&mut *tx)
+        .await?;
+    sqlx::query("UPDATE partners SET user_id = NULL WHERE user_id = $1")
+        .bind(auth_user.user_id)
+        .execute(&mut *tx)
+        .await?;
+
+    let anonymized_pickups = sqlx::query(
+        r#"
+        UPDATE pickup_requests
+        SET citizen_name = 'Anonymous',
+            citizen_phone = '00000-000000',
+            address_line = 'Anonymized',
+            landmark = '',
+            notes = '',
+            location = w.centroid,
+            anonymized_at = NOW(),
+            updated_at = NOW()
+        FROM wards w
+        WHERE w.id = pickup_requests.ward_id
+          AND pickup_requests.user_id = $1
+          AND pickup_requests.anonymized_at IS NULL
+        "#,
+    )
+    .bind(auth_user.user_id)
+    .execute(&mut *tx)
+    .await?
+    .rows_affected();
+
+    let anonymized_reports = sqlx::query(
+        r#"
+        UPDATE dump_reports
+        SET reporter_name = '',
+            reporter_phone = '00000-000000',
+            location = w.centroid,
+            anonymized_at = NOW(),
+            updated_at = NOW()
+        FROM wards w
+        WHERE w.id = dump_reports.ward_id
+          AND dump_reports.user_id = $1
+          AND dump_reports.anonymized_at IS NULL
+        "#,
+    )
+    .bind(auth_user.user_id)
+    .execute(&mut *tx)
+    .await?
+    .rows_affected();
+
+    sqlx::query("DELETE FROM notifications WHERE user_id = $1")
+        .bind(auth_user.user_id)
+        .execute(&mut *tx)
+        .await?;
+
+    sqlx::query("DELETE FROM otp_codes WHERE phone = $1")
+        .bind(&auth_user.phone)
+        .execute(&mut *tx)
+        .await?;
+
+    sqlx::query("UPDATE auth_sessions SET revoked_at = NOW() WHERE user_id = $1 AND revoked_at IS NULL")
+        .bind(auth_user.user_id)
+        .execute(&mut *tx)
+        .await?;
+
+    sqlx::query(
+        r#"
+        UPDATE users
+        SET phone = LEFT('del-' || REPLACE(id::text, '-', ''), 20),
+            full_name = 'মুছে ফেলা ব্যবহারকারী',
+            is_verified = FALSE,
+            anonymized_at = NOW(),
+            updated_at = NOW()
+        WHERE id = $1
+        "#,
+    )
+    .bind(auth_user.user_id)
+    .execute(&mut *tx)
+    .await?;
+
+    record_audit_log(
+        &mut *tx,
+        Some(auth_user.user_id),
+        Some(auth_user.role.as_str()),
+        "account_erased",
+        Some("user"),
+        Some(auth_user.user_id),
+        Some(&ip),
+        serde_json::json!({
+            "anonymized_pickups": anonymized_pickups,
+            "anonymized_reports": anonymized_reports,
+        }),
+    )
+    .await?;
+
+    tx.commit().await?;
+
+    Ok(Json(AccountEraseResponse {
+        erased_user_id: auth_user.user_id,
+        anonymized_pickups,
+        anonymized_reports,
+        message: "Personal data has been anonymized and active sessions revoked.",
+        message_bn: "আপনার ব্যক্তিগত তথ্য নিরাপদভাবে মুছে ফেলা হয়েছে এবং সেশন বাতিল করা হয়েছে।",
+    }))
+}
+
+/// `POST /api/v1/admin/retention/purge` (Admin only)
+/// Runs expired OTP/session cleanup and PII anonymization using `purge_expired_pii`.
+pub async fn purge_retention(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Query(query): Query<RetentionPurgeQuery>,
+) -> Result<Json<RetentionPurgeResponse>, AppError> {
+    let admin = require_role(&state, &headers, &[Role::Admin]).await?;
+    let ip = extract_client_ip(&headers);
+    let days = query.retention_days.unwrap_or(365).clamp(30, 3650);
+
+    let result = sqlx::query_as::<_, RetentionPurgeResponse>(
+        "SELECT purged_otps, purged_sessions, purged_idempotency, anonymized_pickups, anonymized_reports FROM purge_expired_pii($1)",
+    )
+    .bind(days)
+    .fetch_one(&state.pool)
+    .await?;
+
+    record_audit_log(
+        &state.pool,
+        Some(admin.user_id),
+        Some(admin.role.as_str()),
+        "retention_purge",
+        None,
+        None,
+        Some(&ip),
+        serde_json::json!({
+            "retention_days": days,
+            "purged_otps": result.purged_otps,
+            "purged_sessions": result.purged_sessions,
+            "purged_idempotency": result.purged_idempotency,
+            "anonymized_pickups": result.anonymized_pickups,
+            "anonymized_reports": result.anonymized_reports,
+        }),
+    )
+    .await?;
+
+    Ok(Json(result))
 }

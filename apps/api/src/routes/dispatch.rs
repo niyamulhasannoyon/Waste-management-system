@@ -7,8 +7,8 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::{
-    auth::{require_role, Role},
-    db::{create_notification, release_vehicle_if_idle, validate_coords, AppState},
+    auth::{extract_client_ip, require_role, Role},
+    db::{create_notification, record_audit_log, release_vehicle_if_idle, validate_coords, AppState},
     error::AppError,
     models::dump_report::{
         CollectorVehicleRecord, DispatchAssignRequest, DispatchAssignResponse,
@@ -275,6 +275,7 @@ pub async fn assign_vehicle(
     Json(payload): Json<DispatchAssignRequest>,
 ) -> Result<Json<DispatchAssignResponse>, AppError> {
     let admin = require_role(&state, &headers, &[Role::Admin]).await?;
+    let ip = extract_client_ip(&headers);
 
     if !matches!(payload.entity_type.as_str(), "pickup" | "dump_report") {
         return Err(AppError::validation(
@@ -485,6 +486,23 @@ pub async fn assign_vehicle(
         &driver_body,
         &payload.entity_type,
         payload.entity_id,
+    )
+    .await?;
+
+    record_audit_log(
+        &mut *tx,
+        Some(admin.user_id),
+        Some(admin.role.as_str()),
+        "dispatch_assigned",
+        Some(&payload.entity_type),
+        Some(payload.entity_id),
+        Some(&ip),
+        serde_json::json!({
+            "vehicle_id": vehicle.id,
+            "vehicle_code": vehicle.code,
+            "tracking_code": target.tracking_code,
+            "new_status": new_status,
+        }),
     )
     .await?;
 

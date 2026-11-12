@@ -23,6 +23,8 @@ pub fn api_router() -> Router<AppState> {
         .route("/auth/otp-verify", post(auth::verify_otp))
         .route("/auth/me", get(auth::me))
         .route("/auth/logout", post(auth::logout))
+        .route("/auth/erase", post(auth::erase_account))
+        .route("/admin/retention/purge", post(auth::purge_retention))
         .route("/wards", get(wards::list_wards))
         .route("/wards/resolve", get(wards::resolve_ward))
         .route("/analytics/public", get(wards::public_analytics))

@@ -24,6 +24,8 @@ All endpoints are served under `/api/v1` (default local base URL: `http://localh
 | `POST /auth/otp-verify` | Public | Verify OTP and issue session Bearer token + profile |
 | `GET /auth/me` | Authenticated | Return active user & collector/partner metadata |
 | `POST /auth/logout` | Authenticated | Revoke current Bearer session token |
+| `POST /auth/erase` | Authenticated (non-admin) | Anonymize user PII & linked pickups/reports and revoke sessions |
+| `POST /admin/retention/purge` | `admin` | Purge expired OTPs/sessions/idempotency keys and anonymize retention-expired records |
 | `GET /wards` | Public | List Savar Wards `1–9` and Unions `101–106` with `ETag`/`304` support |
 | `GET /wards/resolve` | Public | Resolve `lat`, `lng` coordinates to containing/nearest ward or union |
 | `GET /analytics/public` | Public | Public municipal KPI summary |

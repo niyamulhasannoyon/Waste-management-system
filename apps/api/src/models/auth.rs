@@ -64,3 +64,32 @@ pub struct NotificationRecord {
     pub is_read: bool,
     pub created_at: DateTime<Utc>,
 }
+
+#[derive(Debug, Deserialize, Default)]
+pub struct PaginationQuery {
+    pub page: Option<i64>,
+    pub limit: Option<i64>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct AccountEraseResponse {
+    pub erased_user_id: Uuid,
+    pub anonymized_pickups: u64,
+    pub anonymized_reports: u64,
+    pub message: &'static str,
+    pub message_bn: &'static str,
+}
+
+#[derive(Debug, Deserialize, Default)]
+pub struct RetentionPurgeQuery {
+    pub retention_days: Option<i32>,
+}
+
+#[derive(Debug, Serialize, FromRow)]
+pub struct RetentionPurgeResponse {
+    pub purged_otps: i64,
+    pub purged_sessions: i64,
+    pub purged_idempotency: i64,
+    pub anonymized_pickups: i64,
+    pub anonymized_reports: i64,
+}
