@@ -1,4 +1,5 @@
 import 'package:clean_savar_core/clean_savar_core.dart' as core;
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -227,50 +228,54 @@ class CitizenProfileScreen extends ConsumerWidget {
           isAuthenticated: citizen.isAuthenticated,
           otpPreview: citizen.otpPreview,
         ),
-        const SizedBox(height: 12),
-        FlatCard(
-          onTap: () => ref
-              .read(appRoleProvider.notifier)
-              .setRole(AppRole.collector),
-          child: const Row(
-            children: [
-              Icon(
-                Icons.local_shipping_outlined,
-                color: AppColors.primaryGreen,
-                size: 26,
-              ),
-              SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'পরিচ্ছন্নতাকর্মী মোডে প্রবেশ করুন',
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.textPrimary,
-                      ),
-                    ),
-                    SizedBox(height: 2),
-                    Text(
-                      'ফিল্ড কালেক্টর অ্যাপ UI ও রুট টেস্ট করুন',
-                      style: TextStyle(
-                        fontSize: 12.5,
-                        color: AppColors.textSecondary,
-                      ),
-                    ),
-                  ],
+        if (kDebugMode ||
+            citizen.authenticatedRole == 'collector' ||
+            citizen.authenticatedRole == 'admin') ...[
+          const SizedBox(height: 12),
+          FlatCard(
+            onTap: () => ref
+                .read(appRoleProvider.notifier)
+                .setRole(AppRole.collector),
+            child: const Row(
+              children: [
+                Icon(
+                  Icons.local_shipping_outlined,
+                  color: AppColors.primaryGreen,
+                  size: 26,
                 ),
-              ),
-              Icon(
-                Icons.arrow_forward_ios_rounded,
-                size: 16,
-                color: AppColors.textMuted,
-              ),
-            ],
+                SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'পরিচ্ছন্নতাকর্মী মোডে প্রবেশ করুন',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                      SizedBox(height: 2),
+                      Text(
+                        'ফিল্ড কালেক্টর অ্যাপ UI ও রুট দেখুন',
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Icon(
+                  Icons.arrow_forward_ios_rounded,
+                  size: 16,
+                  color: AppColors.textMuted,
+                ),
+              ],
+            ),
           ),
-        ),
+        ],
       ],
     );
   }
@@ -324,7 +329,9 @@ class _CitizenOtpAuthCardState extends ConsumerState<_CitizenOtpAuthCard> {
       if (!mounted) return;
       setState(() {
         _otpRequested = true;
-        if (challenge.devOtpPreview != null && challenge.devOtpPreview!.isNotEmpty) {
+        if (kDebugMode &&
+            challenge.devOtpPreview != null &&
+            challenge.devOtpPreview!.isNotEmpty) {
           _otpCtrl.text = challenge.devOtpPreview!;
           _statusMessage =
               'ডেভ OTP কোড: ${challenge.devOtpPreview} (যাচাই করতে নিচের বাটনে চাপ দিন)';

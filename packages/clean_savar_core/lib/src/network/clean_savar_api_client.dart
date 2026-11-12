@@ -33,7 +33,9 @@ class CleanSavarApiClient {
   final String baseUrl;
   final http.Client _client;
   String? _authToken;
-  static const Duration _timeout = Duration(seconds: 6);
+  static const Duration _timeout = Duration(seconds: 15);
+  static const Duration _uploadTimeout = Duration(seconds: 30);
+  static const int maxUploadBytes = 5 * 1024 * 1024;
 
   String? get authToken => _authToken;
 
@@ -49,7 +51,11 @@ class CleanSavarApiClient {
     };
   }
 
-  String _extractErrorMessage(String body, int statusCode) {
+  String _extractErrorMessage(
+    String body,
+    int statusCode, {
+    String? fallbackMessage,
+  }) {
     try {
       final decoded = jsonDecode(body);
       if (decoded is Map<String, dynamic>) {
@@ -65,7 +71,7 @@ class CleanSavarApiClient {
         }
       }
     } catch (_) {}
-    return 'Server error $statusCode';
+    return fallbackMessage ?? 'সার্ভার ত্রুটি ($statusCode)';
   }
 
   Future<List<SavarWard>> fetchWards() async {
@@ -106,7 +112,12 @@ class CleanSavarApiClient {
     required int estimatedBags,
     double? lat,
     double? lng,
+    String scheduleType = 'one_time',
+    String? preferredDay,
+    String notes = '',
   }) async {
+    final normalizedSchedule =
+        scheduleType == 'recurring_weekly' ? 'recurring_weekly' : 'one_time';
     final res = await _client
         .post(
           Uri.parse('$baseUrl/pickups'),
@@ -119,9 +130,13 @@ class CleanSavarApiClient {
             'landmark': landmark,
             'waste_type': wasteType.apiValue,
             'slot': slot.apiValue,
+            'schedule_type': normalizedSchedule,
+            if (normalizedSchedule == 'recurring_weekly' && preferredDay != null)
+              'preferred_day': preferredDay,
             'estimated_bags': estimatedBags,
             'lat': lat,
             'lng': lng,
+            if (notes.trim().isNotEmpty) 'notes': notes.trim(),
           }),
         )
         .timeout(_timeout);
@@ -136,12 +151,19 @@ class CleanSavarApiClient {
   }
 
   Future<String> uploadPhoto(File imageFile) async {
+    final byteCount = await imageFile.length();
+    if (byteCount > maxUploadBytes) {
+      throw const CleanSavarApiException(
+        413,
+        'ছবির আকার সর্বোচ্চ ৫ মেগাবাইট হতে পারবে।',
+      );
+    }
     final req = http.MultipartRequest('POST', Uri.parse('$baseUrl/uploads/photo'))
       ..files.add(await http.MultipartFile.fromPath('photo', imageFile.path));
     if (_authToken != null) {
       req.headers['Authorization'] = 'Bearer $_authToken';
     }
-    final streamed = await req.send().timeout(const Duration(seconds: 15));
+    final streamed = await req.send().timeout(_uploadTimeout);
     final body = await streamed.stream.bytesToString();
     if (streamed.statusCode == 201) {
       final json = jsonDecode(body) as Map<String, dynamic>;
@@ -149,7 +171,11 @@ class CleanSavarApiClient {
     }
     throw CleanSavarApiException(
       streamed.statusCode,
-      'Photo upload failed: ${streamed.statusCode}',
+      _extractErrorMessage(
+        body,
+        streamed.statusCode,
+        fallbackMessage: 'ছবি আপলোড করা যায়নি (${streamed.statusCode})',
+      ),
     );
   }
 
@@ -472,5 +498,21 @@ class CleanSavarApiClient {
       }
     }
     return null;
+  }
+
+  Future<void> logout() async {
+    if (_authToken == null) return;
+    try {
+      await _client
+          .post(
+            Uri.parse('$baseUrl/auth/logout'),
+            headers: _headers(),
+          )
+          .timeout(_timeout);
+    } catch (_) {
+      // Best-effort token revocation; local session still clears below.
+    } finally {
+      setAuthToken(null);
+    }
   }
 }

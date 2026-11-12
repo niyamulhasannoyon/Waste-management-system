@@ -93,6 +93,9 @@ class _OfflineTestApiClient extends core.CleanSavarApiClient {
     required int estimatedBags,
     double? lat,
     double? lng,
+    String scheduleType = 'one_time',
+    String? preferredDay,
+    String notes = '',
   }) async {
     throw const core.CleanSavarApiException(503, 'Offline test stub');
   }
@@ -227,15 +230,15 @@ void main() {
 
     expect(find.text('পরিচ্ছন্নতাকর্মী অ্যাপ'), findsOneWidget);
     expect(find.text('কাজ শুরু করুন'), findsOneWidget);
-    expect(find.text('৩টি তথ্য আপলোডের অপেক্ষায়'), findsOneWidget);
+    expect(find.text('সব তথ্য সিঙ্ক সম্পন্ন'), findsOneWidget);
 
     await tester.tap(find.text('কাজ শুরু করুন'));
     await tester.pump();
     expect(find.text('অনলাইন • ডিউটি চালু আছে'), findsOneWidget);
 
-    await tester.tap(find.text('সিঙ্ক করুন'));
+    await tester.tap(find.text('নেট: অনলাইন'));
     await tester.pump();
-    expect(find.text('সব তথ্য সিঙ্ক সম্পন্ন'), findsOneWidget);
+    expect(find.text('নেট: অফলাইন'), findsOneWidget);
 
     await tester.scrollUntilVisible(
       find.text('বাসা ১৪'),
@@ -254,18 +257,25 @@ void main() {
       findsOneWidget,
     );
 
-    // Choose quick weight chip (৫ কেজি) and mark stop completed
+    // Choose quick weight chip (৫ কেজি) and mark stop completed while offline
     await tester.ensureVisible(find.text('৫ কেজি').first);
     await tester.tap(find.text('৫ কেজি').first);
     await tester.pump();
 
     await tester.ensureVisible(find.text('সংগ্রহ সম্পন্ন').first);
     await tester.tap(find.text('সংগ্রহ সম্পন্ন').first);
-    await tester.pump();
+    await tester.pumpAndSettle();
     expect(find.textContaining('সংগ্রহ সম্পন্ন • ৫ কেজি'), findsWidgets);
+    expect(find.text('১টি তথ্য আপলোডের অপেক্ষায়'), findsOneWidget);
+
+    // Restoring connectivity flushes the queued action cleanly
+    await tester.ensureVisible(find.text('নেট: অফলাইন'));
+    await tester.tap(find.text('নেট: অফলাইন'));
+    await tester.pumpAndSettle();
+    expect(find.text('সব তথ্য সিঙ্ক সম্পন্ন'), findsOneWidget);
   });
 
-  testWidgets('Collector QR scan sheet verifies bin tag without platform camera in tests', (
+  testWidgets('Collector QR scan sheet requires matching bin tag without platform camera in tests', (
     tester,
   ) async {
     await tester.pumpWidget(_buildTestRoot());
@@ -285,6 +295,16 @@ void main() {
     expect(find.text('বাসার QR কোড স্ক্যান করুন'), findsOneWidget);
     expect(find.text('ট্যাগ কোড: SV-W05-H14'), findsOneWidget);
 
+    // Submitting without matching tag keeps sheet open with validation message
+    await tester.tap(find.text('QR যাচাই সম্পন্ন করুন'));
+    await tester.pump();
+    expect(find.textContaining('যাচাই করতে বিনের গায়ে থাকা ট্যাগ কোড'), findsOneWidget);
+
+    await tester.enterText(
+      find.byKey(const ValueKey('manual_qr_tag_input')),
+      'SV-W05-H14',
+    );
+    await tester.pump();
     await tester.tap(find.text('QR যাচাই সম্পন্ন করুন'));
     await tester.pumpAndSettle();
 

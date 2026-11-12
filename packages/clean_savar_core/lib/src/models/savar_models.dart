@@ -302,6 +302,14 @@ class OtpAuthResult {
     final profile = json['profile'] as Map<String, dynamic>?;
     final user = (profile?['user'] ?? json['user'] ?? json) as Map<String, dynamic>;
     final rawToken = (json['access_token'] ?? json['token'] ?? '').toString();
+    final expiresInSeconds = (json['expires_in_seconds'] as num?)?.toInt();
+    final resolvedExpiresAt = (json['expires_at'] as String?) ??
+        (expiresInSeconds != null
+            ? DateTime.now()
+                .toUtc()
+                .add(Duration(seconds: expiresInSeconds))
+                .toIso8601String()
+            : null);
     return OtpAuthResult(
       token: rawToken,
       userId: (user['id'] ?? user['user_id'] ?? '').toString(),
@@ -309,7 +317,7 @@ class OtpAuthResult {
       role: (user['role'] as String?) ?? 'citizen',
       nameBn: (user['full_name'] ?? user['name_bn']) as String?,
       wardId: (user['ward_id'] as num?)?.toInt(),
-      expiresAt: json['expires_at'] as String?,
+      expiresAt: resolvedExpiresAt,
       vehicleId: profile?['vehicle_id'] as String?,
     );
   }

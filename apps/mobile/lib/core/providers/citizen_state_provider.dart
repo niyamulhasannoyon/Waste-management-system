@@ -332,7 +332,7 @@ class CitizenStateNotifier extends Notifier<CitizenState> {
   }
 
   Future<void> logoutCitizenAuth() async {
-    _api.setAuthToken(null);
+    await _api.logout();
     await _store.writeJsonMap(OfflineSyncStore.authSessionKey, {});
     state = state.copyWith(
       isAuthenticated: false,
@@ -455,6 +455,9 @@ class CitizenStateNotifier extends Notifier<CitizenState> {
         estimatedBags: request.estimatedBags,
         lat: state.selectedWard.lat,
         lng: state.selectedWard.lng,
+        scheduleType: request.scheduleType,
+        preferredDay: request.preferredDay,
+        notes: request.notes,
       );
 
       state = state.copyWith(
@@ -487,6 +490,9 @@ class CitizenStateNotifier extends Notifier<CitizenState> {
           'estimatedBags': request.estimatedBags,
           'lat': state.selectedWard.lat,
           'lng': state.selectedWard.lng,
+          'scheduleType': request.scheduleType,
+          if (request.preferredDay != null) 'preferredDay': request.preferredDay,
+          'notes': request.notes,
         },
       );
       final queue = await _store.enqueue(action);

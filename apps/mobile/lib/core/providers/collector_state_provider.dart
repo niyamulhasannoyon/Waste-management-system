@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:clean_savar_core/clean_savar_core.dart' as core;
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../constants/savar_seed_data.dart';
@@ -79,19 +80,24 @@ class CollectorStateNotifier extends Notifier<CollectorState> {
       _hydrated = true;
       Future.microtask(_hydrateFromStorageAndServer);
     }
-    return const CollectorState(
-      workerName: 'মোঃ আলমগীর',
-      vehicleCode: 'SV-VAN-04',
-      routeLabel: 'ওয়ার্ড ০৫ — ব্যাংক টাউন ও পাকিজা এলাকা',
+    return CollectorState(
+      workerName: kDebugMode ? 'মোঃ আলমগীর (ডেমো)' : 'পরিচ্ছন্নতাকর্মী',
+      vehicleCode: kDebugMode ? 'SV-VAN-04' : '—',
+      routeLabel: kDebugMode
+          ? 'ওয়ার্ড ০৫ — ব্যাংক টাউন ও পাকিজা এলাকা'
+          : 'অ্যাসাইন করা রুট লোড হচ্ছে...',
       isOnDuty: false,
       isNetworkOnline: true,
-      pendingSyncCount: 3,
-      stops: SavarSeedData.initialRouteStops,
+      pendingSyncCount: 0,
+      stops: kDebugMode ? SavarSeedData.initialRouteStops : const [],
     );
   }
 
   Future<void> _hydrateFromStorageAndServer() async {
     final saved = await _store.readJsonMap(OfflineSyncStore.collectorStateKey);
+    final queuedCount = (await _store.loadSyncQueue())
+        .where((a) => a.type == 'collector_complete')
+        .length;
     if (saved != null) {
       try {
         final stops = (saved['stops'] as List<dynamic>?)
@@ -102,12 +108,13 @@ class CollectorStateNotifier extends Notifier<CollectorState> {
           isOnDuty: (saved['isOnDuty'] as bool?) ?? state.isOnDuty,
           isNetworkOnline:
               (saved['isNetworkOnline'] as bool?) ?? state.isNetworkOnline,
-          pendingSyncCount:
-              (saved['pendingSyncCount'] as num?)?.toInt() ?? state.pendingSyncCount,
+          pendingSyncCount: queuedCount,
           vehicleId: saved['vehicleId'] as String?,
           stops: stops,
         );
       } catch (_) {}
+    } else if (queuedCount > 0) {
+      state = state.copyWith(pendingSyncCount: queuedCount);
     }
 
     if (state.isNetworkOnline) {
@@ -172,7 +179,7 @@ class CollectorStateNotifier extends Notifier<CollectorState> {
     final nextOnline = !state.isNetworkOnline;
     state = state.copyWith(isNetworkOnline: nextOnline);
     unawaited(_persist());
-    if (nextOnline) {
+    if (nextOnline && state.pendingSyncCount > 0) {
       unawaited(syncPendingRecords());
     }
   }
@@ -244,11 +251,10 @@ class CollectorStateNotifier extends Notifier<CollectorState> {
       r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
     ).hasMatch(stop.id);
 
-    if (!isServerUuid) {
-      return;
-    }
-
     if (state.isNetworkOnline) {
+      if (!isServerUuid) {
+        return;
+      }
       try {
         await _api.completeCollectorTask(
           id: stop.id,
@@ -273,12 +279,13 @@ class CollectorStateNotifier extends Notifier<CollectorState> {
       },
     );
     final queue = await _store.enqueue(action);
+    final collectorCount = queue.where((a) => a.type == 'collector_complete').length;
     state = state.copyWith(
       stops: [
         for (final s in state.stops)
           if (s.id == stop.id) s.copyWith(syncedToServer: false) else s,
       ],
-      pendingSyncCount: queue.length,
+      pendingSyncCount: collectorCount,
     );
     await _persist();
   }
@@ -292,31 +299,28 @@ class CollectorStateNotifier extends Notifier<CollectorState> {
     unawaited(_persist());
   }
 
-  bool syncPendingRecords() {
-    if (!state.isNetworkOnline || state.pendingSyncCount == 0) {
+  Future<bool> syncPendingRecords() async {
+    if (!state.isNetworkOnline) {
       return false;
     }
 
+    final res = await _store.flushQueue(_api);
+    final remainingCollectorCount = (await _store.loadSyncQueue())
+        .where((a) => a.type == 'collector_complete')
+        .length;
     final updated = [
       for (final stop in state.stops)
-        stop.syncedToServer ? stop : stop.copyWith(syncedToServer: true),
+        (res.remainingCount == 0 && !stop.syncedToServer)
+            ? stop.copyWith(syncedToServer: true)
+            : stop,
     ];
 
     state = state.copyWith(
       stops: updated,
-      pendingSyncCount: 0,
+      pendingSyncCount: remainingCollectorCount,
     );
-    unawaited(_flushQueueInBackground());
-    return true;
-  }
-
-  Future<void> _flushQueueInBackground() async {
     await _persist();
-    final res = await _store.flushQueue(_api);
-    if (res.remainingCount > 0) {
-      state = state.copyWith(pendingSyncCount: res.remainingCount);
-      await _persist();
-    }
+    return remainingCollectorCount == 0;
   }
 }
 

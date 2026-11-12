@@ -28,40 +28,44 @@ class EcoPointsSegregationSection extends ConsumerWidget {
           ),
         ),
         const SizedBox(height: 10),
-        SizedBox(
-          height: 152,
-          child: ListView.builder(
-            scrollDirection: Axis.horizontal,
-            itemCount: 3,
-            itemBuilder: (context, index) {
-              return Padding(
-                padding: EdgeInsets.only(right: index < 2 ? 12 : 0),
-                child: SizedBox(
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                SizedBox(
                   width: 192,
-                  child: switch (index) {
-                    0 => _EcoPointsCard(ecoPoints: ecoPoints),
-                    1 => const _BinGuideCard(
-                        title: 'পচনশীল',
-                        binLabel: 'সবুজ বিন',
-                        description: 'রান্নাঘরের উচ্ছিষ্ট, সবজি ও ফলের খোসা',
-                        icon: Icons.compost_rounded,
-                        accentColor: AppColors.primaryGreen,
-                        surfaceColor: AppColors.primaryGreenTint,
-                        borderColor: AppColors.primaryGreenBorder,
-                      ),
-                    _ => const _BinGuideCard(
-                        title: 'রিসাইকেলযোগ্য',
-                        binLabel: 'নীল বিন',
-                        description: 'প্লাস্টিক বোতল, কাগজ, কার্টন ও টিন',
-                        icon: Icons.recycling_rounded,
-                        accentColor: AppColors.infoBlueDark,
-                        surfaceColor: AppColors.infoBlueTint,
-                        borderColor: AppColors.infoBlueBorder,
-                      ),
-                  },
+                  child: _EcoPointsCard(ecoPoints: ecoPoints),
                 ),
-              );
-            },
+                const SizedBox(width: 12),
+                const SizedBox(
+                  width: 192,
+                  child: _BinGuideCard(
+                    title: 'পচনশীল',
+                    binLabel: 'সবুজ বিন',
+                    description: 'রান্নাঘরের উচ্ছিষ্ট, সবজি ও ফলের খোসা',
+                    icon: Icons.compost_rounded,
+                    accentColor: AppColors.primaryGreen,
+                    surfaceColor: AppColors.primaryGreenTint,
+                    borderColor: AppColors.primaryGreenBorder,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                const SizedBox(
+                  width: 192,
+                  child: _BinGuideCard(
+                    title: 'রিসাইকেলযোগ্য',
+                    binLabel: 'নীল বিন',
+                    description: 'প্লাস্টিক বোতল, কাগজ, কার্টন ও টিন',
+                    icon: Icons.recycling_rounded,
+                    accentColor: AppColors.infoBlueDark,
+                    surfaceColor: AppColors.infoBlueTint,
+                    borderColor: AppColors.infoBlueBorder,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ],

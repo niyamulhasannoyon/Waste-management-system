@@ -178,6 +178,9 @@ class OfflineSyncStore {
           estimatedBags: (p['estimatedBags'] as num?)?.toInt() ?? 2,
           lat: (p['lat'] as num?)?.toDouble(),
           lng: (p['lng'] as num?)?.toDouble(),
+          scheduleType: (p['scheduleType'] as String?) ?? 'one_time',
+          preferredDay: p['preferredDay'] as String?,
+          notes: (p['notes'] as String?) ?? '',
         );
         return;
 

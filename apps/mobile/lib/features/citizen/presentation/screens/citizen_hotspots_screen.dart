@@ -1,13 +1,36 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/models/hotspot_report.dart';
 import '../../../../core/providers/citizen_state_provider.dart';
+import '../../../../core/services/device_services.dart';
 import '../../../../core/utils/bangla_formatters.dart';
 import '../../../../core/widgets/flat_card.dart';
 import '../../../../core/widgets/status_badge.dart';
 import '../widgets/report_garbage_sheet.dart';
+
+String? _resolveSafePhotoUrl(String rawUrl, String apiBaseUrl) {
+  final trimmed = rawUrl.trim();
+  if (trimmed.isEmpty) return null;
+  if (trimmed.toLowerCase().endsWith('.svg')) return null;
+  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+    return trimmed;
+  }
+  if (trimmed.startsWith('/')) {
+    final apiUri = Uri.tryParse(apiBaseUrl);
+    if (apiUri == null || !apiUri.hasScheme || apiUri.host.isEmpty) {
+      return null;
+    }
+    final origin = apiUri.hasPort
+        ? '${apiUri.scheme}://${apiUri.host}:${apiUri.port}'
+        : '${apiUri.scheme}://${apiUri.host}';
+    return '$origin$trimmed';
+  }
+  return null;
+}
 
 enum _HotspotFilter { all, active, cleared }
 
@@ -28,6 +51,7 @@ class _CitizenHotspotsScreenState extends ConsumerState<CitizenHotspotsScreen> {
     final hotspots = ref.watch(
       citizenStateProvider.select((state) => state.hotspots),
     );
+    final apiBaseUrl = ref.watch(apiClientProvider).baseUrl;
 
     final filtered = hotspots.where((h) {
       return switch (_filter) {
@@ -113,6 +137,10 @@ class _CitizenHotspotsScreenState extends ConsumerState<CitizenHotspotsScreen> {
             itemBuilder: (context, index) {
               final hotspot = filtered[index];
               final isSelected = hotspot.id == _selectedHotspotId;
+              final safePhotos = hotspot.photoUrls
+                  .map((url) => _resolveSafePhotoUrl(url, apiBaseUrl))
+                  .whereType<String>()
+                  .toList(growable: false);
               final tone = switch (hotspot.status) {
                 HotspotStatus.reported => BadgeTone.amber,
                 HotspotStatus.verified ||
@@ -192,6 +220,39 @@ class _CitizenHotspotsScreenState extends ConsumerState<CitizenHotspotsScreen> {
                           ),
                         ],
                       ),
+                      if (safePhotos.isNotEmpty) ...[
+                        const SizedBox(height: 8),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: Image.network(
+                            safePhotos.first,
+                            height: 112,
+                            width: double.infinity,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                          ),
+                        ),
+                      ] else if (hotspot.hasPhoto) ...[
+                        const SizedBox(height: 8),
+                        const Row(
+                          children: [
+                            Icon(
+                              Icons.photo_camera_outlined,
+                              size: 14,
+                              color: AppColors.primaryGreen,
+                            ),
+                            SizedBox(width: 4),
+                            Text(
+                              'ছবি সংযুক্ত রয়েছে',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.primaryGreenDark,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -217,17 +278,25 @@ class _SavarSpatialGridMap extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Savar bounding box used to project lat/lng onto lightweight CustomPaint canvas.
-    const minLat = 23.840;
-    const maxLat = 23.875;
-    const minLng = 90.245;
-    const maxLng = 90.278;
+    // Bounding box spans all Savar Pouroshava wards plus surrounding unions.
+    var minLat = 23.775;
+    var maxLat = 23.935;
+    var minLng = 90.228;
+    var maxLng = 90.335;
+    for (final hotspot in hotspots) {
+      minLat = math.min(minLat, hotspot.lat - 0.008);
+      maxLat = math.max(maxLat, hotspot.lat + 0.008);
+      minLng = math.min(minLng, hotspot.lng - 0.008);
+      maxLng = math.max(maxLng, hotspot.lng + 0.008);
+    }
+    final latSpan = math.max(0.01, maxLat - minLat);
+    final lngSpan = math.max(0.01, maxLng - minLng);
 
     return FlatCard(
       padding: EdgeInsets.zero,
       color: AppColors.cardSurface,
       child: SizedBox(
-        height: 170,
+        height: 184,
         child: ClipRRect(
           borderRadius: BorderRadius.circular(11),
           child: LayoutBuilder(
@@ -243,25 +312,41 @@ class _SavarSpatialGridMap extends StatelessWidget {
                     left: 10,
                     top: 10,
                     child: StatusBadge(
-                      label: 'সাভার পৌরসভা • লাইভ জোন',
+                      label: 'সাভার পৌরসভা ও ইউনিয়ন • লাইভ জোন',
                       tone: BadgeTone.green,
                       icon: Icons.public_rounded,
                     ),
                   ),
                   for (final hotspot in hotspots)
                     Positioned(
-                      left: ((hotspot.lng - minLng) / (maxLng - minLng))
-                              .clamp(0.08, 0.88) *
-                          (constraints.maxWidth - 40),
+                      left: ((hotspot.lng - minLng) / lngSpan)
+                              .clamp(0.04, 0.96) *
+                          math.max<double>(0.0, constraints.maxWidth - 48),
                       top: (1.0 -
-                              ((hotspot.lat - minLat) / (maxLat - minLat))
-                                  .clamp(0.18, 0.82)) *
-                          (constraints.maxHeight - 44),
-                      child: GestureDetector(
-                        onTap: () => onSelectHotspot(hotspot.id),
-                        child: _MapPin(
-                          hotspot: hotspot,
-                          isSelected: hotspot.id == selectedId,
+                              ((hotspot.lat - minLat) / latSpan)
+                                  .clamp(0.08, 0.90)) *
+                          math.max<double>(0.0, constraints.maxHeight - 48),
+                      child: Semantics(
+                        button: true,
+                        label: '${hotspot.wardLabel}: ${hotspot.landmark}',
+                        child: Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            onTap: () => onSelectHotspot(hotspot.id),
+                            borderRadius: BorderRadius.circular(24),
+                            child: ConstrainedBox(
+                              constraints: const BoxConstraints(
+                                minWidth: 48,
+                                minHeight: 48,
+                              ),
+                              child: Center(
+                                child: _MapPin(
+                                  hotspot: hotspot,
+                                  isSelected: hotspot.id == selectedId,
+                                ),
+                              ),
+                            ),
+                          ),
                         ),
                       ),
                     ),

@@ -265,21 +265,23 @@ class CollectorDutyHeader extends ConsumerWidget {
                     Expanded(
                       child: FilledButton.icon(
                         onPressed: collector.isNetworkOnline
-                            ? () {
-                                final ok = ref
+                            ? () async {
+                                final messenger = ScaffoldMessenger.of(context);
+                                final ok = await ref
                                     .read(collectorStateProvider.notifier)
                                     .syncPendingRecords();
-                                if (ok) {
-                                  ScaffoldMessenger.of(context)
-                                    ..hideCurrentSnackBar()
-                                    ..showSnackBar(
-                                      const SnackBar(
-                                        content: Text(
-                                          'অপেক্ষমাণ সব তথ্য সার্ভারে আপলোড সম্পন্ন হয়েছে ✓',
-                                        ),
+                                if (!context.mounted) return;
+                                messenger
+                                  ..hideCurrentSnackBar()
+                                  ..showSnackBar(
+                                    SnackBar(
+                                      content: Text(
+                                        ok
+                                            ? 'অপেক্ষমাণ সব তথ্য সার্ভারে আপলোড সম্পন্ন হয়েছে ✓'
+                                            : 'সার্ভারে সিঙ্ক করা যায়নি — নেটওয়ার্ক বা লগইন পরীক্ষা করুন',
                                       ),
-                                    );
-                                }
+                                    ),
+                                  );
                               }
                             : null,
                         style: FilledButton.styleFrom(

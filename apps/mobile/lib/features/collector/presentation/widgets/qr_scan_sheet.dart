@@ -27,6 +27,7 @@ class _QrScanSheet extends ConsumerStatefulWidget {
 
 class _QrScanSheetState extends ConsumerState<_QrScanSheet> {
   MobileScannerController? _controller;
+  final TextEditingController _manualTagCtrl = TextEditingController();
   String? _scanFeedback;
   bool _handledMatch = false;
 
@@ -44,7 +45,23 @@ class _QrScanSheetState extends ConsumerState<_QrScanSheet> {
   @override
   void dispose() {
     _controller?.dispose();
+    _manualTagCtrl.dispose();
     super.dispose();
+  }
+
+  void _verifyManualTag() {
+    final entered = _manualTagCtrl.text.trim();
+    final expected = widget.stop.expectedQrCode.trim();
+    if (entered.isNotEmpty && entered.toUpperCase() == expected.toUpperCase()) {
+      _handledMatch = true;
+      Navigator.of(context).pop(true);
+      return;
+    }
+    setState(() {
+      _scanFeedback = entered.isEmpty
+          ? 'যাচাই করতে বিনের গায়ে থাকা ট্যাগ কোড ($expected) লিখুন বা ক্যামেরায় স্ক্যান করুন।'
+          : 'প্রবেশকৃত কোড ($entered) এই বাসার ট্যাগের ($expected) সাথে মেলেনি।';
+    });
   }
 
   void _onBarcodeDetected(BarcodeCapture capture) {
@@ -182,10 +199,23 @@ class _QrScanSheetState extends ConsumerState<_QrScanSheet> {
             ),
           ),
           const SizedBox(height: 16),
+          TextField(
+            key: const ValueKey('manual_qr_tag_input'),
+            controller: _manualTagCtrl,
+            textCapitalization: TextCapitalization.characters,
+            textInputAction: TextInputAction.done,
+            onSubmitted: (_) => _verifyManualTag(),
+            decoration: InputDecoration(
+              labelText: 'বিন ট্যাগ কোড (স্টিকার দেখে লিখুন)',
+              hintText: widget.stop.expectedQrCode,
+              border: const OutlineInputBorder(),
+            ),
+          ),
+          const SizedBox(height: 12),
           SizedBox(
             height: 56,
             child: FilledButton.icon(
-              onPressed: () => Navigator.of(context).pop(true),
+              onPressed: _verifyManualTag,
               icon: const Icon(Icons.qr_code_scanner_rounded, size: 24),
               label: const Text(
                 'QR যাচাই সম্পন্ন করুন',
