@@ -29,6 +29,8 @@ describe('Bangladeshi phone, digits & media guards', () => {
     expect(isSafeImageUrl('https://cdn.example.com/photo.jpg')).toBe(true);
     expect(isSafeImageUrl('javascript:alert(1)')).toBe(false);
     expect(isSafeImageUrl('data:text/html,<script>alert(1)</script>')).toBe(false);
+    expect(isSafeImageUrl('data:image/svg+xml;utf8,<svg onload=alert(1)></svg>')).toBe(false);
+    expect(isSafeImageUrl('data:image/png;base64,iVBORw0KGgo=')).toBe(true);
     expect(isSafeImageUrl('/uploads/../secret.png')).toBe(false);
 
     expect(resolveMediaUrl('/uploads/a.webp', 'http://localhost:8080/api/v1')).toBe(

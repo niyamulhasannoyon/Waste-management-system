@@ -147,7 +147,7 @@ export default function ReportPage() {
         setUploadError(
           err instanceof ApiError
             ? err.messageBn
-            : 'ছবি আপলোড করা যায়নি (JPEG/PNG/WebP, সর্বোচ্চ ৮ মেগাবাইট)।',
+            : 'ছবি আপলোড করা যায়নি (JPEG/PNG/WebP, সর্বোচ্চ ৫ মেগাবাইট)।',
         );
       }
     } finally {
@@ -495,7 +495,7 @@ export default function ReportPage() {
                   ঘটনাস্থলের ছবি আপলোড ({toBanglaDigits(photos.length)}/৫)
                 </label>
                 <p className="text-xs text-[#475569]">
-                  JPEG, PNG বা WebP · প্রতি ছবি সর্বোচ্চ ৮ মেগাবাইট
+                  JPEG, PNG বা WebP · প্রতি ছবি সর্বোচ্চ ৫ মেগাবাইট
                 </p>
               </div>
 

@@ -44,7 +44,8 @@ import type {
   PickupRequestRecord,
   RecyclableLotRecord,
 } from '@/lib/types';
-import { buildSafeCsv, formatRelativeTimeBn, toBanglaDigits } from '@/lib/utils';
+import { RelativeTimeBn } from '@/components/ui/relative-time';
+import { buildSafeCsv, toBanglaDigits } from '@/lib/utils';
 
 type AdminTab = 'overview' | 'pickups' | 'reports' | 'vehicles' | 'lots' | 'zones';
 
@@ -232,7 +233,7 @@ function AdminCommandInner() {
                   type="button"
                   aria-current={active ? 'page' : undefined}
                   onClick={() => setTab(item.id)}
-                  className={`min-h-10 rounded-md border px-3 text-xs font-semibold transition-colors ${
+                  className={`min-h-11 rounded-md border px-3 text-xs font-semibold transition-colors ${
                     active
                       ? 'border-[#15803D] bg-[#F0FDF4] text-[#14532D]'
                       : 'border-[#CBD5E1] bg-white text-[#475569] hover:bg-[#F8FAFC]'
@@ -430,7 +431,7 @@ function AdminCommandInner() {
                             <td data-label="কোড">
                               <span className="font-metric font-bold">{p.tracking_code}</span>
                               <span className="block text-[11px] text-[#475569]">
-                                {formatRelativeTimeBn(p.created_at)}
+                                <RelativeTimeBn isoDate={p.created_at} />
                               </span>
                             </td>
                             <td data-label="নাগরিক ও ঠিকানা">
@@ -522,7 +523,7 @@ function AdminCommandInner() {
                             <td data-label="কোড">
                               <span className="font-metric font-bold">{r.tracking_code}</span>
                               <span className="block text-[11px] text-[#475569]">
-                                {formatRelativeTimeBn(r.created_at)}
+                                <RelativeTimeBn isoDate={r.created_at} />
                               </span>
                             </td>
                             <td data-label="অভিযোগ ও স্থান">
@@ -629,7 +630,9 @@ function AdminCommandInner() {
                           <td data-label="অবস্থা">
                             <StatusBadge tone={meta.tone}>{meta.label}</StatusBadge>
                           </td>
-                          <td data-label="শেষ পিং">{formatRelativeTimeBn(v.last_ping_at)}</td>
+                          <td data-label="শেষ পিং">
+                            <RelativeTimeBn isoDate={v.last_ping_at} />
+                          </td>
                         </tr>
                       );
                     })}

@@ -1,6 +1,6 @@
 use axum::{
     extract::{Path, State},
-    http::{HeaderMap, StatusCode},
+    http::HeaderMap,
     Json,
 };
 use uuid::Uuid;
@@ -41,23 +41,27 @@ pub async fn mark_notification_read(
     State(state): State<AppState>,
     headers: HeaderMap,
     Path(id): Path<Uuid>,
-) -> Result<StatusCode, AppError> {
+) -> Result<Json<NotificationRecord>, AppError> {
     let auth_user = require_auth(&state, &headers).await?;
 
-    let res = sqlx::query(
-        "UPDATE notifications SET is_read = TRUE WHERE id = $1 AND user_id = $2",
+    let updated = sqlx::query_as::<_, NotificationRecord>(
+        r#"
+        UPDATE notifications
+        SET is_read = TRUE
+        WHERE id = $1 AND user_id = $2
+        RETURNING id, title_bn, body_bn, entity_type, entity_id, is_read, created_at
+        "#,
     )
     .bind(id)
     .bind(auth_user.user_id)
-    .execute(&state.pool)
-    .await?;
-
-    if res.rows_affected() == 0 {
-        return Err(AppError::not_found(
+    .fetch_optional(&state.pool)
+    .await?
+    .ok_or_else(|| {
+        AppError::not_found(
             "Notification not found.",
             "বিজ্ঞপ্তিটি খুঁজে পাওয়া যায়নি।",
-        ));
-    }
+        )
+    })?;
 
-    Ok(StatusCode::NO_CONTENT)
+    Ok(Json(updated))
 }

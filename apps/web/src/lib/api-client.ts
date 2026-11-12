@@ -8,6 +8,7 @@ import {
   SAVAR_WARDS_SEED,
   resolveNearestWardLocal,
 } from './savar-data';
+import { compressImageForUpload, toBanglaDigits } from './utils';
 import type {
   AnalyticsSummary,
   AuthSession,
@@ -49,9 +50,20 @@ export const API_BASE = (
 ).replace(/\/$/, '');
 
 export const SESSION_STORAGE_KEY = 'clean_savar_auth_session_v1';
-const REQUEST_TIMEOUT_MS = 8000;
+const REQUEST_TIMEOUT_MS = 12000;
 const ALLOWED_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
-const MAX_UPLOAD_BYTES = 8 * 1024 * 1024;
+const DEFAULT_MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
+const parsedMaxUpload = Number(process.env.NEXT_PUBLIC_MAX_UPLOAD_BYTES);
+const MAX_UPLOAD_BYTES =
+  Number.isFinite(parsedMaxUpload) && parsedMaxUpload >= 64 * 1024 && parsedMaxUpload <= 15 * 1024 * 1024
+    ? parsedMaxUpload
+    : DEFAULT_MAX_UPLOAD_BYTES;
+const MAX_UPLOAD_MB_LABEL = toBanglaDigits(
+  MAX_UPLOAD_BYTES % (1024 * 1024) === 0
+    ? String(MAX_UPLOAD_BYTES / (1024 * 1024))
+    : (MAX_UPLOAD_BYTES / (1024 * 1024)).toFixed(1),
+);
+const RAW_INPUT_GUARD_BYTES = 20 * 1024 * 1024;
 
 export class ApiError extends Error {
   readonly status: number;
@@ -128,7 +140,7 @@ function defaultBnForStatus(status: number): string {
   if (status === 403) return 'আপনার বর্তমান অ্যাকাউন্ট ভূমিকার জন্য এই অনুমতি নেই।';
   if (status === 404) return 'অনুরোধকৃত তথ্যটি পাওয়া যায়নি।';
   if (status === 409) return 'তথ্যের অবস্থার সাথে এই ধাপটি সামঞ্জস্যপূর্ণ নয়।';
-  if (status === 413) return 'ছবির আকার ৮ মেগাবাইটের বেশি হতে পারবে না।';
+  if (status === 413) return `ছবির আকার ${MAX_UPLOAD_MB_LABEL} মেগাবাইটের বেশি হতে পারবে না।`;
   if (status === 422) return 'প্রদত্ত তথ্যগুলো যাচাই করে আবার চেষ্টা করুন।';
   if (status === 429) return 'অনেকবার চেষ্টা করা হয়েছে — কিছুক্ষণ পর আবার চেষ্টা করুন।';
   if (status >= 500) return 'সার্ভারে সাময়িক ত্রুটি হয়েছে। কিছুক্ষণ পর চেষ্টা করুন।';
@@ -503,11 +515,16 @@ export async function fetchNotifications(): Promise<NotificationRecord[]> {
   return unwrapList(raw);
 }
 
-export async function markNotificationRead(id: string): Promise<NotificationRecord> {
-  return fetchJson<NotificationRecord>(`/notifications/${encodeURIComponent(id)}/read`, {
-    method: 'PATCH',
-    auth: true,
-  });
+export async function markNotificationRead(
+  id: string,
+): Promise<NotificationRecord | undefined> {
+  return fetchJson<NotificationRecord | undefined>(
+    `/notifications/${encodeURIComponent(id)}/read`,
+    {
+      method: 'PATCH',
+      auth: true,
+    },
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -557,17 +574,27 @@ export async function uploadDumpPhoto(file: File): Promise<UploadPhotoResponse> 
       messageBn: 'শুধুমাত্র JPEG, PNG বা WebP ফরম্যাটের ছবি আপলোড করা যাবে।',
     });
   }
-  if (file.size > MAX_UPLOAD_BYTES) {
+  if (file.size > RAW_INPUT_GUARD_BYTES) {
     throw new ApiError({
       status: 413,
       code: 'FILE_TOO_LARGE',
-      message: 'Photo exceeds 8 MB limit',
-      messageBn: 'ছবির আকার ৮ মেগাবাইটের কম হতে হবে।',
+      message: 'Raw image file exceeds 20 MB browser limit',
+      messageBn: 'মূল ছবির আকার ২০ মেগাবাইটের কম হতে হবে।',
+    });
+  }
+
+  const preparedFile = await compressImageForUpload(file);
+  if (preparedFile.size > MAX_UPLOAD_BYTES) {
+    throw new ApiError({
+      status: 413,
+      code: 'FILE_TOO_LARGE',
+      message: `Photo exceeds ${MAX_UPLOAD_BYTES} bytes limit`,
+      messageBn: `ছবির আকার ${MAX_UPLOAD_MB_LABEL} মেগাবাইটের কম হতে হবে।`,
     });
   }
 
   const form = new FormData();
-  form.append('photo', file);
+  form.append('photo', preparedFile);
   return fetchJson<UploadPhotoResponse>('/uploads/photo', {
     method: 'POST',
     auth: true,
@@ -635,10 +662,13 @@ export async function fetchNearbyWorkers(
   lat: number,
   lng: number,
 ): Promise<CollectorVehicleRecord[]> {
-  const raw = await fetchJson<CollectorVehicleRecord[] | { items?: CollectorVehicleRecord[] }>(
-    `/workers/nearby${buildQuery({ lat, lng })}`,
-    { auth: true },
-  );
+  const raw = await fetchJson<
+    | CollectorVehicleRecord[]
+    | { items?: CollectorVehicleRecord[]; vehicles?: CollectorVehicleRecord[] }
+  >(`/workers/nearby${buildQuery({ lat, lng })}`, { auth: true });
+  if (!Array.isArray(raw) && raw && Array.isArray(raw.vehicles)) {
+    return raw.vehicles;
+  }
   return unwrapList(raw);
 }
 

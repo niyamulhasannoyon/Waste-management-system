@@ -206,9 +206,11 @@ export function CleanSavarProvider({ children }: { children: React.ReactNode }) 
     );
     try {
       const updated = await markNotificationRead(id);
-      setNotifications((prev) =>
-        prev.map((item) => (item.id === id ? updated : item)),
-      );
+      if (updated && updated.id) {
+        setNotifications((prev) =>
+          prev.map((item) => (item.id === id ? updated : item)),
+        );
+      }
     } catch {
       // Keep UI responsive; next sync restores authoritative state if transient failure.
     }

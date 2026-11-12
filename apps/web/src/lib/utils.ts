@@ -87,8 +87,60 @@ export function isSafeImageUrl(raw: string | null | undefined): raw is string {
   if (!trimmed) return false;
   if (trimmed.startsWith('/uploads/')) return !trimmed.includes('..');
   if (/^https?:\/\//i.test(trimmed)) return true;
-  if (/^data:image\/(png|jpeg|webp|svg\+xml)[;,]/i.test(trimmed)) return true;
+  if (/^data:image\/(png|jpeg|webp)[;,]/i.test(trimmed)) return true;
   return false;
+}
+
+/**
+ * Downscale and JPEG-compress oversized camera photos on the client when Canvas is available.
+ * Reduces cellular data usage across Bangladesh 3G/4G connections while falling back safely in SSR/tests.
+ */
+export async function compressImageForUpload(
+  file: File,
+  maxDimension = 1400,
+  quality = 0.78,
+): Promise<File> {
+  if (
+    typeof window === 'undefined' ||
+    typeof document === 'undefined' ||
+    typeof createImageBitmap !== 'function' ||
+    file.size <= 350 * 1024
+  ) {
+    return file;
+  }
+
+  let bitmap: ImageBitmap | null = null;
+  try {
+    bitmap = await createImageBitmap(file);
+    const scale = Math.min(1, maxDimension / Math.max(bitmap.width, bitmap.height));
+    const targetW = Math.max(1, Math.round(bitmap.width * scale));
+    const targetH = Math.max(1, Math.round(bitmap.height * scale));
+
+    const canvas = document.createElement('canvas');
+    canvas.width = targetW;
+    canvas.height = targetH;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return file;
+
+    ctx.drawImage(bitmap, 0, 0, targetW, targetH);
+
+    const blob = await new Promise<Blob | null>((resolve) =>
+      canvas.toBlob(resolve, 'image/jpeg', quality),
+    );
+    if (!blob || blob.size >= file.size) {
+      return file;
+    }
+
+    const baseName = file.name.replace(/\.[^/.]+$/, '') || 'photo';
+    return new File([blob], `${baseName}.jpg`, {
+      type: 'image/jpeg',
+      lastModified: file.lastModified,
+    });
+  } catch {
+    return file;
+  } finally {
+    bitmap?.close();
+  }
 }
 
 export function resolveMediaUrl(

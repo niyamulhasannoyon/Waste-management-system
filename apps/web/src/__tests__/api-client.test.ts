@@ -256,4 +256,25 @@ describe('Unified Clean Savar API Client', () => {
     expect(syncRes.results).toHaveLength(1);
     expect(syncRes.failed_keys).toEqual(['idem-2']);
   });
+
+  it('rejects oversized uploads (>5 MB) and disallowed MIME types client-side before fetch', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    const { uploadDumpPhoto } = await import('@/lib/api-client');
+
+    const badMime = new File(['<svg></svg>'], 'evil.svg', { type: 'image/svg+xml' });
+    await expect(uploadDumpPhoto(badMime)).rejects.toMatchObject({
+      code: 'INVALID_MIME_TYPE',
+      status: 422,
+    });
+
+    const bigFile = new File([new Uint8Array(5 * 1024 * 1024 + 1024)], 'huge.jpg', {
+      type: 'image/jpeg',
+    });
+    await expect(uploadDumpPhoto(bigFile)).rejects.toMatchObject({
+      code: 'FILE_TOO_LARGE',
+      status: 413,
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
 });

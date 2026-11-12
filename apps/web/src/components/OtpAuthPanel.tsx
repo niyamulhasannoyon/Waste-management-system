@@ -6,7 +6,7 @@ import { FormField } from '@/components/ui/form-field';
 import { useCleanSavar } from '@/context/CleanSavarContext';
 import { ApiError, requestOtp, verifyOtp } from '@/lib/api-client';
 import { DEMO_OTP_ACCOUNTS, SAVAR_WARDS_SEED } from '@/lib/savar-data';
-import type { AuthSession, OtpLoginResponse, UserRole } from '@/lib/types';
+import type { AuthSession, OtpLoginResponse } from '@/lib/types';
 import { normalizeBdPhone, toBanglaDigits } from '@/lib/utils';
 import { KeyRound, Loader2, Phone, RefreshCw, ShieldCheck } from 'lucide-react';
 
@@ -15,6 +15,8 @@ interface OtpAuthPanelProps {
   titleId?: string;
 }
 
+const SHOW_DEMO_ACCOUNTS = process.env.NEXT_PUBLIC_SHOW_DEMO_ACCOUNTS === 'true';
+
 export function OtpAuthPanel({ onSuccess, titleId }: OtpAuthPanelProps) {
   const { applyAuthSession, wards, isOfflinePreview, authPromptReason } = useCleanSavar();
 
@@ -22,7 +24,6 @@ export function OtpAuthPanel({ onSuccess, titleId }: OtpAuthPanelProps) {
   const [phoneInput, setPhoneInput] = useState<string>('');
   const [fullName, setFullName] = useState<string>('');
   const [wardId, setWardId] = useState<number>(SAVAR_WARDS_SEED[2]?.id ?? 3);
-  const [accountType, setAccountType] = useState<Extract<UserRole, 'citizen' | 'collector'>>('citizen');
   const [otpInput, setOtpInput] = useState<string>('');
 
   const [phoneTouched, setPhoneTouched] = useState<boolean>(false);
@@ -90,7 +91,7 @@ export function OtpAuthPanel({ onSuccess, titleId }: OtpAuthPanelProps) {
         phone: normalizedPhone,
         full_name: fullName.trim() || undefined,
         ward_id: wardId,
-        role: accountType,
+        role: 'citizen',
       });
       setOtpChallenge(challenge);
       setOtpInput('');
@@ -144,7 +145,7 @@ export function OtpAuthPanel({ onSuccess, titleId }: OtpAuthPanelProps) {
         phone: normalizedPhone,
         full_name: fullName.trim() || undefined,
         ward_id: wardId,
-        role: accountType,
+        role: 'citizen',
       });
       setOtpChallenge(challenge);
     } catch (err) {
@@ -183,29 +184,30 @@ export function OtpAuthPanel({ onSuccess, titleId }: OtpAuthPanelProps) {
 
       {step === 'phone' ? (
         <form onSubmit={handleRequestOtp} noValidate className="space-y-4">
-          <div className="rounded-md border border-[#E2E8F0] bg-[#F8FAFC] p-3">
-            <p className="mb-2 text-xs font-semibold text-[#475569]">
-              দ্রুত টেস্ট অ্যাকাউন্ট নম্বর বসান (সবাই প্রকৃত OTP দিয়েই লগইন করে):
-            </p>
-            <div className="flex flex-wrap gap-1.5">
-              {DEMO_OTP_ACCOUNTS.map((acc) => (
-                <button
-                  key={acc.role}
-                  type="button"
-                  onClick={() => {
-                    setPhoneInput(acc.phone);
-                    setFullName(acc.nameBn);
-                    setAccountType(acc.role === 'collector' ? 'collector' : 'citizen');
-                    setPhoneTouched(false);
-                    setFormError(null);
-                  }}
-                  className="rounded border border-[#CBD5E1] bg-white px-2.5 py-1 text-xs font-medium text-[#0F172A] transition-colors hover:border-[#15803D] hover:bg-[#F0FDF4] hover:text-[#14532D]"
-                >
-                  {acc.labelBn}
-                </button>
-              ))}
+          {SHOW_DEMO_ACCOUNTS ? (
+            <div className="rounded-md border border-[#E2E8F0] bg-[#F8FAFC] p-3">
+              <p className="mb-2 text-xs font-semibold text-[#475569]">
+                দ্রুত টেস্ট অ্যাকাউন্ট নম্বর বসান (সবাই প্রকৃত OTP দিয়েই লগইন করে):
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {DEMO_OTP_ACCOUNTS.map((acc) => (
+                  <button
+                    key={acc.role}
+                    type="button"
+                    onClick={() => {
+                      setPhoneInput(acc.phone);
+                      setFullName(acc.nameBn);
+                      setPhoneTouched(false);
+                      setFormError(null);
+                    }}
+                    className="min-h-11 rounded border border-[#CBD5E1] bg-white px-3 py-1.5 text-xs font-medium text-[#0F172A] transition-colors hover:border-[#15803D] hover:bg-[#F0FDF4] hover:text-[#14532D]"
+                  >
+                    {acc.labelBn}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
+          ) : null}
 
           <FormField
             id={titleId ? `${titleId}-phone` : 'otp-phone-input'}
@@ -280,44 +282,9 @@ export function OtpAuthPanel({ onSuccess, titleId }: OtpAuthPanelProps) {
             </FormField>
           </div>
 
-          <fieldset className="space-y-1.5">
-            <legend className="text-sm font-medium text-[#0F172A]">
-              নতুন নিবন্ধনের ভূমিকা
-            </legend>
-            <p className="text-xs text-[#475569]">
-              পূর্বনিবন্ধিত পার্টনার ও অ্যাডমিন নম্বরে স্বয়ংক্রিয়ভাবে নির্ধারিত ভূমিকা চালু থাকে।
-            </p>
-            <div className="grid grid-cols-2 gap-2 pt-1">
-              {(
-                [
-                  { id: 'citizen', label: 'নাগরিক (Citizen)' },
-                  { id: 'collector', label: 'সংগ্রহকারী (Collector)' },
-                ] as const
-              ).map((item) => {
-                const selected = accountType === item.id;
-                return (
-                  <label
-                    key={item.id}
-                    className={`flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium transition-colors ${
-                      selected
-                        ? 'border-[#15803D] bg-[#F0FDF4] text-[#14532D]'
-                        : 'border-[#CBD5E1] bg-white text-[#475569] hover:bg-[#F8FAFC]'
-                    }`}
-                  >
-                    <input
-                      type="radio"
-                      name="otp-register-role"
-                      value={item.id}
-                      checked={selected}
-                      onChange={() => setAccountType(item.id)}
-                      className="accent-[#15803D]"
-                    />
-                    {item.label}
-                  </label>
-                );
-              })}
-            </div>
-          </fieldset>
+          <p className="rounded-md bg-[#F8FAFC] px-3 py-2 text-xs text-[#475569]">
+            নতুন নম্বর নাগরিক হিসেবে নিবন্ধিত হবে; পূর্বনিবন্ধিত কালেক্টর, পার্টনার ও অ্যাডমিন নম্বরে স্বয়ংক্রিয়ভাবে নির্ধারিত ভূমিকা চালু থাকে।
+          </p>
 
           <Button type="submit" size="lg" className="w-full" disabled={isSubmitting}>
             {isSubmitting ? (

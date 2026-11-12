@@ -73,28 +73,30 @@ export function SavarWardMap({
 
       <div className="overflow-hidden rounded-md border border-[#E2E8F0] bg-[#F8FAFC]">
         <svg
-          role="img"
+          role="group"
           aria-label="সাভার পৌরসভা ওয়ার্ড ১ থেকে ৯ এর পিকআপ, ময়লার স্তূপ ও গাড়ির অবস্থান ম্যাপ"
           viewBox="0 0 600 360"
           className="h-auto w-full"
         >
-          {[80, 160, 240, 320].map((y) => (
-            <line key={y} x1="16" y1={y} x2="584" y2={y} stroke="#E2E8F0" strokeWidth="1" />
-          ))}
-          {[120, 240, 360, 480].map((x) => (
-            <line key={x} x1={x} y1="16" x2={x} y2="344" stroke="#E2E8F0" strokeWidth="1" />
-          ))}
+          <g aria-hidden="true">
+            {[80, 160, 240, 320].map((y) => (
+              <line key={y} x1="16" y1={y} x2="584" y2={y} stroke="#E2E8F0" strokeWidth="1" />
+            ))}
+            {[120, 240, 360, 480].map((x) => (
+              <line key={x} x1={x} y1="16" x2={x} y2="344" stroke="#E2E8F0" strokeWidth="1" />
+            ))}
 
-          <path
-            d="M 190 345 L 250 220 L 310 125 L 405 18"
-            fill="none"
-            stroke="#CBD5E1"
-            strokeWidth="6"
-            strokeLinecap="round"
-          />
-          <text x="315" y="110" fill="#475569" fontSize="10" fontFamily="Inter, sans-serif">
-            Dhaka-Aricha Hwy (N5)
-          </text>
+            <path
+              d="M 190 345 L 250 220 L 310 125 L 405 18"
+              fill="none"
+              stroke="#CBD5E1"
+              strokeWidth="6"
+              strokeLinecap="round"
+            />
+            <text x="315" y="110" fill="#475569" fontSize="10" fontFamily="Inter, sans-serif">
+              Dhaka-Aricha Hwy (N5)
+            </text>
+          </g>
 
           {pourashavaWards.map((ward) => {
             const pt = project(ward.centroid_lat, ward.centroid_lng);
@@ -105,7 +107,7 @@ export function SavarWardMap({
                 role="button"
                 tabIndex={0}
                 aria-pressed={selected}
-                aria-label={`${ward.name_bn}`}
+                aria-label={`${ward.name_bn} — ${toBanglaDigits(ward.pending_pickups + ward.open_reports)}টি সক্রিয় কাজ`}
                 onClick={() => onSelectWard(selected ? null : ward.id)}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' || e.key === ' ') {
@@ -113,8 +115,18 @@ export function SavarWardMap({
                     onSelectWard(selected ? null : ward.id);
                   }
                 }}
-                className="cursor-pointer focus:outline-none"
+                className="group cursor-pointer focus:outline-none"
               >
+                <circle
+                  cx={pt.x}
+                  cy={pt.y}
+                  r={(selected ? 25 : 21) + 4}
+                  fill="none"
+                  stroke="#0F172A"
+                  strokeWidth={2.5}
+                  strokeDasharray="3 2"
+                  className="pointer-events-none opacity-0 transition-opacity group-focus-visible:opacity-100"
+                />
                 <circle
                   cx={pt.x}
                   cy={pt.y}
@@ -211,8 +223,9 @@ export function SavarWardMap({
         <span className="text-xs font-semibold text-[#475569]">ইউনিয়ন ও ফিল্টার:</span>
         <button
           type="button"
+          aria-pressed={selectedWardId === null}
           onClick={() => onSelectWard(null)}
-          className={`rounded border px-2.5 py-1 text-xs font-medium transition-colors ${
+          className={`min-h-11 rounded border px-3 py-2 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#15803D] ${
             selectedWardId === null
               ? 'border-[#15803D] bg-[#F0FDF4] text-[#14532D]'
               : 'border-[#CBD5E1] bg-white text-[#475569] hover:bg-[#F8FAFC]'
@@ -226,8 +239,9 @@ export function SavarWardMap({
             <button
               key={u.id}
               type="button"
+              aria-pressed={selected}
               onClick={() => onSelectWard(selected ? null : u.id)}
-              className={`rounded border px-2.5 py-1 text-xs font-medium transition-colors ${
+              className={`min-h-11 rounded border px-3 py-2 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#15803D] ${
                 selected
                   ? 'border-[#15803D] bg-[#F0FDF4] text-[#14532D]'
                   : 'border-[#CBD5E1] bg-white text-[#475569] hover:bg-[#F8FAFC]'

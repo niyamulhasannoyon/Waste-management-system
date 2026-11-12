@@ -613,13 +613,20 @@ function PickupPageContent() {
                   type="button"
                   onClick={async () => {
                     setLoadingRecent(true);
+                    setRecentError(null);
                     try {
                       setRecentPickups(await fetchPickups({ limit: 6 }));
+                    } catch (err) {
+                      setRecentError(
+                        err instanceof ApiError
+                          ? err.messageBn
+                          : 'সাম্প্রতিক পিকআপ তালিকা রিফ্রেশ করা যায়নি।',
+                      );
                     } finally {
                       setLoadingRecent(false);
                     }
                   }}
-                  className="inline-flex items-center gap-1 text-xs font-semibold text-[#15803D] hover:underline"
+                  className="inline-flex min-h-9 items-center gap-1 rounded px-2 text-xs font-semibold text-[#15803D] hover:bg-[#F0FDF4] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#15803D]"
                 >
                   <RefreshCw className="h-3 w-3" aria-hidden="true" />
                   রিফ্রেশ
