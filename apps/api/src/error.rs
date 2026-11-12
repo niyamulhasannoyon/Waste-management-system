@@ -5,6 +5,7 @@ use axum::{
 };
 use serde::Serialize;
 use thiserror::Error;
+use utoipa::ToSchema;
 
 /// Unified API error type with bilingual (English + Bangla) client-safe messages.
 #[derive(Debug, Error)]
@@ -58,16 +59,17 @@ pub enum AppError {
     Internal(String),
 }
 
-#[derive(Serialize)]
-struct ErrorBody {
-    error: ErrorPayload,
+#[derive(Serialize, ToSchema)]
+pub struct ErrorBody {
+    pub error: ErrorPayload,
 }
 
-#[derive(Serialize)]
-struct ErrorPayload {
-    code: &'static str,
-    message: String,
-    message_bn: String,
+#[derive(Serialize, ToSchema)]
+pub struct ErrorPayload {
+    #[schema(value_type = String)]
+    pub code: &'static str,
+    pub message: String,
+    pub message_bn: String,
 }
 
 impl AppError {

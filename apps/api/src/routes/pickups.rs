@@ -4,6 +4,7 @@ use axum::{
     Json,
 };
 use serde::{Deserialize, Serialize};
+use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 
 use crate::{
@@ -13,7 +14,7 @@ use crate::{
         mask_phone, normalize_bd_phone, release_vehicle_if_idle, resolve_ward_id_and_match,
         validate_coords, AppState,
     },
-    error::AppError,
+    error::{AppError, ErrorBody},
     models::{
         partner::StatusEventRecord,
         pickup::{
@@ -68,13 +69,14 @@ const VALID_DAYS: &[&str] = &[
     "friday",
 ];
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct TrackedPickupResponse {
     pub pickup: PickupRequestRecord,
     pub events: Vec<StatusEventRecord>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, IntoParams)]
+#[into_params(parameter_in = Query)]
 pub struct TrackVerifyQuery {
     pub phone: Option<String>,
 }
@@ -94,6 +96,17 @@ pub fn is_valid_pickup_transition(from: &str, to: &str) -> bool {
 
 /// `GET /api/v1/pickups`
 /// Authenticated, role-scoped list endpoint with search and pagination.
+#[utoipa::path(
+    get,
+    path = "/api/v1/pickups",
+    tag = "Pickups",
+    security(("bearerAuth" = [])),
+    params(ListPickupsQuery),
+    responses(
+        (status = 200, description = "Role-scoped pickup requests", body = Vec<PickupRequestRecord>),
+        (status = 401, description = "Unauthorized", body = ErrorBody)
+    )
+)]
 pub async fn list_pickups(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -209,6 +222,17 @@ pub async fn list_pickups(
 
 /// `POST /api/v1/pickups`
 /// Authenticated citizen/admin pickup creation binding ownership and using sequence tracking codes.
+#[utoipa::path(
+    post,
+    path = "/api/v1/pickups",
+    tag = "Pickups",
+    security(("bearerAuth" = [])),
+    request_body = CreatePickupRequest,
+    responses(
+        (status = 201, description = "Pickup scheduled", body = PickupRequestRecord),
+        (status = 400, description = "Validation error", body = ErrorBody)
+    )
+)]
 pub async fn create_pickup(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -420,6 +444,19 @@ pub async fn create_pickup(
 
 /// `GET /api/v1/pickups/track/:code`
 /// Publicly lookupable with masked citizen PII; full address/phone shown only to owner, verified phone match, collector, or admin.
+#[utoipa::path(
+    get,
+    path = "/api/v1/pickups/track/{code}",
+    tag = "Pickups",
+    params(
+        ("code" = String, Path, description = "Pickup tracking code (e.g. SAV-00001-XXXXXX)"),
+        TrackVerifyQuery
+    ),
+    responses(
+        (status = 200, description = "Tracked pickup with audit timeline (PII masked for public queries)", body = TrackedPickupResponse),
+        (status = 404, description = "Pickup not found", body = ErrorBody)
+    )
+)]
 pub async fn track_by_code(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -497,6 +534,19 @@ pub async fn track_by_code(
 
 /// `PATCH /api/v1/pickups/:id/status`
 /// Role-enforced state transition with vehicle release on completion/cancellation and citizen notification.
+#[utoipa::path(
+    patch,
+    path = "/api/v1/pickups/{id}/status",
+    tag = "Pickups",
+    security(("bearerAuth" = [])),
+    params(("id" = Uuid, Path, description = "Pickup request UUID")),
+    request_body = UpdatePickupStatusRequest,
+    responses(
+        (status = 200, description = "Pickup status updated", body = PickupRequestRecord),
+        (status = 400, description = "Invalid state transition", body = ErrorBody),
+        (status = 403, description = "Forbidden", body = ErrorBody)
+    )
+)]
 pub async fn update_pickup_status(
     State(state): State<AppState>,
     headers: HeaderMap,

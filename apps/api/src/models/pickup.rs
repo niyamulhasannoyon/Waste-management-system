@@ -1,9 +1,10 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
+use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 
-#[derive(Debug, Serialize, FromRow)]
+#[derive(Debug, Serialize, FromRow, ToSchema)]
 pub struct PickupRequestRecord {
     pub id: Uuid,
     pub tracking_code: String,
@@ -32,7 +33,7 @@ pub struct PickupRequestRecord {
     pub updated_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct CreatePickupRequest {
     pub citizen_name: Option<String>,
     pub citizen_phone: Option<String>,
@@ -61,7 +62,8 @@ fn default_schedule_type() -> String {
     "one_time".to_string()
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, IntoParams)]
+#[into_params(parameter_in = Query)]
 pub struct ListPickupsQuery {
     pub ward_id: Option<i16>,
     pub status: Option<String>,
@@ -71,7 +73,7 @@ pub struct ListPickupsQuery {
     pub limit: Option<i64>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct UpdatePickupStatusRequest {
     pub status: String,
     pub weight_kg: Option<f64>,

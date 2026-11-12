@@ -8,7 +8,7 @@ use uuid::Uuid;
 use crate::{
     auth::{require_role, Role},
     db::{ensure_ward_exists, AppState},
-    error::AppError,
+    error::{AppError, ErrorBody},
     models::partner::{
         ClaimLotRequest, CreateLotRequest, ListLotsQuery, RecyclableLotRecord,
     },
@@ -37,6 +37,17 @@ const VALID_LOT_STATUSES: &[&str] = &["open", "claimed", "collected"];
 
 /// `GET /api/v1/partner/lots`
 /// Partner/Admin endpoint supporting filters and pagination.
+#[utoipa::path(
+    get,
+    path = "/api/v1/partner/lots",
+    tag = "Partner",
+    security(("bearerAuth" = [])),
+    params(ListLotsQuery),
+    responses(
+        (status = 200, description = "Recyclable material lots", body = Vec<RecyclableLotRecord>),
+        (status = 403, description = "Forbidden", body = ErrorBody)
+    )
+)]
 pub async fn list_lots(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -107,6 +118,17 @@ pub async fn list_lots(
 }
 
 /// `POST /api/v1/partner/lots` (Admin only)
+#[utoipa::path(
+    post,
+    path = "/api/v1/partner/lots",
+    tag = "Partner",
+    security(("bearerAuth" = [])),
+    request_body = CreateLotRequest,
+    responses(
+        (status = 201, description = "Recyclable lot created", body = RecyclableLotRecord),
+        (status = 403, description = "Admin access required", body = ErrorBody)
+    )
+)]
 pub async fn create_lot(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -173,6 +195,18 @@ pub async fn create_lot(
 
 /// `POST /api/v1/partner/lots/:id/claim` (Verified Partner only)
 /// Derives partner identity strictly from authenticated partner account (cannot spoof names).
+#[utoipa::path(
+    post,
+    path = "/api/v1/partner/lots/{id}/claim",
+    tag = "Partner",
+    security(("bearerAuth" = [])),
+    params(("id" = Uuid, Path, description = "Recyclable lot UUID")),
+    request_body = Option<ClaimLotRequest>,
+    responses(
+        (status = 200, description = "Lot claimed by recycling partner", body = RecyclableLotRecord),
+        (status = 409, description = "Lot already claimed", body = ErrorBody)
+    )
+)]
 pub async fn claim_lot(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -260,6 +294,17 @@ pub async fn claim_lot(
 
 /// `POST /api/v1/partner/lots/:id/collect` (Owning Partner or Admin)
 /// Transitions a claimed lot to `'collected'`.
+#[utoipa::path(
+    post,
+    path = "/api/v1/partner/lots/{id}/collect",
+    tag = "Partner",
+    security(("bearerAuth" = [])),
+    params(("id" = Uuid, Path, description = "Recyclable lot UUID")),
+    responses(
+        (status = 200, description = "Lot marked collected", body = RecyclableLotRecord),
+        (status = 403, description = "Forbidden", body = ErrorBody)
+    )
+)]
 pub async fn collect_lot(
     State(state): State<AppState>,
     headers: HeaderMap,

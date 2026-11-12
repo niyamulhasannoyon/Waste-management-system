@@ -1,9 +1,10 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::{types::Json, FromRow};
+use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 
-#[derive(Debug, Serialize, FromRow)]
+#[derive(Debug, Serialize, FromRow, ToSchema)]
 pub struct DumpReportRecord {
     pub id: Uuid,
     pub tracking_code: String,
@@ -19,6 +20,7 @@ pub struct DumpReportRecord {
     pub status: String,
     pub lat: f64,
     pub lng: f64,
+    #[schema(value_type = Vec<String>)]
     pub photo_urls: Json<Vec<String>>,
     pub resolved_photo_url: Option<String>,
     pub assigned_vehicle_id: Option<Uuid>,
@@ -31,7 +33,7 @@ pub struct DumpReportRecord {
 }
 
 /// Sanitized public hotspot view omitting citizen PII (`reporter_name`, `reporter_phone`).
-#[derive(Debug, Serialize, FromRow)]
+#[derive(Debug, Serialize, FromRow, ToSchema)]
 pub struct PublicHotspotRecord {
     pub id: Uuid,
     pub tracking_code: String,
@@ -48,7 +50,7 @@ pub struct PublicHotspotRecord {
     pub created_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct CreateDumpReportRequest {
     #[serde(default)]
     pub reporter_name: String,
@@ -66,7 +68,7 @@ pub struct CreateDumpReportRequest {
     pub photo_urls: Vec<String>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct CreateDumpReportResponse {
     pub is_duplicate: bool,
     pub duplicate_of: Option<Uuid>,
@@ -78,7 +80,8 @@ fn default_severity() -> String {
     "high".to_string()
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, IntoParams)]
+#[into_params(parameter_in = Query)]
 pub struct ListReportsQuery {
     pub ward_id: Option<i16>,
     pub status: Option<String>,
@@ -91,7 +94,7 @@ pub struct ListReportsQuery {
     pub limit: Option<i64>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct UpdateReportStatusRequest {
     pub status: String,
     pub resolved_photo_url: Option<String>,
@@ -99,7 +102,7 @@ pub struct UpdateReportStatusRequest {
     pub note_bn: String,
 }
 
-#[derive(Debug, Serialize, FromRow)]
+#[derive(Debug, Serialize, FromRow, ToSchema)]
 pub struct CollectorVehicleRecord {
     pub id: Uuid,
     pub user_id: Option<Uuid>,
@@ -116,7 +119,7 @@ pub struct CollectorVehicleRecord {
     pub last_ping_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct DispatchAssignRequest {
     pub entity_type: String,
     pub entity_id: Uuid,
@@ -125,7 +128,7 @@ pub struct DispatchAssignRequest {
     pub note_bn: String,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct DispatchAssignResponse {
     pub entity_type: String,
     pub entity_id: Uuid,
@@ -134,14 +137,14 @@ pub struct DispatchAssignResponse {
     pub new_status: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct UpdateVehicleLocationRequest {
     pub lat: f64,
     pub lng: f64,
     pub status: Option<String>,
 }
 
-#[derive(Debug, Default, Deserialize)]
+#[derive(Debug, Default, Deserialize, ToSchema)]
 pub struct CompleteTaskRequest {
     pub task_type: Option<String>,
     pub weight_kg: Option<f64>,
@@ -150,7 +153,7 @@ pub struct CompleteTaskRequest {
     pub notes: String,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct CompleteTaskResponse {
     pub completion_id: Uuid,
     pub task_type: String,
@@ -164,7 +167,7 @@ pub struct CompleteTaskResponse {
     pub idempotency_key: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct SyncBatchItem {
     pub idempotency_key: String,
     pub task_id: Uuid,
@@ -175,12 +178,12 @@ pub struct SyncBatchItem {
     pub notes: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct CollectorSyncRequest {
     pub items: Vec<SyncBatchItem>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct SyncBatchResultItem {
     pub idempotency_key: String,
     pub task_id: Uuid,

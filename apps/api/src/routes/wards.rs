@@ -135,12 +135,30 @@ pub async fn resolve_ward(
 
 /// `GET /api/v1/analytics/public`
 /// Non-PII operational summary computed live from PostGIS records (never hardcoded offsets).
+#[utoipa::path(
+    get,
+    path = "/api/v1/analytics/public",
+    tag = "Wards",
+    responses(
+        (status = 200, description = "Public operational analytics summary", body = AnalyticsSummary)
+    )
+)]
 pub async fn public_analytics(State(state): State<AppState>) -> Result<Json<AnalyticsSummary>, AppError> {
     let summary = compute_analytics(&state).await?;
     Ok(Json(summary))
 }
 
 /// `GET /api/v1/analytics/summary` (Admin only)
+#[utoipa::path(
+    get,
+    path = "/api/v1/analytics/summary",
+    tag = "Admin",
+    security(("bearerAuth" = [])),
+    responses(
+        (status = 200, description = "Admin operational analytics summary", body = AnalyticsSummary),
+        (status = 403, description = "Admin access required", body = ErrorBody)
+    )
+)]
 pub async fn admin_analytics(
     State(state): State<AppState>,
     headers: HeaderMap,

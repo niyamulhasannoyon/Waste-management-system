@@ -5,6 +5,7 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use sqlx::types::Json as SqlxJson;
+use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 
 use crate::{
@@ -14,7 +15,7 @@ use crate::{
         mask_phone, normalize_bd_phone, release_vehicle_if_idle, resolve_ward_id_and_match,
         validate_coords, validate_uploaded_photo_url, AppState,
     },
-    error::AppError,
+    error::{AppError, ErrorBody},
     models::{
         dump_report::{
             CreateDumpReportRequest, CreateDumpReportResponse, DumpReportRecord, ListReportsQuery,
@@ -58,13 +59,14 @@ const VALID_SEVERITIES: &[&str] = &["medium", "high", "critical"];
 const VALID_REPORT_STATUSES: &[&str] =
     &["reported", "verified", "dispatched", "cleared", "rejected"];
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct TrackedReportResponse {
     pub report: DumpReportRecord,
     pub events: Vec<StatusEventRecord>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, IntoParams)]
+#[into_params(parameter_in = Query)]
 pub struct TrackVerifyQuery {
     pub phone: Option<String>,
 }
@@ -84,6 +86,15 @@ pub fn is_valid_report_transition(from: &str, to: &str) -> bool {
 
 /// `GET /api/v1/reports/public`
 /// Public hotspot summary strictly stripped of citizen phone numbers and reporter names.
+#[utoipa::path(
+    get,
+    path = "/api/v1/reports/public",
+    tag = "Reports",
+    params(ListReportsQuery),
+    responses(
+        (status = 200, description = "Public hotspot pins without PII", body = Vec<PublicHotspotRecord>)
+    )
+)]
 pub async fn list_public_hotspots(
     State(state): State<AppState>,
     Query(query): Query<ListReportsQuery>,
@@ -128,6 +139,17 @@ pub async fn list_public_hotspots(
 
 /// `GET /api/v1/reports`
 /// Authenticated, role-scoped dump report listing with geospatial radius and search filtering.
+#[utoipa::path(
+    get,
+    path = "/api/v1/reports",
+    tag = "Reports",
+    security(("bearerAuth" = [])),
+    params(ListReportsQuery),
+    responses(
+        (status = 200, description = "Role-scoped dump reports", body = Vec<DumpReportRecord>),
+        (status = 401, description = "Unauthorized", body = ErrorBody)
+    )
+)]
 pub async fn list_reports(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -261,6 +283,17 @@ pub async fn list_reports(
 
 /// `POST /api/v1/reports`
 /// Authenticated dump report submission with sanitized photo URLs and per-ward 50m PostGIS duplicate clustering.
+#[utoipa::path(
+    post,
+    path = "/api/v1/reports",
+    tag = "Reports",
+    security(("bearerAuth" = [])),
+    request_body = CreateDumpReportRequest,
+    responses(
+        (status = 201, description = "Dump report created or merged into nearby hotspot", body = CreateDumpReportResponse),
+        (status = 400, description = "Validation error", body = ErrorBody)
+    )
+)]
 pub async fn create_report(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -476,6 +509,19 @@ pub async fn create_report(
 }
 
 /// `GET /api/v1/reports/track/:code`
+#[utoipa::path(
+    get,
+    path = "/api/v1/reports/track/{code}",
+    tag = "Reports",
+    params(
+        ("code" = String, Path, description = "Report tracking code (e.g. DMP-00001-XXXXXX)"),
+        TrackVerifyQuery
+    ),
+    responses(
+        (status = 200, description = "Tracked dump report with timeline", body = TrackedReportResponse),
+        (status = 404, description = "Dump report not found", body = ErrorBody)
+    )
+)]
 pub async fn track_by_code(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -553,6 +599,18 @@ pub async fn track_by_code(
 
 /// `PATCH /api/v1/reports/:id/status`
 /// Role-enforced report transitions with validated proof URL, duplicate cascading, and vehicle release.
+#[utoipa::path(
+    patch,
+    path = "/api/v1/reports/{id}/status",
+    tag = "Reports",
+    security(("bearerAuth" = [])),
+    params(("id" = Uuid, Path, description = "Dump report UUID")),
+    request_body = UpdateReportStatusRequest,
+    responses(
+        (status = 200, description = "Updated dump report", body = DumpReportRecord),
+        (status = 400, description = "Invalid state transition", body = ErrorBody)
+    )
+)]
 pub async fn update_report_status(
     State(state): State<AppState>,
     headers: HeaderMap,

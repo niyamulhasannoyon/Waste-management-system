@@ -14,11 +14,12 @@ use axum::{
     Router,
 };
 
-use crate::db::AppState;
+use crate::{db::AppState, openapi};
 
 pub fn api_router() -> Router<AppState> {
     Router::new()
         .route("/health", get(health::health_check))
+        .route("/openapi.json", get(openapi::openapi_json))
         .route("/auth/otp-login", post(auth::otp_login))
         .route("/auth/otp-verify", post(auth::verify_otp))
         .route("/auth/me", get(auth::me))

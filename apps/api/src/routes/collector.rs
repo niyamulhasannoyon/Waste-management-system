@@ -15,7 +15,7 @@ use crate::{
         create_notification, release_vehicle_if_idle, sha256_hex, validate_uploaded_photo_url,
         AppState,
     },
-    error::AppError,
+    error::{AppError, ErrorBody},
     models::dump_report::{
         CollectorSyncRequest, CompleteTaskRequest, CompleteTaskResponse, SyncBatchItem,
         SyncBatchResultItem,
@@ -27,6 +27,21 @@ const REPLAY_HEADER_NAME: &str = "x-idempotent-replay";
 
 /// `PATCH /api/v1/collector/tasks/:id/complete` (or `POST`)
 /// Idempotent collector task completion backed by SHA-256 request fingerprints and vehicle ownership checks.
+#[utoipa::path(
+    patch,
+    path = "/api/v1/collector/tasks/{task_id}/complete",
+    tag = "Collector",
+    security(("bearerAuth" = [])),
+    params(
+        ("task_id" = Uuid, Path, description = "Pickup or dump report UUID"),
+        ("idempotency-key" = String, Header, description = "Client-supplied UUID idempotency key")
+    ),
+    request_body = Option<CompleteTaskRequest>,
+    responses(
+        (status = 200, description = "Task completed or idempotent replay returned", body = CompleteTaskResponse),
+        (status = 409, description = "Idempotency conflict", body = ErrorBody)
+    )
+)]
 pub async fn complete_task(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -61,6 +76,17 @@ pub async fn complete_task(
 
 /// `POST /api/v1/collector/sync`
 /// Offline sync endpoint processing queued collector completions sequentially with per-item idempotency.
+#[utoipa::path(
+    post,
+    path = "/api/v1/collector/sync",
+    tag = "Collector",
+    security(("bearerAuth" = [])),
+    request_body = CollectorSyncRequest,
+    responses(
+        (status = 200, description = "Per-item offline sync batch results", body = Vec<SyncBatchResultItem>),
+        (status = 400, description = "Batch size invalid", body = ErrorBody)
+    )
+)]
 pub async fn sync_batch(
     State(state): State<AppState>,
     headers: HeaderMap,

@@ -3,6 +3,7 @@ mod config;
 mod db;
 mod error;
 mod models;
+mod openapi;
 mod routes;
 
 use axum::{
@@ -18,7 +19,7 @@ use axum::{
 use std::net::{IpAddr, SocketAddr};
 use tokio::net::TcpListener;
 use tower_http::{cors::CorsLayer, services::ServeDir, trace::TraceLayer};
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
 use crate::{
     config::AppConfig,
@@ -29,13 +30,36 @@ use crate::{
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     dotenvy::dotenv().ok();
 
-    tracing_subscriber::registry()
-        .with(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "clean_savar_api=debug,tower_http=info".into()),
-        )
-        .with(tracing_subscriber::fmt::layer())
-        .init();
+    let app_env = std::env::var("APP_ENV")
+        .unwrap_or_else(|_| "development".to_string())
+        .trim()
+        .to_ascii_lowercase();
+    let is_production = matches!(app_env.as_str(), "production" | "prod");
+    let default_format = if is_production { "json" } else { "pretty" };
+    let log_format = std::env::var("LOG_FORMAT")
+        .unwrap_or_else(|_| default_format.to_string())
+        .trim()
+        .to_ascii_lowercase();
+
+    let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| {
+        if is_production {
+            "clean_savar_api=info,tower_http=info".into()
+        } else {
+            "clean_savar_api=debug,tower_http=info".into()
+        }
+    });
+
+    if log_format == "json" {
+        tracing_subscriber::registry()
+            .with(env_filter)
+            .with(tracing_subscriber::fmt::layer().json())
+            .init();
+    } else {
+        tracing_subscriber::registry()
+            .with(env_filter)
+            .with(tracing_subscriber::fmt::layer())
+            .init();
+    }
 
     let cfg = AppConfig::from_env().map_err(|err| {
         tracing::error!(error = %err, "invalid API configuration");

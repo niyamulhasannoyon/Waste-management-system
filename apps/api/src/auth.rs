@@ -7,6 +7,7 @@ use sqlx::PgPool;
 use std::collections::HashMap;
 use std::fmt::Write as _;
 use std::sync::Arc;
+use subtle::ConstantTimeEq;
 use tokio::sync::Mutex;
 use uuid::Uuid;
 
@@ -54,6 +55,7 @@ pub struct AuthUser {
     pub phone: String,
     pub full_name: String,
     pub role: Role,
+    #[allow(dead_code)]
     pub ward_id: Option<i16>,
     pub vehicle_id: Option<Uuid>,
     pub partner_id: Option<Uuid>,
@@ -129,16 +131,9 @@ pub fn hmac_hash_hex(secret: &str, value: &str) -> String {
     hex
 }
 
-/// Constant-time comparison over equal-length strings.
+/// Constant-time comparison over byte slices using the audited `subtle` crate.
 pub fn constant_time_eq(a: &str, b: &str) -> bool {
-    if a.len() != b.len() {
-        return false;
-    }
-    let mut diff = 0u8;
-    for (&x, &y) in a.as_bytes().iter().zip(b.as_bytes().iter()) {
-        diff |= x ^ y;
-    }
-    diff == 0
+    bool::from(a.as_bytes().ct_eq(b.as_bytes()))
 }
 
 /// CSPRNG 6-digit numeric OTP using uniform rejection sampling (no modulo bias).
@@ -323,5 +318,15 @@ mod tests {
             axum::http::HeaderValue::from_static("103.4.145.10"),
         );
         assert_eq!(extract_client_ip(&headers), "103.4.145.10");
+    }
+
+    #[test]
+    fn constant_time_eq_verifies_exact_and_mismatched_digests() {
+        let a = hmac_hash_hex("secret-key-at-least-32-chars-long-here", "01715-883210:123456");
+        let b = hmac_hash_hex("secret-key-at-least-32-chars-long-here", "01715-883210:123456");
+        let c = hmac_hash_hex("secret-key-at-least-32-chars-long-here", "01715-883210:654321");
+        assert!(constant_time_eq(&a, &b));
+        assert!(!constant_time_eq(&a, &c));
+        assert!(!constant_time_eq(&a, "short"));
     }
 }

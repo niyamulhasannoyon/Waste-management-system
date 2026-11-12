@@ -8,12 +8,23 @@ use uuid::Uuid;
 use crate::{
     auth::require_auth,
     db::AppState,
-    error::AppError,
+    error::{AppError, ErrorBody},
     models::auth::{NotificationRecord, PaginationQuery},
 };
 
 /// `GET /api/v1/notifications`
 /// Lists recent status notifications strictly owned by the authenticated user with bounded pagination.
+#[utoipa::path(
+    get,
+    path = "/api/v1/notifications",
+    tag = "Notifications",
+    security(("bearerAuth" = [])),
+    params(PaginationQuery),
+    responses(
+        (status = 200, description = "Paginated user notifications", body = Vec<NotificationRecord>),
+        (status = 401, description = "Unauthorized", body = ErrorBody)
+    )
+)]
 pub async fn list_notifications(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -43,6 +54,17 @@ pub async fn list_notifications(
 }
 
 /// `PATCH /api/v1/notifications/:id/read`
+#[utoipa::path(
+    patch,
+    path = "/api/v1/notifications/{id}/read",
+    tag = "Notifications",
+    security(("bearerAuth" = [])),
+    params(("id" = Uuid, Path, description = "Notification UUID")),
+    responses(
+        (status = 200, description = "Updated notification record", body = NotificationRecord),
+        (status = 404, description = "Notification not found", body = ErrorBody)
+    )
+)]
 pub async fn mark_notification_read(
     State(state): State<AppState>,
     headers: HeaderMap,

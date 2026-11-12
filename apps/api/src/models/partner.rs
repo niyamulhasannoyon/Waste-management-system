@@ -1,9 +1,10 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
+use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 
-#[derive(Debug, Serialize, FromRow)]
+#[derive(Debug, Serialize, FromRow, ToSchema)]
 pub struct RecyclableLotRecord {
     pub id: Uuid,
     pub lot_code: String,
@@ -19,7 +20,8 @@ pub struct RecyclableLotRecord {
     pub created_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, IntoParams)]
+#[into_params(parameter_in = Query)]
 pub struct ListLotsQuery {
     pub status: Option<String>,
     pub material_type: Option<String>,
@@ -28,7 +30,7 @@ pub struct ListLotsQuery {
     pub limit: Option<i64>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct CreateLotRequest {
     pub ward_id: i16,
     pub material_type: String,
@@ -36,13 +38,13 @@ pub struct CreateLotRequest {
     pub pickup_hub_bn: String,
 }
 
-#[derive(Debug, Deserialize, Default)]
+#[derive(Debug, Deserialize, Default, ToSchema)]
 pub struct ClaimLotRequest {
     #[serde(default)]
     pub note_bn: String,
 }
 
-#[derive(Debug, Serialize, FromRow)]
+#[derive(Debug, Serialize, FromRow, ToSchema)]
 pub struct StatusEventRecord {
     pub id: Uuid,
     pub entity_type: String,

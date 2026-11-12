@@ -12,7 +12,7 @@ use crate::{
         hmac_hash_hex, require_auth, require_role, Role,
     },
     db::{ensure_ward_exists, mask_phone, normalize_bd_phone, record_audit_log, AppState},
-    error::AppError,
+    error::{AppError, ErrorBody},
     models::auth::{
         AccountEraseResponse, AuthenticatedProfile, OtpLoginRequest, OtpLoginResponse,
         OtpVerifyRequest, OtpVerifyResponse, RetentionPurgeQuery, RetentionPurgeResponse,
@@ -22,6 +22,17 @@ use crate::{
 
 /// `POST /api/v1/auth/otp-login`
 /// Rate-limited phone OTP request. Does not mutate verified user records before OTP proof.
+#[utoipa::path(
+    post,
+    path = "/api/v1/auth/otp-login",
+    tag = "Auth",
+    request_body = OtpLoginRequest,
+    responses(
+        (status = 201, description = "OTP issued", body = OtpLoginResponse),
+        (status = 400, description = "Invalid phone or ward", body = ErrorBody),
+        (status = 429, description = "Rate limit exceeded", body = ErrorBody)
+    )
+)]
 pub async fn otp_login(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -149,6 +160,17 @@ pub async fn otp_login(
 
 /// `POST /api/v1/auth/otp-verify`
 /// Verifies OTP against its HMAC digest, then creates/updates user & issues a hashed Bearer session.
+#[utoipa::path(
+    post,
+    path = "/api/v1/auth/otp-verify",
+    tag = "Auth",
+    request_body = OtpVerifyRequest,
+    responses(
+        (status = 200, description = "OTP verified and bearer token issued", body = OtpVerifyResponse),
+        (status = 401, description = "Invalid or expired OTP", body = ErrorBody),
+        (status = 429, description = "Too many OTP attempts", body = ErrorBody)
+    )
+)]
 pub async fn verify_otp(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -389,6 +411,16 @@ pub async fn verify_otp(
 }
 
 /// `GET /api/v1/auth/me`
+#[utoipa::path(
+    get,
+    path = "/api/v1/auth/me",
+    tag = "Auth",
+    security(("bearerAuth" = [])),
+    responses(
+        (status = 200, description = "Authenticated user profile", body = AuthenticatedProfile),
+        (status = 401, description = "Unauthorized", body = ErrorBody)
+    )
+)]
 pub async fn me(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -411,6 +443,16 @@ pub async fn me(
 }
 
 /// `POST /api/v1/auth/logout`
+#[utoipa::path(
+    post,
+    path = "/api/v1/auth/logout",
+    tag = "Auth",
+    security(("bearerAuth" = [])),
+    responses(
+        (status = 204, description = "Session revoked"),
+        (status = 401, description = "Unauthorized", body = ErrorBody)
+    )
+)]
 pub async fn logout(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -441,6 +483,16 @@ pub async fn logout(
 /// `POST /api/v1/auth/erase`
 /// Anonymizes the authenticated user's PII across profile, pickup requests, and dump reports,
 /// snaps pickup coordinates to ward centroid, and revokes all active bearer sessions.
+#[utoipa::path(
+    post,
+    path = "/api/v1/auth/erase",
+    tag = "Auth",
+    security(("bearerAuth" = [])),
+    responses(
+        (status = 200, description = "Account anonymized and active sessions revoked", body = AccountEraseResponse),
+        (status = 403, description = "Forbidden for admin self-erasure", body = ErrorBody)
+    )
+)]
 pub async fn erase_account(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -565,6 +617,17 @@ pub async fn erase_account(
 
 /// `POST /api/v1/admin/retention/purge` (Admin only)
 /// Runs expired OTP/session cleanup and PII anonymization using `purge_expired_pii`.
+#[utoipa::path(
+    post,
+    path = "/api/v1/admin/retention/purge",
+    tag = "Admin",
+    security(("bearerAuth" = [])),
+    params(RetentionPurgeQuery),
+    responses(
+        (status = 200, description = "Expired PII anonymized/purged", body = RetentionPurgeResponse),
+        (status = 403, description = "Admin access required", body = ErrorBody)
+    )
+)]
 pub async fn purge_retention(
     State(state): State<AppState>,
     headers: HeaderMap,

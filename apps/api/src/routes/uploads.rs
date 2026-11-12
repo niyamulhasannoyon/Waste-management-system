@@ -7,20 +7,28 @@ use image::{imageops::FilterType, ImageFormat, ImageReader, Limits};
 use serde::Serialize;
 use std::io::Cursor;
 use tokio::fs;
+use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::{
     auth::{extract_client_ip, require_role, Role},
     db::AppState,
-    error::AppError,
+    error::{AppError, ErrorBody},
 };
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct PhotoUploadResponse {
     pub object_key: String,
     pub url: String,
     pub mime_type: String,
     pub size_bytes: usize,
+}
+
+#[allow(dead_code)]
+#[derive(ToSchema)]
+pub struct PhotoUploadForm {
+    #[schema(content_media_type = "application/octet-stream")]
+    pub file: Vec<u8>,
 }
 
 #[derive(Clone, Copy)]
@@ -108,6 +116,19 @@ fn sanitize_and_reencode_image(
 
 /// `POST /api/v1/uploads/photo`
 /// Authenticated, rate-limited, EXIF-stripping image upload endpoint.
+#[utoipa::path(
+    post,
+    path = "/api/v1/uploads/photo",
+    tag = "Uploads",
+    security(("bearerAuth" = [])),
+    request_body(content = PhotoUploadForm, content_type = "multipart/form-data"),
+    responses(
+        (status = 201, description = "Sanitized image uploaded", body = PhotoUploadResponse),
+        (status = 400, description = "Unsupported or corrupted image", body = ErrorBody),
+        (status = 413, description = "Payload too large", body = ErrorBody),
+        (status = 429, description = "Rate limit exceeded", body = ErrorBody)
+    )
+)]
 pub async fn upload_photo(
     State(state): State<AppState>,
     headers: HeaderMap,

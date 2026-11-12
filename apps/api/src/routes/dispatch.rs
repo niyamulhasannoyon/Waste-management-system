@@ -4,19 +4,21 @@ use axum::{
     Json,
 };
 use serde::{Deserialize, Serialize};
+use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 
 use crate::{
     auth::{extract_client_ip, require_role, Role},
     db::{create_notification, record_audit_log, release_vehicle_if_idle, validate_coords, AppState},
-    error::AppError,
+    error::{AppError, ErrorBody},
     models::dump_report::{
         CollectorVehicleRecord, DispatchAssignRequest, DispatchAssignResponse,
         UpdateVehicleLocationRequest,
     },
 };
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, IntoParams)]
+#[into_params(parameter_in = Query)]
 pub struct ListVehiclesQuery {
     pub lat: Option<f64>,
     pub lng: Option<f64>,
@@ -27,7 +29,7 @@ pub struct ListVehiclesQuery {
     pub limit: Option<i64>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct NearbyVehiclesResponse {
     pub target_lat: f64,
     pub target_lng: f64,
@@ -38,6 +40,17 @@ pub struct NearbyVehiclesResponse {
 
 /// `GET /api/v1/dispatch/vehicles`
 /// Admin/Collector endpoint to inspect fleet vehicles with optional spatial proximity & pagination.
+#[utoipa::path(
+    get,
+    path = "/api/v1/dispatch/vehicles",
+    tag = "Dispatch",
+    security(("bearerAuth" = [])),
+    params(ListVehiclesQuery),
+    responses(
+        (status = 200, description = "Scoped fleet vehicles", body = Vec<CollectorVehicleRecord>),
+        (status = 403, description = "Forbidden", body = ErrorBody)
+    )
+)]
 pub async fn list_vehicles(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -129,6 +142,17 @@ pub async fn list_vehicles(
 
 /// `GET /api/v1/workers/nearby`
 /// Admin dispatch endpoint to find active nearby collector vehicles within radius_m sorted by PostGIS ST_Distance.
+#[utoipa::path(
+    get,
+    path = "/api/v1/workers/nearby",
+    tag = "Dispatch",
+    security(("bearerAuth" = [])),
+    params(ListVehiclesQuery),
+    responses(
+        (status = 200, description = "Nearby vehicles sorted by distance", body = NearbyVehiclesResponse),
+        (status = 400, description = "Missing coordinates", body = ErrorBody)
+    )
+)]
 pub async fn nearby_workers(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -206,6 +230,18 @@ pub async fn nearby_workers(
 
 /// `PATCH /api/v1/dispatch/vehicles/:id/location`
 /// Collectors can only update their own vehicle GPS/status; Admins can update any vehicle.
+#[utoipa::path(
+    patch,
+    path = "/api/v1/dispatch/vehicles/{id}/location",
+    tag = "Dispatch",
+    security(("bearerAuth" = [])),
+    params(("id" = Uuid, Path, description = "Vehicle UUID")),
+    request_body = UpdateVehicleLocationRequest,
+    responses(
+        (status = 200, description = "Updated vehicle GPS ping", body = CollectorVehicleRecord),
+        (status = 403, description = "Forbidden", body = ErrorBody)
+    )
+)]
 pub async fn update_vehicle_location(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -269,6 +305,17 @@ pub async fn update_vehicle_location(
 
 /// `POST /api/v1/dispatch/assign` (Admin only)
 /// Safely assigns/reassigns an active vehicle to an active pickup or report and releases replaced vehicles.
+#[utoipa::path(
+    post,
+    path = "/api/v1/dispatch/assign",
+    tag = "Dispatch",
+    security(("bearerAuth" = [])),
+    request_body = DispatchAssignRequest,
+    responses(
+        (status = 200, description = "Vehicle assigned to pickup or report", body = DispatchAssignResponse),
+        (status = 409, description = "No available vehicle in range", body = ErrorBody)
+    )
+)]
 pub async fn assign_vehicle(
     State(state): State<AppState>,
     headers: HeaderMap,

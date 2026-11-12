@@ -1,7 +1,8 @@
 use serde::{Deserialize, Serialize};
 use sqlx::{types::Json, FromRow};
+use utoipa::{IntoParams, ToSchema};
 
-#[derive(Debug, Serialize, FromRow)]
+#[derive(Debug, Serialize, FromRow, ToSchema)]
 pub struct WardSummary {
     pub id: i16,
     pub code: String,
@@ -10,6 +11,7 @@ pub struct WardSummary {
     pub name_bn: String,
     pub name_en: String,
     pub zone_label_bn: String,
+    #[schema(value_type = Vec<String>)]
     pub neighborhoods: Json<Vec<String>>,
     pub schedule_bn: String,
     pub frequency_bn: String,
@@ -22,13 +24,14 @@ pub struct WardSummary {
     pub active_vehicles: i64,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, IntoParams)]
+#[into_params(parameter_in = Query)]
 pub struct ResolveWardQuery {
     pub lat: f64,
     pub lng: f64,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct ResolvedWardResponse {
     pub ward_id: i16,
     pub code: String,
@@ -39,7 +42,7 @@ pub struct ResolvedWardResponse {
     pub exact_match: bool,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct AnalyticsSummary {
     pub total_pickups: i64,
     pub pending_pickups: i64,
