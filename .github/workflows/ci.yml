@@ -1,0 +1,124 @@
+name: Clean Savar CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  rust-api:
+    name: Rust API & PostGIS Schema
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4-alpine
+        env:
+          POSTGRES_DB: clean_savar
+          POSTGRES_USER: clean_savar
+          POSTGRES_PASSWORD: clean_savar_ci_pw
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U clean_savar -d clean_savar"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=12
+
+    env:
+      DATABASE_URL: postgres://clean_savar:clean_savar_ci_pw@127.0.0.1:5432/clean_savar
+      PGPASSWORD: clean_savar_ci_pw
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Apply PostGIS schema and Savar ward seeds
+        run: |
+          psql -h 127.0.0.1 -U clean_savar -d clean_savar -v ON_ERROR_STOP=1 -f apps/api/migrations/0001_init_postgis.sql
+          psql -h 127.0.0.1 -U clean_savar -d clean_savar -v ON_ERROR_STOP=1 -f apps/api/migrations/0002_seed_savar_wards.sql
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - name: Cache Cargo artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/api
+
+      - name: Format check (cargo fmt)
+        working-directory: apps/api
+        run: cargo fmt --all -- --check
+
+      - name: Lint (cargo clippy)
+        working-directory: apps/api
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: Unit tests (cargo test)
+        working-directory: apps/api
+        run: cargo test --locked || cargo test
+
+  web-portal:
+    name: Next.js Web Portal
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+
+      - name: Install web dependencies
+        working-directory: apps/web
+        run: npm ci
+
+      - name: TypeScript typecheck
+        working-directory: apps/web
+        run: npm run typecheck
+
+      - name: ESLint check
+        working-directory: apps/web
+        run: npm run lint
+
+      - name: Vitest unit & component tests
+        working-directory: apps/web
+        run: npm test
+
+      - name: Production build
+        working-directory: apps/web
+        run: npm run build
+
+  flutter-mobile:
+    name: Flutter Core SDK & Mobile App
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter SDK
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Analyze shared core package
+        working-directory: packages/clean_savar_core
+        run: |
+          flutter pub get
+          flutter analyze
+
+      - name: Analyze and test mobile app
+        working-directory: apps/mobile
+        run: |
+          flutter pub get
+          flutter analyze
+          flutter test

@@ -1,36 +1,41 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Clean Savar Web Portal (`apps/web`)
 
-## Getting Started
+Next.js 15 (App Router, Strict TypeScript, Tailwind CSS v4, Lucide Icons, Vitest) citizen and municipal operations portal for **Clean Savar (ক্লিন সাভার)**.
 
-First, run the development server:
+## Routes
+
+- `/` — Public Citizen Portal, interactive Savar Ward `1–9` & Union `101–106` PostGIS map, live metrics, active hotspots, and Eco-Recycling overview
+- `/login` — Phone OTP Sign-In with Bangladeshi number normalization and demo test account presets
+- `/pickup` — Door-to-door one-time or recurring weekly (`recurring_weekly`) waste pickup scheduling with automatic ward detection
+- `/report` — Geo-tagged illegal dump reporting with EXIF-stripped photo upload (up to 5 photos)
+- `/track` — Real-time pickup (`CS-PK-*`) and report (`CS-DR-*`) status timeline lookup with optional phone verification
+- `/collector` — Field Collector Workspace for assigned tasks, vehicle GPS pings, QR verification, and idempotent completion
+- `/partner` — Verified Recycling Partner lot marketplace (`CS-LOT-*`) with filter & collection logging
+- `/admin` — Savar Pourashava Dispatch & Analytics dashboard with PostGIS nearest-vehicle assignment, status triage, lot creation, and formula-injection-safe CSV export
+
+## Design System & Accessibility
+
+- **Eco-Municipal Flat UI:** Slate canvas (`#F8FAFC`), crisp card surfaces (`#FFFFFF`), high-contrast slate borders (`#E2E8F0` / `#CBD5E1`), Deep Leaf Green accent (`#15803D` / `#14532D`), zero glassmorphism or heavy elevation clutter.
+- **Typography:** `Hind Siliguri` for Bangla prose (`line-height: 1.65`) paired with `Inter` (`font-variant-numeric: tabular-nums`) for codes, phone numbers, and metrics.
+- **WCAG AA & Native Web Standards:** Semantic `<dialog>` modals and mobile drawers (`@starting-style`, `overscroll-behavior: contain`), post-interaction form validation (`aria-invalid` + `:user-invalid`), single `aria-live="polite"` status announcer, container-query responsive tables (`.cs-table-wrapper`), and `>= 44px` tap targets.
+
+## Commands
+
+Requires Node.js >= 22:
 
 ```bash
+npm ci
+npm run typecheck
+npm run lint
+npm test
+npm run build
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Configure the Rust API URL via `.env.local` (or root `.env`):
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```env
+NEXT_PUBLIC_API_URL=http://localhost:8080/api/v1
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+When `NEXT_PUBLIC_API_URL` is unreachable, public read views enter a clearly badged offline preview mode; mutating actions (`POST`/`PATCH`, OTP verification, photo uploads) require the live backend API and never fabricate successful writes.
