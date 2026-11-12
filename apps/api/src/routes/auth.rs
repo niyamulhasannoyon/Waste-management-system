@@ -300,13 +300,12 @@ pub async fn verify_otp(
     .await?
     .is_some();
 
-    let is_verified_partner: bool = sqlx::query_scalar::<_, Uuid>(
-        "SELECT id FROM partners WHERE contact_phone = $1 LIMIT 1",
-    )
-    .bind(&phone)
-    .fetch_optional(&mut *tx)
-    .await?
-    .is_some();
+    let is_verified_partner: bool =
+        sqlx::query_scalar::<_, Uuid>("SELECT id FROM partners WHERE contact_phone = $1 LIMIT 1")
+            .bind(&phone)
+            .fetch_optional(&mut *tx)
+            .await?
+            .is_some();
 
     let resolved_role = if is_bootstrap_admin || existing_user_role.as_deref() == Some("admin") {
         Role::Admin.as_str()
@@ -509,10 +508,12 @@ pub async fn erase_account(
     let mut tx = state.pool.begin().await?;
 
     // Unlink any assigned fleet/partner references before anonymizing user identity.
-    sqlx::query("UPDATE collector_vehicles SET user_id = NULL, updated_at = NOW() WHERE user_id = $1")
-        .bind(auth_user.user_id)
-        .execute(&mut *tx)
-        .await?;
+    sqlx::query(
+        "UPDATE collector_vehicles SET user_id = NULL, updated_at = NOW() WHERE user_id = $1",
+    )
+    .bind(auth_user.user_id)
+    .execute(&mut *tx)
+    .await?;
     sqlx::query("UPDATE partners SET user_id = NULL WHERE user_id = $1")
         .bind(auth_user.user_id)
         .execute(&mut *tx)
@@ -569,10 +570,12 @@ pub async fn erase_account(
         .execute(&mut *tx)
         .await?;
 
-    sqlx::query("UPDATE auth_sessions SET revoked_at = NOW() WHERE user_id = $1 AND revoked_at IS NULL")
-        .bind(auth_user.user_id)
-        .execute(&mut *tx)
-        .await?;
+    sqlx::query(
+        "UPDATE auth_sessions SET revoked_at = NOW() WHERE user_id = $1 AND revoked_at IS NULL",
+    )
+    .bind(auth_user.user_id)
+    .execute(&mut *tx)
+    .await?;
 
     sqlx::query(
         r#"

@@ -348,10 +348,14 @@ pub async fn create_report(
 
     let mut clean_photos = Vec::with_capacity(payload.photo_urls.len());
     for url in &payload.photo_urls {
-        clean_photos.push(validate_uploaded_photo_url(url, &state.public_upload_base_url)?);
+        clean_photos.push(validate_uploaded_photo_url(
+            url,
+            &state.public_upload_base_url,
+        )?);
     }
 
-    let (phone, owner_override_needed) = match (&auth_user.role, payload.reporter_phone.as_deref()) {
+    let (phone, owner_override_needed) = match (&auth_user.role, payload.reporter_phone.as_deref())
+    {
         (Role::Admin, Some(raw)) if !raw.trim().is_empty() => {
             let normalized = normalize_bd_phone(raw)?;
             let is_self = normalized == auth_user.phone;
@@ -371,9 +375,11 @@ pub async fn create_report(
             ensure_ward_exists(&state.pool, wid).await?;
             wid
         }
-        None => resolve_ward_id_and_match(&state.pool, payload.lat, payload.lng)
-            .await?
-            .0,
+        None => {
+            resolve_ward_id_and_match(&state.pool, payload.lat, payload.lng)
+                .await?
+                .0
+        }
     };
 
     let mut tx = state.pool.begin().await?;
@@ -536,7 +542,11 @@ pub async fn track_by_code(
 
     let auth_user = extract_optional_auth(&state, &headers).await?;
     let normalized_code = code.trim().to_uppercase();
-    if verify.phone.as_deref().is_some_and(|p| !p.trim().is_empty()) {
+    if verify
+        .phone
+        .as_deref()
+        .is_some_and(|p| !p.trim().is_empty())
+    {
         state
             .rate_limiter
             .check(&format!("track_verify:{normalized_code}:{ip}"), 8, 900)
@@ -562,8 +572,9 @@ pub async fn track_by_code(
         .and_then(|p| normalize_bd_phone(p).ok())
         .is_some_and(|p| p == report.reporter_phone);
 
-    let is_authorized = is_owner_or_staff(auth_user.as_ref(), report.user_id, &report.reporter_phone)
-        || phone_verified;
+    let is_authorized =
+        is_owner_or_staff(auth_user.as_ref(), report.user_id, &report.reporter_phone)
+            || phone_verified;
 
     if !is_authorized {
         report.reporter_phone = mask_phone(&report.reporter_phone);
@@ -675,7 +686,10 @@ pub async fn update_report_status(
 
     if !is_valid_report_transition(&row.status, &payload.status) {
         return Err(AppError::conflict(
-            format!("Cannot transition dump report from '{}' to '{}'.", row.status, payload.status),
+            format!(
+                "Cannot transition dump report from '{}' to '{}'.",
+                row.status, payload.status
+            ),
             "বর্তমান অবস্থা থেকে এই স্ট্যাটাসে পরিবর্তন করা যাবে না।",
         ));
     }

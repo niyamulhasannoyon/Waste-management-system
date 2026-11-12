@@ -57,8 +57,13 @@ const PICKUP_SELECT_BASE: &str = r#"
 
 const VALID_WASTE_TYPES: &[&str] = &["household", "organic", "recyclable", "bulky"];
 const VALID_SLOTS: &[&str] = &["morning", "afternoon", "evening"];
-const VALID_PICKUP_STATUSES: &[&str] =
-    &["pending", "assigned", "in_progress", "collected", "cancelled"];
+const VALID_PICKUP_STATUSES: &[&str] = &[
+    "pending",
+    "assigned",
+    "in_progress",
+    "collected",
+    "cancelled",
+];
 const VALID_DAYS: &[&str] = &[
     "saturday",
     "sunday",
@@ -296,7 +301,10 @@ pub async fn create_pickup(
             "পিকআপের সঠিক সময় নির্বাচন করুন।",
         ));
     }
-    if !matches!(payload.schedule_type.as_str(), "one_time" | "recurring_weekly") {
+    if !matches!(
+        payload.schedule_type.as_str(),
+        "one_time" | "recurring_weekly"
+    ) {
         return Err(AppError::validation(
             "Invalid schedule_type.",
             "পিকআপের সময়সূচি সঠিক নয়।",
@@ -471,7 +479,11 @@ pub async fn track_by_code(
 
     let auth_user = extract_optional_auth(&state, &headers).await?;
     let normalized_code = code.trim().to_uppercase();
-    if verify.phone.as_deref().is_some_and(|p| !p.trim().is_empty()) {
+    if verify
+        .phone
+        .as_deref()
+        .is_some_and(|p| !p.trim().is_empty())
+    {
         state
             .rate_limiter
             .check(&format!("track_verify:{normalized_code}:{ip}"), 8, 900)
@@ -497,8 +509,9 @@ pub async fn track_by_code(
         .and_then(|p| normalize_bd_phone(p).ok())
         .is_some_and(|p| p == pickup.citizen_phone);
 
-    let is_authorized = is_owner_or_staff(auth_user.as_ref(), pickup.user_id, &pickup.citizen_phone)
-        || phone_verified;
+    let is_authorized =
+        is_owner_or_staff(auth_user.as_ref(), pickup.user_id, &pickup.citizen_phone)
+            || phone_verified;
 
     if !is_authorized {
         pickup.citizen_name = "সাভারের নাগরিক".to_string();
@@ -612,7 +625,10 @@ pub async fn update_pickup_status(
 
     if !is_valid_pickup_transition(&row.status, &payload.status) {
         return Err(AppError::conflict(
-            format!("Cannot transition pickup from '{}' to '{}'.", row.status, payload.status),
+            format!(
+                "Cannot transition pickup from '{}' to '{}'.",
+                row.status, payload.status
+            ),
             "বর্তমান অবস্থা থেকে এই স্ট্যাটাসে পরিবর্তন করা যাবে না।",
         ));
     }
@@ -682,12 +698,7 @@ async fn fetch_pickup_by_id(state: &AppState, id: Uuid) -> Result<PickupRequestR
         .bind(id)
         .fetch_optional(&state.pool)
         .await?
-        .ok_or_else(|| {
-            AppError::not_found(
-                "Pickup request not found.",
-                "পিকআপ রিকোয়েস্ট পাওয়া যায়নি।",
-            )
-        })
+        .ok_or_else(|| AppError::not_found("Pickup request not found.", "পিকআপ রিকোয়েস্ট পাওয়া যায়নি।"))
 }
 
 fn is_owner_or_staff(auth_user: Option<&AuthUser>, owner_id: Option<Uuid>, phone: &str) -> bool {

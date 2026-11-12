@@ -4,6 +4,7 @@ use std::{env, net::IpAddr};
 /// Fails closed if required secrets/database config are missing outside explicit dev mode.
 #[derive(Clone, Debug)]
 pub struct AppConfig {
+    #[allow(dead_code)]
     pub app_env: String,
     pub database_url: String,
     pub bind_addr: String,
@@ -38,9 +39,7 @@ impl AppConfig {
             );
         }
         if is_production && otp_dev_mode {
-            return Err(
-                "OTP_DEV_MODE cannot be enabled when APP_ENV=production".to_string(),
-            );
+            return Err("OTP_DEV_MODE cannot be enabled when APP_ENV=production".to_string());
         }
 
         let database_url = match env::var("DATABASE_URL") {
@@ -77,9 +76,7 @@ impl AppConfig {
                 "clean-savar-local-dev-only-secret-do-not-use-in-prod-2026".to_string()
             }
             _ => {
-                return Err(
-                    "AUTH_SECRET (minimum 32 characters) must be configured".to_string(),
-                );
+                return Err("AUTH_SECRET (minimum 32 characters) must be configured".to_string());
             }
         };
 

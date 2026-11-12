@@ -151,7 +151,11 @@ async fn send_http(
     if let Some(payload) = body {
         let encoded = payload.to_string();
         req.push_str("Content-Type: application/json\r\n");
-        req.push_str(&format!("Content-Length: {}\r\n\r\n{}", encoded.len(), encoded));
+        req.push_str(&format!(
+            "Content-Length: {}\r\n\r\n{}",
+            encoded.len(),
+            encoded
+        ));
     } else {
         req.push_str("\r\n");
     }
@@ -215,7 +219,10 @@ async fn health_openapi_and_security_headers_work_against_postgis() {
     let health = send_http(server.addr, "GET", "/api/v1/health", None, None, None).await;
     assert_eq!(health.status, 200);
     assert_eq!(
-        health.headers.get("x-content-type-options").map(String::as_str),
+        health
+            .headers
+            .get("x-content-type-options")
+            .map(String::as_str),
         Some("nosniff")
     );
     assert_eq!(
@@ -244,7 +251,11 @@ async fn wards_etag_304_and_spatial_resolve_work() {
 
     let wards = send_http(server.addr, "GET", "/api/v1/wards", None, None, None).await;
     assert_eq!(wards.status, 200);
-    let etag = wards.headers.get("etag").cloned().expect("ETag header on /wards");
+    let etag = wards
+        .headers
+        .get("etag")
+        .cloned()
+        .expect("ETag header on /wards");
     let ward_rows = wards.json();
     assert!(ward_rows.as_array().is_some_and(|rows| rows.len() >= 15));
 
@@ -329,7 +340,9 @@ async fn otp_rbac_pickup_masking_and_account_erasure_work_end_to_end() {
     assert_eq!(verify.status, 200);
     let verify_json = verify.json();
     assert_eq!(verify_json["profile"]["user"]["role"], "citizen");
-    let user_id_str = verify_json["profile"]["user"]["id"].as_str().expect("user id");
+    let user_id_str = verify_json["profile"]["user"]["id"]
+        .as_str()
+        .expect("user id");
     let user_id = Uuid::parse_str(user_id_str).expect("valid user UUID");
     let token = verify_json["access_token"]
         .as_str()
@@ -383,7 +396,9 @@ async fn otp_rbac_pickup_masking_and_account_erasure_work_end_to_end() {
     let public_track = send_http(server.addr, "GET", &track_path, None, None, None).await;
     assert_eq!(public_track.status, 200);
     let public_json = public_track.json();
-    let masked_phone = public_json["pickup"]["citizen_phone"].as_str().unwrap_or("");
+    let masked_phone = public_json["pickup"]["citizen_phone"]
+        .as_str()
+        .unwrap_or("");
     assert!(masked_phone.contains("••••"));
     assert_eq!(
         public_json["pickup"]["address_line"],
@@ -411,8 +426,15 @@ async fn otp_rbac_pickup_masking_and_account_erasure_work_end_to_end() {
     assert_eq!(erase.status, 200);
     assert_eq!(erase.json()["anonymized_pickups"], 1);
 
-    let me_after =
-        send_http(server.addr, "GET", "/api/v1/auth/me", Some(&token), None, None).await;
+    let me_after = send_http(
+        server.addr,
+        "GET",
+        "/api/v1/auth/me",
+        Some(&token),
+        None,
+        None,
+    )
+    .await;
     assert_eq!(me_after.status, 401);
 
     let user_check_sql = "SELECT phone, anonymized_at IS NOT NULL FROM users WHERE id = $1";

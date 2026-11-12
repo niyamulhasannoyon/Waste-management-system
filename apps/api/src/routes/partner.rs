@@ -9,9 +9,7 @@ use crate::{
     auth::{require_role, Role},
     db::{ensure_ward_exists, AppState},
     error::{AppError, ErrorBody},
-    models::partner::{
-        ClaimLotRequest, CreateLotRequest, ListLotsQuery, RecyclableLotRecord,
-    },
+    models::partner::{ClaimLotRequest, CreateLotRequest, ListLotsQuery, RecyclableLotRecord},
 };
 
 const LOT_SELECT_BASE: &str = r#"
@@ -238,9 +236,8 @@ pub async fn claim_lot(
             .fetch_optional(&mut *tx)
             .await?;
 
-    let status = current_status.ok_or_else(|| {
-        AppError::not_found("Recyclable lot not found.", "লটটি খুঁজে পাওয়া যায়নি।")
-    })?;
+    let status = current_status
+        .ok_or_else(|| AppError::not_found("Recyclable lot not found.", "লটটি খুঁজে পাওয়া যায়নি।"))?;
 
     if status != "open" {
         return Err(AppError::conflict(

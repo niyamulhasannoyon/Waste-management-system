@@ -11,46 +11,25 @@ use utoipa::ToSchema;
 #[derive(Debug, Error)]
 pub enum AppError {
     #[error("Validation error: {message}")]
-    Validation {
-        message: String,
-        message_bn: String,
-    },
+    Validation { message: String, message_bn: String },
 
     #[error("Unauthorized: {message}")]
-    Unauthorized {
-        message: String,
-        message_bn: String,
-    },
+    Unauthorized { message: String, message_bn: String },
 
     #[error("Forbidden: {message}")]
-    Forbidden {
-        message: String,
-        message_bn: String,
-    },
+    Forbidden { message: String, message_bn: String },
 
     #[error("Resource not found: {message}")]
-    NotFound {
-        message: String,
-        message_bn: String,
-    },
+    NotFound { message: String, message_bn: String },
 
     #[error("Conflict: {message}")]
-    Conflict {
-        message: String,
-        message_bn: String,
-    },
+    Conflict { message: String, message_bn: String },
 
     #[error("Too many requests: {message}")]
-    TooManyRequests {
-        message: String,
-        message_bn: String,
-    },
+    TooManyRequests { message: String, message_bn: String },
 
     #[error("Payload too large: {message}")]
-    PayloadTooLarge {
-        message: String,
-        message_bn: String,
-    },
+    PayloadTooLarge { message: String, message_bn: String },
 
     #[error("Database error: {0}")]
     Database(#[from] sqlx::Error),
@@ -124,7 +103,9 @@ impl AppError {
             | Self::Conflict { message, .. }
             | Self::TooManyRequests { message, .. }
             | Self::PayloadTooLarge { message, .. } => message.clone(),
-            Self::Database(_) => "A database error occurred while processing this item.".to_string(),
+            Self::Database(_) => {
+                "A database error occurred while processing this item.".to_string()
+            }
             Self::Internal(_) => "Internal server error.".to_string(),
         }
     }
@@ -145,7 +126,12 @@ impl IntoResponse for AppError {
             Self::Unauthorized {
                 message,
                 message_bn,
-            } => (StatusCode::UNAUTHORIZED, "UNAUTHORIZED", message, message_bn),
+            } => (
+                StatusCode::UNAUTHORIZED,
+                "UNAUTHORIZED",
+                message,
+                message_bn,
+            ),
             Self::Forbidden {
                 message,
                 message_bn,

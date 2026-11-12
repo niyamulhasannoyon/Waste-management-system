@@ -30,15 +30,24 @@ pub fn api_router() -> Router<AppState> {
         .route("/wards/resolve", get(wards::resolve_ward))
         .route("/analytics/public", get(wards::public_analytics))
         .route("/analytics/summary", get(wards::admin_analytics))
-        .route("/pickups", get(pickups::list_pickups).post(pickups::create_pickup))
+        .route(
+            "/pickups",
+            get(pickups::list_pickups).post(pickups::create_pickup),
+        )
         .route("/pickups/track/:code", get(pickups::track_by_code))
         .route("/pickups/:id/status", patch(pickups::update_pickup_status))
         .route("/reports/public", get(reports::list_public_hotspots))
-        .route("/reports", get(reports::list_reports).post(reports::create_report))
+        .route(
+            "/reports",
+            get(reports::list_reports).post(reports::create_report),
+        )
         .route("/reports/track/:code", get(reports::track_by_code))
         .route("/reports/:id/status", patch(reports::update_report_status))
         .route("/dispatch/vehicles", get(dispatch::list_vehicles))
-        .route("/dispatch/vehicles/:id/location", patch(dispatch::update_vehicle_location))
+        .route(
+            "/dispatch/vehicles/:id/location",
+            patch(dispatch::update_vehicle_location),
+        )
         .route("/dispatch/assign", post(dispatch::assign_vehicle))
         .route("/workers/nearby", get(dispatch::nearby_workers))
         .route(
@@ -46,7 +55,10 @@ pub fn api_router() -> Router<AppState> {
             patch(collector::complete_task).post(collector::complete_task),
         )
         .route("/collector/sync", post(collector::sync_batch))
-        .route("/partner/lots", get(partner::list_lots).post(partner::create_lot))
+        .route(
+            "/partner/lots",
+            get(partner::list_lots).post(partner::create_lot),
+        )
         .route("/partner/lots/:id/claim", post(partner::claim_lot))
         .route("/partner/lots/:id/collect", post(partner::collect_lot))
         .route("/notifications", get(notifications::list_notifications))

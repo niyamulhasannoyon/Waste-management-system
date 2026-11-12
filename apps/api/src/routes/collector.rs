@@ -264,8 +264,7 @@ async fn execute_complete_task(
                 ));
             }
 
-            ensure_collector_can_complete(&mut tx, &auth_user, assigned_vehicle_id, ward_id)
-                .await?;
+            ensure_collector_can_complete(&mut tx, auth_user, assigned_vehicle_id, ward_id).await?;
 
             let final_vehicle_id = auth_user.vehicle_id.or(assigned_vehicle_id);
             let final_weight = payload.weight_kg.or(existing_weight_kg);
@@ -378,8 +377,7 @@ async fn execute_complete_task(
                 ));
             }
 
-            ensure_collector_can_complete(&mut tx, &auth_user, assigned_vehicle_id, ward_id)
-                .await?;
+            ensure_collector_can_complete(&mut tx, auth_user, assigned_vehicle_id, ward_id).await?;
 
             let final_vehicle_id = auth_user.vehicle_id.or(assigned_vehicle_id);
             let final_photo = clean_photo.or(existing_photo_url);
@@ -429,10 +427,7 @@ async fn execute_complete_task(
             .await?;
 
             for child in cleared_children {
-                let child_body = format!(
-                    "আপনার অভিযোগ {} পরিষ্কার সম্পন্ন হয়েছে।",
-                    child.tracking_code
-                );
+                let child_body = format!("আপনার অভিযোগ {} পরিষ্কার সম্পন্ন হয়েছে।", child.tracking_code);
                 create_notification(
                     &mut tx,
                     child.user_id,

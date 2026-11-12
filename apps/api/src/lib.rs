@@ -31,12 +31,7 @@ pub fn build_router(state: AppState, cfg: &AppConfig) -> Router {
 
     let cors = CorsLayer::new()
         .allow_origin(origins)
-        .allow_methods([
-            Method::GET,
-            Method::POST,
-            Method::PATCH,
-            Method::OPTIONS,
-        ])
+        .allow_methods([Method::GET, Method::POST, Method::PATCH, Method::OPTIONS])
         .allow_headers([
             AUTHORIZATION,
             CONTENT_TYPE,
@@ -67,7 +62,11 @@ async fn resolve_client_ip_middleware(
     next: Next,
 ) -> Response {
     req.headers_mut().remove("x-resolved-client-ip");
-    if let Some(addr) = req.extensions().get::<ConnectInfo<SocketAddr>>().map(|c| c.0) {
+    if let Some(addr) = req
+        .extensions()
+        .get::<ConnectInfo<SocketAddr>>()
+        .map(|c| c.0)
+    {
         let peer_ip = addr.ip();
         let resolved = if state.trusted_proxy_ips.contains(&peer_ip) {
             req.headers()
@@ -139,7 +138,8 @@ pub async fn shutdown_signal() {
 
     #[cfg(unix)]
     let terminate = async {
-        if let Ok(mut sig) = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+        if let Ok(mut sig) =
+            tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
         {
             sig.recv().await;
         }

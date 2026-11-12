@@ -80,7 +80,12 @@ pub struct RateLimiter {
 }
 
 impl RateLimiter {
-    pub async fn check(&self, key: &str, max_hits: usize, window_seconds: i64) -> Result<(), AppError> {
+    pub async fn check(
+        &self,
+        key: &str,
+        max_hits: usize,
+        window_seconds: i64,
+    ) -> Result<(), AppError> {
         let now = Utc::now().timestamp();
         let cutoff = now - window_seconds;
         let mut guard = self.buckets.lock().await;
@@ -221,7 +226,10 @@ pub async fn require_role(
     Ok(user)
 }
 
-async fn fetch_auth_user_by_token_hash(pool: &PgPool, token_hash: &str) -> Result<AuthUser, AppError> {
+async fn fetch_auth_user_by_token_hash(
+    pool: &PgPool,
+    token_hash: &str,
+) -> Result<AuthUser, AppError> {
     #[derive(sqlx::FromRow)]
     struct SessionRow {
         user_id: Uuid,
@@ -322,9 +330,18 @@ mod tests {
 
     #[test]
     fn constant_time_eq_verifies_exact_and_mismatched_digests() {
-        let a = hmac_hash_hex("secret-key-at-least-32-chars-long-here", "01715-883210:123456");
-        let b = hmac_hash_hex("secret-key-at-least-32-chars-long-here", "01715-883210:123456");
-        let c = hmac_hash_hex("secret-key-at-least-32-chars-long-here", "01715-883210:654321");
+        let a = hmac_hash_hex(
+            "secret-key-at-least-32-chars-long-here",
+            "01715-883210:123456",
+        );
+        let b = hmac_hash_hex(
+            "secret-key-at-least-32-chars-long-here",
+            "01715-883210:123456",
+        );
+        let c = hmac_hash_hex(
+            "secret-key-at-least-32-chars-long-here",
+            "01715-883210:654321",
+        );
         assert!(constant_time_eq(&a, &b));
         assert!(!constant_time_eq(&a, &c));
         assert!(!constant_time_eq(&a, "short"));

@@ -84,12 +84,7 @@ pub async fn mark_notification_read(
     .bind(auth_user.user_id)
     .fetch_optional(&state.pool)
     .await?
-    .ok_or_else(|| {
-        AppError::not_found(
-            "Notification not found.",
-            "বিজ্ঞপ্তিটি খুঁজে পাওয়া যায়নি।",
-        )
-    })?;
+    .ok_or_else(|| AppError::not_found("Notification not found.", "বিজ্ঞপ্তিটি খুঁজে পাওয়া যায়নি।"))?;
 
     Ok(Json(updated))
 }

@@ -9,7 +9,9 @@ use uuid::Uuid;
 
 use crate::{
     auth::{extract_client_ip, require_role, Role},
-    db::{create_notification, record_audit_log, release_vehicle_if_idle, validate_coords, AppState},
+    db::{
+        create_notification, record_audit_log, release_vehicle_if_idle, validate_coords, AppState,
+    },
     error::{AppError, ErrorBody},
     models::dump_report::{
         CollectorVehicleRecord, DispatchAssignRequest, DispatchAssignResponse,
@@ -259,7 +261,10 @@ pub async fn update_vehicle_location(
     }
 
     if let Some(ref status) = payload.status {
-        if !matches!(status.as_str(), "available" | "en_route" | "busy" | "offline") {
+        if !matches!(
+            status.as_str(),
+            "available" | "en_route" | "busy" | "offline"
+        ) {
             return Err(AppError::validation(
                 "Invalid vehicle status.",
                 "গাড়ির স্ট্যাটাস সঠিক নয়।",
@@ -370,7 +375,10 @@ pub async fn assign_vehicle(
     let is_assignable = if payload.entity_type == "pickup" {
         matches!(target.status.as_str(), "pending" | "assigned")
     } else {
-        matches!(target.status.as_str(), "reported" | "verified" | "dispatched")
+        matches!(
+            target.status.as_str(),
+            "reported" | "verified" | "dispatched"
+        )
     };
 
     if !is_assignable {

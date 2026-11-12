@@ -174,7 +174,10 @@ pub fn validate_coords(lat: f64, lng: f64) -> Result<(), AppError> {
 }
 
 /// Validate that submitted photo URLs belong strictly to our sanitized `/uploads/<uuid>.(jpg|png)` store.
-pub fn validate_uploaded_photo_url(raw: &str, public_upload_base_url: &str) -> Result<String, AppError> {
+pub fn validate_uploaded_photo_url(
+    raw: &str,
+    public_upload_base_url: &str,
+) -> Result<String, AppError> {
     let trimmed = raw.trim();
     if trimmed.is_empty() || trimmed.len() > 512 {
         return Err(AppError::validation(
@@ -359,7 +362,10 @@ mod tests {
     #[test]
     fn normalizes_valid_bd_phones_and_rejects_invalid_prefixes() {
         assert_eq!(normalize_bd_phone("01715883210").unwrap(), "01715-883210");
-        assert_eq!(normalize_bd_phone("+8801819-653241").unwrap(), "01819-653241");
+        assert_eq!(
+            normalize_bd_phone("+8801819-653241").unwrap(),
+            "01819-653241"
+        );
         assert!(normalize_bd_phone("01012345678").is_err());
         assert!(normalize_bd_phone("01212345678").is_err());
         assert!(normalize_bd_phone("12345").is_err());
@@ -379,9 +385,21 @@ mod tests {
             validate_uploaded_photo_url(valid, "http://localhost:8080/uploads").unwrap(),
             valid
         );
-        assert!(validate_uploaded_photo_url("javascript:alert(1)", "http://localhost:8080/uploads").is_err());
-        assert!(validate_uploaded_photo_url("https://evil.example/a.jpg", "http://localhost:8080/uploads").is_err());
-        assert!(validate_uploaded_photo_url("/uploads/../etc/passwd.jpg", "http://localhost:8080/uploads").is_err());
+        assert!(validate_uploaded_photo_url(
+            "javascript:alert(1)",
+            "http://localhost:8080/uploads"
+        )
+        .is_err());
+        assert!(validate_uploaded_photo_url(
+            "https://evil.example/a.jpg",
+            "http://localhost:8080/uploads"
+        )
+        .is_err());
+        assert!(validate_uploaded_photo_url(
+            "/uploads/../etc/passwd.jpg",
+            "http://localhost:8080/uploads"
+        )
+        .is_err());
     }
 
     #[test]

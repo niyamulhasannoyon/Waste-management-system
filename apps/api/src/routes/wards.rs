@@ -8,12 +8,21 @@ use axum::{
 use crate::{
     auth::{require_role, Role},
     db::{resolve_ward_id_and_match, sha256_hex, validate_coords, AppState},
-    error::AppError,
+    error::{AppError, ErrorBody},
     models::ward::{AnalyticsSummary, ResolveWardQuery, ResolvedWardResponse, WardSummary},
 };
 
 /// `GET /api/v1/wards`
 /// Single-pass aggregated ward & union list (eliminates N+1 subqueries) with ETag caching.
+#[utoipa::path(
+    get,
+    path = "/api/v1/wards",
+    tag = "Wards",
+    responses(
+        (status = 200, description = "All active Savar wards and unions", body = Vec<WardSummary>),
+        (status = 304, description = "Not modified (ETag matched)")
+    )
+)]
 pub async fn list_wards(
     State(state): State<AppState>,
     req_headers: HeaderMap,
@@ -97,6 +106,16 @@ pub async fn list_wards(
 
 /// `GET /api/v1/wards/resolve`
 /// Single spatial query resolving Savar coordinates to their exact containing zone or nearest centroid.
+#[utoipa::path(
+    get,
+    path = "/api/v1/wards/resolve",
+    tag = "Wards",
+    params(ResolveWardQuery),
+    responses(
+        (status = 200, description = "Resolved Savar ward/union for coordinates", body = ResolvedWardResponse),
+        (status = 400, description = "Coordinates outside Savar bounds", body = ErrorBody)
+    )
+)]
 pub async fn resolve_ward(
     State(state): State<AppState>,
     Query(query): Query<ResolveWardQuery>,
@@ -143,7 +162,9 @@ pub async fn resolve_ward(
         (status = 200, description = "Public operational analytics summary", body = AnalyticsSummary)
     )
 )]
-pub async fn public_analytics(State(state): State<AppState>) -> Result<Json<AnalyticsSummary>, AppError> {
+pub async fn public_analytics(
+    State(state): State<AppState>,
+) -> Result<Json<AnalyticsSummary>, AppError> {
     let summary = compute_analytics(&state).await?;
     Ok(Json(summary))
 }
