@@ -283,7 +283,9 @@ pub async fn collect_lot(
     .await?
     .ok_or_else(|| AppError::not_found("Recyclable lot not found.", "লটটি পাওয়া যায়নি।"))?;
 
-    if auth_user.role == Role::Partner && row.claimed_partner_id != auth_user.partner_id {
+    if auth_user.role == Role::Partner
+        && (auth_user.partner_id.is_none() || row.claimed_partner_id != auth_user.partner_id)
+    {
         return Err(AppError::forbidden(
             "Only the claiming partner or an admin can mark this lot collected.",
             "শুধুমাত্র বুকিংকারী পার্টনার অথবা অ্যাডমিন এই লটটি সংগ্রহ সম্পন্ন করতে পারবেন।",

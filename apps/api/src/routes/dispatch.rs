@@ -68,10 +68,15 @@ pub async fn list_vehicles(
     let page = query.page.unwrap_or(1).max(1);
     let offset = (page - 1) * limit;
 
-    let effective_ward = if auth_user.role == Role::Collector {
-        query.ward_id.or(auth_user.ward_id)
+    let collector_vehicle_id: Option<Uuid> = if auth_user.role == Role::Collector {
+        Some(auth_user.vehicle_id.ok_or_else(|| {
+            AppError::forbidden(
+                "Collector account has no linked vehicle.",
+                "আপনার কালেক্টর অ্যাকাউন্টে কোনো গাড়ি সংযুক্ত নেই।",
+            )
+        })?)
     } else {
-        query.ward_id
+        None
     };
 
     let vehicles = sqlx::query_as::<_, CollectorVehicleRecord>(
@@ -101,17 +106,19 @@ pub async fn list_vehicles(
         JOIN wards w ON w.id = cv.ward_id
         WHERE ($3::SMALLINT IS NULL OR cv.ward_id = $3)
           AND ($4::TEXT IS NULL OR cv.status = $4)
+          AND ($5::UUID IS NULL OR cv.id = $5)
         ORDER BY
             CASE WHEN cv.status = 'available' THEN 0 WHEN cv.status = 'en_route' THEN 1 ELSE 2 END ASC,
             distance_meters ASC NULLS LAST,
             cv.code ASC
-        LIMIT $5 OFFSET $6
+        LIMIT $6 OFFSET $7
         "#,
     )
     .bind(query.lat)
     .bind(query.lng)
-    .bind(effective_ward)
+    .bind(query.ward_id)
     .bind(query.status)
+    .bind(collector_vehicle_id)
     .bind(limit)
     .bind(offset)
     .fetch_all(&state.pool)
@@ -121,13 +128,13 @@ pub async fn list_vehicles(
 }
 
 /// `GET /api/v1/workers/nearby`
-/// Find active nearby collector vehicles within radius_m sorted by PostGIS ST_Distance.
+/// Admin dispatch endpoint to find active nearby collector vehicles within radius_m sorted by PostGIS ST_Distance.
 pub async fn nearby_workers(
     State(state): State<AppState>,
     headers: HeaderMap,
     Query(query): Query<ListVehiclesQuery>,
 ) -> Result<Json<NearbyVehiclesResponse>, AppError> {
-    let _staff = require_role(&state, &headers, &[Role::Collector, Role::Admin]).await?;
+    let _admin = require_role(&state, &headers, &[Role::Admin]).await?;
 
     let (lat, lng) = match (query.lat, query.lng) {
         (Some(lat), Some(lng)) => {

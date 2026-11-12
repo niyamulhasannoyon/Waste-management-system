@@ -60,11 +60,10 @@ pub async fn otp_login(
 
     let pending_role = match payload.role.as_deref().map(str::trim) {
         None | Some("") | Some("citizen") => Some("citizen".to_string()),
-        Some("collector") => Some("collector".to_string()),
-        Some("admin") | Some("partner") => {
+        Some("collector") | Some("admin") | Some("partner") => {
             return Err(AppError::forbidden(
                 "Privileged accounts cannot self-register via public OTP.",
-                "অ্যাডমিন বা পার্টনার অ্যাকাউন্ট অনুমোদিত ফোন নম্বর দিয়ে লগইন করতে হবে।",
+                "কালেক্টর, অ্যাডমিন বা পার্টনার অ্যাকাউন্ট অনুমোদিত ফোন নম্বর দিয়ে লগইন করতে হবে।",
             ));
         }
         Some(_) => {
@@ -180,13 +179,12 @@ pub async fn verify_otp(
         otp_hash: String,
         pending_full_name: Option<String>,
         pending_ward_id: Option<i16>,
-        pending_role: Option<String>,
         attempts: i16,
     }
 
     let otp_row = sqlx::query_as::<_, OtpRow>(
         r#"
-        SELECT id, otp_hash, pending_full_name, pending_ward_id, pending_role, attempts
+        SELECT id, otp_hash, pending_full_name, pending_ward_id, attempts
         FROM otp_codes
         WHERE phone = $1
           AND consumed_at IS NULL
@@ -266,8 +264,6 @@ pub async fn verify_otp(
         Role::Collector.as_str()
     } else if is_verified_partner || existing_user_role.as_deref() == Some("partner") {
         Role::Partner.as_str()
-    } else if otp_row.pending_role.as_deref() == Some("collector") {
-        Role::Collector.as_str()
     } else {
         Role::Citizen.as_str()
     };

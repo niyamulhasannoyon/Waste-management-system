@@ -186,16 +186,17 @@ pub async fn list_reports(
     };
 
     let collector_vehicle_id: Option<Uuid> = if auth_user.role == Role::Collector {
-        auth_user.vehicle_id
+        Some(auth_user.vehicle_id.ok_or_else(|| {
+            AppError::forbidden(
+                "Collector account has no linked vehicle.",
+                "আপনার কালেক্টর অ্যাকাউন্টে কোনো গাড়ি সংযুক্ত নেই।",
+            )
+        })?)
     } else {
         None
     };
 
-    let effective_ward_id: Option<i16> = if auth_user.role == Role::Collector {
-        query.ward_id.or(auth_user.ward_id)
-    } else {
-        query.ward_id
-    };
+    let effective_ward_id: Option<i16> = query.ward_id;
 
     let sql = format!(
         "{REPORT_SELECT_BASE}
@@ -210,7 +211,13 @@ pub async fn list_reports(
            AND (
                $6::UUID IS NULL
                OR dr.assigned_vehicle_id = $6
-               OR dr.ward_id = $1
+               OR (
+                   dr.assigned_vehicle_id IS NULL
+                   AND EXISTS (
+                       SELECT 1 FROM collector_vehicles cv
+                       WHERE cv.id = $6 AND cv.ward_id = dr.ward_id
+                   )
+               )
            )
            AND (
                $7::DOUBLE PRECISION IS NULL

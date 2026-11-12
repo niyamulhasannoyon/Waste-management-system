@@ -127,13 +127,14 @@ pub async fn list_pickups(
 
     let phone_filter = match auth_user.role {
         Role::Citizen => Some(auth_user.phone.clone()),
-        _ => query
+        Role::Admin => query
             .phone
             .as_deref()
             .map(str::trim)
             .filter(|s| !s.is_empty())
             .map(normalize_bd_phone)
             .transpose()?,
+        Role::Collector | Role::Partner => None,
     };
 
     let owner_user_id: Option<Uuid> = if auth_user.role == Role::Citizen {
@@ -143,16 +144,17 @@ pub async fn list_pickups(
     };
 
     let collector_vehicle_id: Option<Uuid> = if auth_user.role == Role::Collector {
-        auth_user.vehicle_id
+        Some(auth_user.vehicle_id.ok_or_else(|| {
+            AppError::forbidden(
+                "Collector account has no linked vehicle.",
+                "আপনার কালেক্টর অ্যাকাউন্টে কোনো গাড়ি সংযুক্ত নেই।",
+            )
+        })?)
     } else {
         None
     };
 
-    let effective_ward_id: Option<i16> = if auth_user.role == Role::Collector {
-        query.ward_id.or(auth_user.ward_id)
-    } else {
-        query.ward_id
-    };
+    let effective_ward_id: Option<i16> = query.ward_id;
 
     let sql = format!(
         "{PICKUP_SELECT_BASE}
@@ -171,7 +173,13 @@ pub async fn list_pickups(
            AND (
                $5::UUID IS NULL
                OR pr.assigned_vehicle_id = $5
-               OR pr.ward_id = $1
+               OR (
+                   pr.assigned_vehicle_id IS NULL
+                   AND EXISTS (
+                       SELECT 1 FROM collector_vehicles cv
+                       WHERE cv.id = $5 AND cv.ward_id = pr.ward_id
+                   )
+               )
            )
            AND (
                $6::TEXT IS NULL

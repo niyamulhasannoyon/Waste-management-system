@@ -220,6 +220,7 @@ async fn execute_complete_task(
         LockedTask::Pickup {
             tracking_code,
             status,
+            ward_id,
             user_id,
             assigned_vehicle_id,
             existing_weight_kg,
@@ -232,22 +233,8 @@ async fn execute_complete_task(
                 ));
             }
 
-            if auth_user.role == Role::Collector {
-                let actor_vid = auth_user.vehicle_id.ok_or_else(|| {
-                    AppError::forbidden(
-                        "Collector account has no linked vehicle.",
-                        "আপনার কালেক্টর অ্যাকাউন্টে কোনো গাড়ি সংযুক্ত নেই।",
-                    )
-                })?;
-                if let Some(assigned) = assigned_vehicle_id {
-                    if assigned != actor_vid {
-                        return Err(AppError::forbidden(
-                            "This pickup task is assigned to a different collector vehicle.",
-                            "এই কাজটি অন্য গাড়ির জন্য নির্ধারিত।",
-                        ));
-                    }
-                }
-            }
+            ensure_collector_can_complete(&mut tx, &auth_user, assigned_vehicle_id, ward_id)
+                .await?;
 
             let final_vehicle_id = auth_user.vehicle_id.or(assigned_vehicle_id);
             let final_weight = payload.weight_kg.or(existing_weight_kg);
@@ -348,6 +335,7 @@ async fn execute_complete_task(
         LockedTask::DumpReport {
             tracking_code,
             status,
+            ward_id,
             user_id,
             assigned_vehicle_id,
             existing_photo_url,
@@ -359,22 +347,8 @@ async fn execute_complete_task(
                 ));
             }
 
-            if auth_user.role == Role::Collector {
-                let actor_vid = auth_user.vehicle_id.ok_or_else(|| {
-                    AppError::forbidden(
-                        "Collector account has no linked vehicle.",
-                        "আপনার কালেক্টর অ্যাকাউন্টে কোনো গাড়ি সংযুক্ত নেই।",
-                    )
-                })?;
-                if let Some(assigned) = assigned_vehicle_id {
-                    if assigned != actor_vid {
-                        return Err(AppError::forbidden(
-                            "This dump report is assigned to a different collector vehicle.",
-                            "এই অভিযোগের কাজটি অন্য গাড়ির জন্য নির্ধারিত।",
-                        ));
-                    }
-                }
-            }
+            ensure_collector_can_complete(&mut tx, &auth_user, assigned_vehicle_id, ward_id)
+                .await?;
 
             let final_vehicle_id = auth_user.vehicle_id.or(assigned_vehicle_id);
             let final_photo = clean_photo.or(existing_photo_url);
@@ -508,10 +482,54 @@ async fn execute_complete_task(
     Ok((response, false))
 }
 
+async fn ensure_collector_can_complete(
+    tx: &mut Transaction<'_, Postgres>,
+    auth_user: &AuthUser,
+    assigned_vehicle_id: Option<Uuid>,
+    task_ward_id: i16,
+) -> Result<(), AppError> {
+    if auth_user.role != Role::Collector {
+        return Ok(());
+    }
+
+    let actor_vid = auth_user.vehicle_id.ok_or_else(|| {
+        AppError::forbidden(
+            "Collector account has no linked vehicle.",
+            "আপনার কালেক্টর অ্যাকাউন্টে কোনো গাড়ি সংযুক্ত নেই।",
+        )
+    })?;
+
+    if let Some(assigned) = assigned_vehicle_id {
+        if assigned != actor_vid {
+            return Err(AppError::forbidden(
+                "This task is assigned to a different collector vehicle.",
+                "এই কাজটি অন্য গাড়ির জন্য নির্ধারিত।",
+            ));
+        }
+        return Ok(());
+    }
+
+    let vehicle_ward_id: Option<i16> =
+        sqlx::query_scalar("SELECT ward_id FROM collector_vehicles WHERE id = $1")
+            .bind(actor_vid)
+            .fetch_optional(&mut **tx)
+            .await?;
+
+    if vehicle_ward_id != Some(task_ward_id) {
+        return Err(AppError::forbidden(
+            "Collectors can only complete unassigned tasks within their assigned ward.",
+            "কালেক্টর কেবল নিজের নির্ধারিত ওয়ার্ডের অনির্ধারিত কাজ সম্পন্ন করতে পারবেন।",
+        ));
+    }
+
+    Ok(())
+}
+
 enum LockedTask {
     Pickup {
         tracking_code: String,
         status: String,
+        ward_id: i16,
         user_id: Option<Uuid>,
         assigned_vehicle_id: Option<Uuid>,
         existing_weight_kg: Option<f64>,
@@ -520,6 +538,7 @@ enum LockedTask {
     DumpReport {
         tracking_code: String,
         status: String,
+        ward_id: i16,
         user_id: Option<Uuid>,
         assigned_vehicle_id: Option<Uuid>,
         existing_photo_url: Option<String>,
@@ -536,13 +555,14 @@ async fn lock_target_task(
         struct PickupRow {
             tracking_code: String,
             status: String,
+            ward_id: i16,
             user_id: Option<Uuid>,
             assigned_vehicle_id: Option<Uuid>,
             weight_kg: Option<f64>,
             completion_photo_url: Option<String>,
         }
         if let Some(p) = sqlx::query_as::<_, PickupRow>(
-            "SELECT tracking_code, status, user_id, assigned_vehicle_id, weight_kg, completion_photo_url FROM pickup_requests WHERE id = $1 FOR UPDATE",
+            "SELECT tracking_code, status, ward_id, user_id, assigned_vehicle_id, weight_kg, completion_photo_url FROM pickup_requests WHERE id = $1 FOR UPDATE",
         )
         .bind(task_id)
         .fetch_optional(&mut **tx)
@@ -551,6 +571,7 @@ async fn lock_target_task(
             return Ok(LockedTask::Pickup {
                 tracking_code: p.tracking_code,
                 status: p.status,
+                ward_id: p.ward_id,
                 user_id: p.user_id,
                 assigned_vehicle_id: p.assigned_vehicle_id,
                 existing_weight_kg: p.weight_kg,
@@ -564,12 +585,13 @@ async fn lock_target_task(
         struct ReportRow {
             tracking_code: String,
             status: String,
+            ward_id: i16,
             user_id: Option<Uuid>,
             assigned_vehicle_id: Option<Uuid>,
             resolved_photo_url: Option<String>,
         }
         if let Some(r) = sqlx::query_as::<_, ReportRow>(
-            "SELECT tracking_code, status, user_id, assigned_vehicle_id, resolved_photo_url FROM dump_reports WHERE id = $1 FOR UPDATE",
+            "SELECT tracking_code, status, ward_id, user_id, assigned_vehicle_id, resolved_photo_url FROM dump_reports WHERE id = $1 FOR UPDATE",
         )
         .bind(task_id)
         .fetch_optional(&mut **tx)
@@ -578,6 +600,7 @@ async fn lock_target_task(
             return Ok(LockedTask::DumpReport {
                 tracking_code: r.tracking_code,
                 status: r.status,
+                ward_id: r.ward_id,
                 user_id: r.user_id,
                 assigned_vehicle_id: r.assigned_vehicle_id,
                 existing_photo_url: r.resolved_photo_url,
