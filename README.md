@@ -34,12 +34,12 @@ Honest breakdown of current platform capabilities vs remaining backlog (see [`do
 | Citizen Pickup Scheduling (`/pickup` & mobile) | **Implemented** | One-time & `recurring_weekly` bookings stored in PostgreSQL; queued offline on mobile. |
 | Dump Reporting, Photo Upload & EXIF Stripping | **Implemented** | Magic-byte validation, header dimension bounds (`<= 8000px`), JPEG/PNG/WebP re-encoding, `5 MB` cap (`MAX_UPLOAD_BYTES`). |
 | `50m` PostGIS Duplicate Clustering & Ward Resolve | **Implemented** | `ST_Contains` / `ST_Distance` ward matching and `ST_DWithin` complaint clustering in PostGIS. |
-| Phone OTP Auth, Sessions & RBAC | **Partial** | HMAC-SHA256 OTP & bearer tokens are enforced server-side; **SMS gateway delivery is not yet wired** (`OTP_DEV_MODE` logs/previews in dev only). |
+| Phone OTP Auth, Sessions & RBAC | **Partial** | HMAC-SHA256 OTP, `subtle` constant-time verify, and bearer tokens are enforced server-side; **SMS gateway delivery is not yet wired** (`OTP_DEV_MODE` logs/previews in dev only). |
 | Collector Route Completion, QR & Offline Sync | **Partial** | Idempotent server sync, QR bin-tag verification & weight logging work across web/mobile; release push notifications (FCM) are not yet added. |
 | Recycling Partner Lot Workflow (`/partner`) | **Implemented** | Browse, filter, create (`admin`), claim, and record collection (`collected`) on `CS-LOT-*` lots with ownership checks. |
-| Admin Nearest-Vehicle Dispatch & CSV Export | **Partial** | PostGIS worker matching & formula-injection-safe CSV export work; immutable DB audit-log table & retention jobs await approval. |
-| Full Stack Containers & CI Pipeline | **Implemented** | `docker-compose.yml` (`postgres` + `api` + `web`), `apps/api/Dockerfile`, `apps/web/Dockerfile`, `.github/workflows/ci.yml`. |
-| Production Hardening Backlog (Schema/Deps) | **Missing** | OpenAPI codegen (`utoipa`), constant-time OTP compare (`subtle`), structured JSON logs, `flutter_secure_storage`, Playwright E2E, PostGIS GIST `geography` index migration (`0003_*`). |
+| Admin Nearest-Vehicle Dispatch, Audit & Retention | **Implemented** | PostGIS worker matching, formula-injection-safe CSV export, `audit_logs`, `POST /auth/erase`, `POST /admin/retention/purge`, and `purge_expired_pii(...)` (`0003_*`). |
+| Full Stack Containers, Backups & CI Pipeline | **Implemented** | `docker-compose.yml` (`postgres` + `api` + `web`), Dockerfiles, [`scripts/backup_postgis.sh`](scripts/backup_postgis.sh), and GitHub Actions (PostGIS integration tests, `cargo audit`, `npm audit`, `gitleaks`). |
+| OpenAPI, Logging & Remaining Backlog | **Partial** | Live `GET /api/v1/openapi.json` (`utoipa`) & JSON logs (`LOG_FORMAT=json`) are implemented; client OpenAPI codegen, `flutter_secure_storage`, and Playwright E2E remain deferred until dependency approvals. |
 
 ---
 
@@ -71,8 +71,11 @@ Honest breakdown of current platform capabilities vs remaining backlog (see [`do
 │   └── openapi.yaml                # OpenAPI 3.0 specification for /api/v1
 ├── apps/
 │   ├── api/                        # Unified Rust Axum + SQLx PostGIS REST API (+ Dockerfile)
-│   │   ├── migrations/             # 0001_init_postgis.sql, 0002_seed_savar_wards.sql
-│   │   └── src/                    # auth, config, db, error, models, routes/
+│   │   ├── migrations/             # 0001_init_postgis.sql, 0002_seed_savar_wards.sql, 0003_indexes_audit_retention.sql
+│   │   ├── src/                    # lib, auth, config, db, error, models, openapi, routes/
+│   │   └── tests/                  # api_integration.rs (Axum + live PostGIS integration tests)
+├── scripts/
+│   └── backup_postgis.sh           # Compressed pg_dump custom backup with SHA-256 verification
 │   ├── web/                        # Next.js 15 Citizen, Collector, Partner & Admin Web Portal (+ Dockerfile)
 │   │   ├── src/app/                # /, /login, /pickup, /report, /track, /collector, /partner, /admin
 │   │   ├── src/components/         # Reusable design system & portal modules
@@ -185,7 +188,8 @@ Seeded Savar test accounts (all log in via real Phone OTP when `OTP_DEV_MODE=tru
 
 ## Documentation & Contributing
 
-- API contract & OpenAPI spec: [`docs/API.md`](docs/API.md) and [`docs/openapi.yaml`](docs/openapi.yaml)
+- API contract & OpenAPI spec: [`docs/API.md`](docs/API.md), [`docs/openapi.yaml`](docs/openapi.yaml), and live `GET /api/v1/openapi.json`
+- PostGIS backup & restore helper: [`scripts/backup_postgis.sh`](scripts/backup_postgis.sh)
 - Architecture & GIS notes: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
 - Contributing workflow & local verification: [`CONTRIBUTING.md`](CONTRIBUTING.md)
 - Security policy & reporting: [`SECURITY.md`](SECURITY.md)

@@ -28,7 +28,7 @@ use crate::{
     tag = "Auth",
     request_body = OtpLoginRequest,
     responses(
-        (status = 201, description = "OTP issued", body = OtpLoginResponse),
+        (status = 200, description = "OTP issued", body = OtpLoginResponse),
         (status = 400, description = "Invalid phone or ward", body = ErrorBody),
         (status = 429, description = "Rate limit exceeded", body = ErrorBody)
     )

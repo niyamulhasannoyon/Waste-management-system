@@ -28,7 +28,7 @@ pub struct PhotoUploadResponse {
 #[derive(ToSchema)]
 pub struct PhotoUploadForm {
     #[schema(content_media_type = "application/octet-stream")]
-    pub file: Vec<u8>,
+    pub photo: Vec<u8>,
 }
 
 #[derive(Clone, Copy)]

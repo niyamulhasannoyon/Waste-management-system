@@ -123,3 +123,48 @@ jobs:
           flutter pub get
           flutter analyze
           flutter test
+
+  security-scans:
+    name: Dependency & Secret Scans
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout full history for secret scanning
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Scan git history for leaked secrets (Gitleaks)
+        run: |
+          docker run --rm -v "${{ github.workspace }}:/repo" ghcr.io/gitleaks/gitleaks:latest git -v --redact /repo
+
+      - name: Setup Rust & install cargo-audit
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install cargo-audit
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-audit
+
+      - name: Audit Rust API dependencies
+        working-directory: apps/api
+        run: |
+          cargo generate-lockfile
+          cargo audit
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+
+      - name: Audit Next.js Web dependencies
+        working-directory: apps/web
+        run: |
+          npm ci --ignore-scripts
+          npm audit --audit-level=critical
+
+      - name: Advisory high-severity npm audit report
+        working-directory: apps/web
+        continue-on-error: true
+        run: npm audit --audit-level=high
