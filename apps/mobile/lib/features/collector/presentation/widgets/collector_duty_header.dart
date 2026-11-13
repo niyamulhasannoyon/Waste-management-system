@@ -1,7 +1,9 @@
+// ignore: deprecated_member_use
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/providers/citizen_state_provider.dart';
 import '../../../../core/providers/collector_state_provider.dart';
 import '../../../../core/utils/bangla_formatters.dart';
 import '../../../../core/widgets/flat_card.dart';
@@ -76,6 +78,16 @@ class CollectorDutyHeader extends ConsumerWidget {
                       ),
                     ),
                   ],
+                ),
+              ),
+              IconButton(
+                key: const ValueKey('collector_logout_btn'),
+                tooltip: 'লগআউট',
+                onPressed: () =>
+                    ref.read(citizenStateProvider.notifier).logoutCitizenAuth(),
+                icon: const Icon(
+                  Icons.logout_rounded,
+                  color: AppColors.textSecondary,
                 ),
               ),
             ],
@@ -332,13 +344,28 @@ class CollectorDutyHeader extends ConsumerWidget {
           ],
         ),
         const SizedBox(height: 14),
-        const Text(
-          'আজকের নির্ধারিত রুট',
-          style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.w700,
-            color: AppColors.textPrimary,
-          ),
+        Row(
+          children: [
+            const Expanded(
+              child: Text(
+                'আজকের নির্ধারিত রুট',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+            ),
+            IconButton(
+              tooltip: 'রুট রিফ্রেশ করুন',
+              onPressed: () =>
+                  ref.read(collectorStateProvider.notifier).refreshFromServer(),
+              icon: const Icon(
+                Icons.refresh_rounded,
+                color: AppColors.primaryGreenDark,
+              ),
+            ),
+          ],
         ),
       ],
     );

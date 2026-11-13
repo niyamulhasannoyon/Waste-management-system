@@ -23,7 +23,8 @@ import {
 } from '@/lib/api-client';
 import { LOT_STATUS_META, MATERIAL_LABELS } from '@/lib/savar-data';
 import type { LotStatus, MaterialType, RecyclableLotRecord } from '@/lib/types';
-import { formatRelativeTimeBn, toBanglaDigits } from '@/lib/utils';
+import { RelativeTimeBn } from '@/components/ui/relative-time';
+import { toBanglaDigits } from '@/lib/utils';
 
 function PartnerMarketplaceInner() {
   const { profile, announce, refreshPublicData } = useCleanSavar();
@@ -236,7 +237,7 @@ function PartnerMarketplaceInner() {
                           {lot.lot_code}
                         </span>
                         <span className="block text-[11px] text-[#475569]">
-                          {formatRelativeTimeBn(lot.created_at)}
+                          <RelativeTimeBn isoDate={lot.created_at} />
                         </span>
                       </td>
                       <td data-label="উপাদান ও ওজন">

@@ -22,6 +22,8 @@ pub fn api_router() -> Router<AppState> {
         .route("/openapi.json", get(openapi::openapi_json))
         .route("/auth/otp-login", post(auth::otp_login))
         .route("/auth/otp-verify", post(auth::verify_otp))
+        .route("/auth/phone-login", post(auth::phone_login))
+        .route("/auth/firebase-login", post(auth::firebase_login))
         .route("/auth/me", get(auth::me))
         .route("/auth/logout", post(auth::logout))
         .route("/auth/erase", post(auth::erase_account))

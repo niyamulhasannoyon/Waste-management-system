@@ -1,6 +1,6 @@
 import 'dart:async';
-import 'dart:io';
 
+// ignore: deprecated_member_use
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -131,6 +131,7 @@ class _ReportGarbageSheetState extends ConsumerState<ReportGarbageSheet> {
           hasPhoto: _capturedPhoto != null,
           photoMetaLabel: _capturedPhoto?.metaLabel,
           photoPath: _capturedPhoto?.path,
+          photoBytes: _capturedPhoto?.bytes,
         );
 
     final messenger = ScaffoldMessenger.of(context);
@@ -403,8 +404,7 @@ class _CameraCaptureCard extends StatelessWidget {
       );
     }
 
-    final photoPath = photo!.path;
-    final hasLocalFile = photoPath != null && File(photoPath).existsSync();
+    final photoBytes = photo!.bytes;
 
     return FlatCard(
       padding: const EdgeInsets.all(12),
@@ -418,9 +418,9 @@ class _CameraCaptureCard extends StatelessWidget {
               width: 56,
               height: 56,
               color: AppColors.primaryGreenDark,
-              child: hasLocalFile
-                  ? Image.file(
-                      File(photoPath),
+              child: photoBytes != null && photoBytes.isNotEmpty
+                  ? Image.memory(
+                      photoBytes,
                       fit: BoxFit.cover,
                     )
                   : const Icon(

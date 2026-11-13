@@ -1,9 +1,11 @@
 import 'dart:async';
-import 'dart:io';
+import 'dart:convert';
 
 import 'package:clean_savar_core/clean_savar_core.dart' as core;
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../config/app_build_config.dart';
 import '../constants/savar_seed_data.dart';
 import '../models/app_role.dart';
 import '../models/hotspot_report.dart';
@@ -11,7 +13,9 @@ import '../models/pickup_request.dart';
 import '../models/ward_info.dart';
 import '../services/device_services.dart';
 import '../services/offline_sync_service.dart';
+import '../utils/local_file_bytes.dart';
 import 'app_role_provider.dart';
+import 'collector_state_provider.dart';
 
 class CitizenState {
   const CitizenState({
@@ -33,6 +37,7 @@ class CitizenState {
     this.pendingSyncCount = 0,
     this.isRefreshing = false,
     this.isAuthenticated = false,
+    this.isDemoPreview = false,
     this.authenticatedRole = 'citizen',
     this.otpPreview,
   });
@@ -55,6 +60,7 @@ class CitizenState {
   final int pendingSyncCount;
   final bool isRefreshing;
   final bool isAuthenticated;
+  final bool isDemoPreview;
   final String authenticatedRole;
   final String? otpPreview;
 
@@ -72,6 +78,7 @@ class CitizenState {
     int? pendingSyncCount,
     bool? isRefreshing,
     bool? isAuthenticated,
+    bool? isDemoPreview,
     String? authenticatedRole,
     String? otpPreview,
     bool clearOtpPreview = false,
@@ -96,6 +103,7 @@ class CitizenState {
       pendingSyncCount: pendingSyncCount ?? this.pendingSyncCount,
       isRefreshing: isRefreshing ?? this.isRefreshing,
       isAuthenticated: isAuthenticated ?? this.isAuthenticated,
+      isDemoPreview: isDemoPreview ?? this.isDemoPreview,
       authenticatedRole: authenticatedRole ?? this.authenticatedRole,
       otpPreview: clearOtpPreview ? null : (otpPreview ?? this.otpPreview),
     );
@@ -287,16 +295,30 @@ class CitizenStateNotifier extends Notifier<CitizenState> {
     }
   }
 
-  Future<core.OtpChallengeResult> requestCitizenOtp({String? phone}) async {
+  Future<core.OtpChallengeResult> requestCitizenOtp({
+    String? phone,
+    String? fullName,
+    int? wardId,
+  }) async {
     final targetPhone = (phone ?? state.citizenPhone).trim();
+    final trimmedName = fullName?.trim();
+    final effectiveName = (trimmedName != null && trimmedName.isNotEmpty)
+        ? trimmedName
+        : state.citizenFullName;
+    final effectiveWardId = wardId ?? state.selectedWard.id;
+
+    // Backend `/auth/otp-login` expects `citizen` (or empty) and resolves
+    // collector/admin roles authoritatively from DB during `/auth/otp-verify`.
     final challenge = await _api.requestOtp(
       phone: targetPhone,
       role: 'citizen',
-      fullName: state.citizenFullName,
-      wardId: state.selectedWard.id,
+      fullName: effectiveName,
+      wardId: effectiveWardId,
     );
     state = state.copyWith(
-      citizenPhone: challenge.phone,
+      citizenPhone: challenge.phone.isNotEmpty ? challenge.phone : targetPhone,
+      citizenFullName: effectiveName,
+      citizenName: effectiveName.split(' ').first,
       otpPreview: challenge.devOtpPreview,
     );
     await _persist();
@@ -306,29 +328,121 @@ class CitizenStateNotifier extends Notifier<CitizenState> {
   Future<core.OtpAuthResult> verifyCitizenOtp({
     required String otp,
     String? phone,
+    AppRole expectedRole = AppRole.citizen,
   }) async {
     final targetPhone = (phone ?? state.citizenPhone).trim();
     final auth = await _api.verifyOtp(phone: targetPhone, otp: otp.trim());
+
+    if (expectedRole == AppRole.collector &&
+        auth.role != 'collector' &&
+        auth.role != 'admin') {
+      await _api.logout();
+      await _store.writeJsonMap(OfflineSyncStore.authSessionKey, {});
+      throw const core.CleanSavarApiException(
+        403,
+        'এই নম্বরটি পৌরসভার নিবন্ধিত পরিচ্ছন্নতাকর্মী হিসেবে যুক্ত নয়। অনুগ্রহ করে নাগরিক লগইন ব্যবহার করুন অথবা অনুমোদিত কর্মী নম্বর দিন।',
+      );
+    }
+
     await _store.writeJsonMap(OfflineSyncStore.authSessionKey, {
       'token': auth.token,
       'phone': auth.phone,
       'role': auth.role,
     });
+    final resolvedFullName = (auth.nameBn != null && auth.nameBn!.trim().isNotEmpty)
+        ? auth.nameBn!.trim()
+        : state.citizenFullName;
     state = state.copyWith(
       citizenPhone: auth.phone.isNotEmpty ? auth.phone : targetPhone,
-      citizenFullName: (auth.nameBn != null && auth.nameBn!.trim().isNotEmpty)
-          ? auth.nameBn
-          : state.citizenFullName,
+      citizenFullName: resolvedFullName,
+      citizenName: resolvedFullName.split(' ').first,
       isAuthenticated: auth.token.isNotEmpty,
+      isDemoPreview: false,
       authenticatedRole: auth.role,
       clearOtpPreview: true,
     );
-    if (auth.role == 'collector') {
+    if (expectedRole == AppRole.collector || auth.role == 'collector') {
       ref.read(appRoleProvider.notifier).setRole(AppRole.collector);
+      unawaited(ref.read(collectorStateProvider.notifier).refreshFromServer());
+    } else {
+      ref.read(appRoleProvider.notifier).setRole(AppRole.citizen);
+      if (auth.role == 'admin') {
+        unawaited(ref.read(collectorStateProvider.notifier).refreshFromServer());
+      }
     }
     await _persist();
     await refreshFromServer();
     return auth;
+  }
+
+  Future<core.OtpAuthResult> loginWithFirebaseToken({
+    required String idToken,
+    String? phone,
+    AppRole expectedRole = AppRole.citizen,
+    String? fullName,
+    int? wardId,
+  }) async {
+    final targetPhone = (phone ?? state.citizenPhone).trim();
+    final auth = await _api.loginWithFirebaseToken(
+      idToken: idToken,
+      fullName: fullName ??
+          (state.citizenFullName.isNotEmpty ? state.citizenFullName : null),
+      wardId: wardId ?? state.selectedWard.id,
+      role: expectedRole == AppRole.collector ? 'collector' : 'citizen',
+    );
+
+    if (expectedRole == AppRole.collector &&
+        auth.role != 'collector' &&
+        auth.role != 'admin') {
+      await _api.logout();
+      await _store.writeJsonMap(OfflineSyncStore.authSessionKey, {});
+      throw const core.CleanSavarApiException(
+        403,
+        'এই নম্বরটি পৌরসভার নিবন্ধিত পরিচ্ছন্নতাকর্মী হিসেবে যুক্ত নয়। অনুগ্রহ করে নাগরিক লগইন ব্যবহার করুন অথবা অনুমোদিত কর্মী নম্বর দিন।',
+      );
+    }
+
+    await _store.writeJsonMap(OfflineSyncStore.authSessionKey, {
+      'token': auth.token,
+      'phone': auth.phone,
+      'role': auth.role,
+    });
+    final resolvedFullName =
+        (auth.nameBn != null && auth.nameBn!.trim().isNotEmpty)
+            ? auth.nameBn!.trim()
+            : state.citizenFullName;
+    state = state.copyWith(
+      citizenPhone: auth.phone.isNotEmpty ? auth.phone : targetPhone,
+      citizenFullName: resolvedFullName,
+      citizenName: resolvedFullName.split(' ').first,
+      isAuthenticated: auth.token.isNotEmpty,
+      isDemoPreview: false,
+      authenticatedRole: auth.role,
+      clearOtpPreview: true,
+    );
+    if (expectedRole == AppRole.collector || auth.role == 'collector') {
+      ref.read(appRoleProvider.notifier).setRole(AppRole.collector);
+      unawaited(ref.read(collectorStateProvider.notifier).refreshFromServer());
+    } else {
+      ref.read(appRoleProvider.notifier).setRole(AppRole.citizen);
+      if (auth.role == 'admin') {
+        unawaited(ref.read(collectorStateProvider.notifier).refreshFromServer());
+      }
+    }
+    await _persist();
+    await refreshFromServer();
+    return auth;
+  }
+
+  void enterDemoPreview({AppRole role = AppRole.citizen}) {
+    if (!AppBuildConfig.enableDemoMode) return;
+    ref.read(collectorStateProvider.notifier).loadDemoSample();
+    ref.read(appRoleProvider.notifier).setRole(role);
+    state = state.copyWith(
+      isDemoPreview: true,
+      activeTabIndex: 0,
+      clearOtpPreview: true,
+    );
   }
 
   Future<void> logoutCitizenAuth() async {
@@ -336,10 +450,13 @@ class CitizenStateNotifier extends Notifier<CitizenState> {
     await _store.writeJsonMap(OfflineSyncStore.authSessionKey, {});
     state = state.copyWith(
       isAuthenticated: false,
+      isDemoPreview: false,
       authenticatedRole: 'citizen',
+      activeTabIndex: 0,
       clearOtpPreview: true,
     );
     ref.read(appRoleProvider.notifier).setRole(AppRole.citizen);
+    unawaited(ref.read(collectorStateProvider.notifier).resetOnLogout());
     await _persist();
   }
 
@@ -474,30 +591,48 @@ class CitizenStateNotifier extends Notifier<CitizenState> {
         ],
       );
       await _persist();
+    } on core.CleanSavarApiException catch (e) {
+      if (e.statusCode == 400 ||
+          e.statusCode == 404 ||
+          e.statusCode == 409 ||
+          e.statusCode == 413 ||
+          e.statusCode == 422) {
+        state = state.copyWith(
+          notifications: [e.message, ...state.notifications],
+          hasUnreadNotifications: true,
+        );
+        await _persist();
+        return;
+      }
+      await _queuePickupOffline(localId, request);
     } catch (_) {
-      final action = PendingSyncAction(
-        id: 'pickup-$localId-${DateTime.now().millisecondsSinceEpoch}',
-        type: 'pickup_create',
-        createdAtIso: DateTime.now().toIso8601String(),
-        payload: {
-          'citizenName': state.citizenFullName,
-          'citizenPhone': state.citizenPhone,
-          'wardId': request.wardId,
-          'addressLine': request.addressLine,
-          'landmark': state.selectedWard.areaChipLabel,
-          'wasteType': request.category.apiValue,
-          'slot': request.slot.apiValue,
-          'estimatedBags': request.estimatedBags,
-          'lat': state.selectedWard.lat,
-          'lng': state.selectedWard.lng,
-          'scheduleType': request.scheduleType,
-          if (request.preferredDay != null) 'preferredDay': request.preferredDay,
-          'notes': request.notes,
-        },
-      );
-      final queue = await _store.enqueue(action);
-      state = state.copyWith(pendingSyncCount: queue.length);
+      await _queuePickupOffline(localId, request);
     }
+  }
+
+  Future<void> _queuePickupOffline(String localId, PickupRequest request) async {
+    final action = PendingSyncAction(
+      id: 'pickup-$localId-${DateTime.now().millisecondsSinceEpoch}',
+      type: 'pickup_create',
+      createdAtIso: DateTime.now().toIso8601String(),
+      payload: {
+        'citizenName': state.citizenFullName,
+        'citizenPhone': state.citizenPhone,
+        'wardId': request.wardId,
+        'addressLine': request.addressLine,
+        'landmark': state.selectedWard.areaChipLabel,
+        'wasteType': request.category.apiValue,
+        'slot': request.slot.apiValue,
+        'estimatedBags': request.estimatedBags,
+        'lat': state.selectedWard.lat,
+        'lng': state.selectedWard.lng,
+        'scheduleType': request.scheduleType,
+        if (request.preferredDay != null) 'preferredDay': request.preferredDay,
+        'notes': request.notes,
+      },
+    );
+    final queue = await _store.enqueue(action);
+    state = state.copyWith(pendingSyncCount: queue.length);
   }
 
   String submitHotspotReport({
@@ -508,6 +643,7 @@ class CitizenStateNotifier extends Notifier<CitizenState> {
     required bool hasPhoto,
     String? photoMetaLabel,
     String? photoPath,
+    Uint8List? photoBytes,
   }) {
     _sequenceCounter += 1;
     final code = 'CS-DR-${1050 + _sequenceCounter}';
@@ -544,23 +680,33 @@ class CitizenStateNotifier extends Notifier<CitizenState> {
       hasUnreadNotifications: true,
     );
 
-    unawaited(_persistAndSyncReport(localId: localId, report: report));
+    unawaited(
+      _persistAndSyncReport(
+        localId: localId,
+        report: report,
+        photoBytes: photoBytes,
+      ),
+    );
     return code;
   }
 
   Future<void> _persistAndSyncReport({
     required String localId,
     required HotspotReport report,
+    Uint8List? photoBytes,
   }) async {
     await _persist();
     try {
       final photoUrls = <String>[];
-      if (report.photoPath != null && report.photoPath!.isNotEmpty) {
-        final file = File(report.photoPath!);
-        if (await file.exists()) {
-          final uploadedUrl = await _api.uploadPhoto(file);
-          photoUrls.add(uploadedUrl);
-        }
+      var bytesToUpload = photoBytes;
+      if (bytesToUpload == null &&
+          report.photoPath != null &&
+          report.photoPath!.isNotEmpty) {
+        bytesToUpload = await readLocalFileBytes(report.photoPath!);
+      }
+      if (bytesToUpload != null && bytesToUpload.isNotEmpty) {
+        final uploadedUrl = await _api.uploadPhotoBytes(bytesToUpload);
+        photoUrls.add(uploadedUrl);
       }
 
       final created = await _api.submitDumpReport(
@@ -605,13 +751,17 @@ class CitizenStateNotifier extends Notifier<CitizenState> {
         await _persist();
         return;
       }
-      await _queueReportOffline(localId, report);
+      await _queueReportOffline(localId, report, photoBytes: photoBytes);
     } catch (_) {
-      await _queueReportOffline(localId, report);
+      await _queueReportOffline(localId, report, photoBytes: photoBytes);
     }
   }
 
-  Future<void> _queueReportOffline(String localId, HotspotReport report) async {
+  Future<void> _queueReportOffline(
+    String localId,
+    HotspotReport report, {
+    Uint8List? photoBytes,
+  }) async {
     final severity = report.categories.contains(ReportIssueCategory.drainBlocked)
         ? 'high'
         : 'medium';
@@ -628,6 +778,10 @@ class CitizenStateNotifier extends Notifier<CitizenState> {
         'lat': report.lat,
         'lng': report.lng,
         'photoPath': report.photoPath,
+        if (photoBytes != null &&
+            photoBytes.isNotEmpty &&
+            photoBytes.length <= core.CleanSavarApiClient.maxUploadBytes)
+          'photoBase64': base64Encode(photoBytes),
       },
     );
     final queue = await _store.enqueue(action);

@@ -6,15 +6,29 @@ Thumbs.db
 .idea/
 *.iml
 
-# Environment
+# Environment & Shuttle Secrets
 .env
 .env.local
 .env.*.local
 !.env.example
+Secrets.toml
+Secrets.*.toml
+Secrets.dev.toml
+
+# Firebase & Service Account Credentials
+*firebase-adminsdk*.json
+*adminsdk*.json
+serviceAccountKey.json
+service-account*.json
+*-service-account*.json
+firebase-credentials*.json
+google-services.json
+GoogleService-Info.plist
 
 # Node / Next.js
 node_modules/
 .next/
+.next-dev/
 out/
 dist/
 build/
@@ -41,6 +55,19 @@ target/
 **/android/local.properties
 **/ios/Pods/
 **/ios/Flutter/.last_build_id
+
+# Android release keystore & signing keys
+key.properties
+*.jks
+*.keystore
+*.apk
+*.aab
+
+# Agent skills and lockfiles
+.agents/
+.claude/
+agent/
+skills-lock.json
 
 # Local runtime data & logs
 uploads/

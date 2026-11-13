@@ -2,6 +2,7 @@ pub mod auth;
 pub mod config;
 pub mod db;
 pub mod error;
+pub mod firebase_auth;
 pub mod models;
 pub mod openapi;
 pub mod routes;

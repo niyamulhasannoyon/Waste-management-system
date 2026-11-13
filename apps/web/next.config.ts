@@ -1,49 +1,54 @@
 import path from 'node:path';
 import type { NextConfig } from 'next';
+import { PHASE_DEVELOPMENT_SERVER } from 'next/constants';
 
-const remotePatterns: NonNullable<NextConfig['images']>['remotePatterns'] = [
-  { protocol: 'http', hostname: 'localhost' },
-  { protocol: 'http', hostname: '127.0.0.1' },
-];
+export default function nextConfig(phase: string): NextConfig {
+  const remotePatterns: NonNullable<NextConfig['images']>['remotePatterns'] = [
+    { protocol: 'http', hostname: 'localhost' },
+    { protocol: 'http', hostname: '127.0.0.1' },
+  ];
 
-const configuredApi = process.env.NEXT_PUBLIC_API_URL;
-if (configuredApi) {
-  try {
-    const parsed = new URL(configuredApi);
-    if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
-      remotePatterns.push({
-        protocol: parsed.protocol.slice(0, -1) as 'http' | 'https',
-        hostname: parsed.hostname,
-      });
+  const configuredApi = process.env.NEXT_PUBLIC_API_URL;
+  if (configuredApi) {
+    try {
+      const parsed = new URL(configuredApi);
+      if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+        remotePatterns.push({
+          protocol: parsed.protocol.slice(0, -1) as 'http' | 'https',
+          hostname: parsed.hostname,
+        });
+      }
+    } catch {
+      // Ignore invalid build-time API URL cleanly.
     }
-  } catch {
-    // Ignore invalid build-time API URL cleanly.
   }
+
+  return {
+    // Isolate dev artifacts from `next build` so running both never corrupts `.next`.
+    distDir:
+      process.env.NEXT_DIST_DIR ||
+      (phase === PHASE_DEVELOPMENT_SERVER ? '.next-dev' : '.next'),
+    output: 'standalone',
+    outputFileTracingRoot: path.join(__dirname, '../..'),
+    images: {
+      unoptimized: true,
+      remotePatterns,
+    },
+    async headers() {
+      return [
+        {
+          source: '/:path*',
+          headers: [
+            { key: 'X-Frame-Options', value: 'DENY' },
+            { key: 'X-Content-Type-Options', value: 'nosniff' },
+            { key: 'Referrer-Policy', value: 'no-referrer' },
+            {
+              key: 'Permissions-Policy',
+              value: 'camera=(self), geolocation=(self), microphone=()',
+            },
+          ],
+        },
+      ];
+    },
+  };
 }
-
-const nextConfig: NextConfig = {
-  output: 'standalone',
-  outputFileTracingRoot: path.join(__dirname, '../..'),
-  images: {
-    unoptimized: true,
-    remotePatterns,
-  },
-  async headers() {
-    return [
-      {
-        source: '/:path*',
-        headers: [
-          { key: 'X-Frame-Options', value: 'DENY' },
-          { key: 'X-Content-Type-Options', value: 'nosniff' },
-          { key: 'Referrer-Policy', value: 'no-referrer' },
-          {
-            key: 'Permissions-Policy',
-            value: 'camera=(self), geolocation=(self), microphone=()',
-          },
-        ],
-      },
-    ];
-  },
-};
-
-export default nextConfig;

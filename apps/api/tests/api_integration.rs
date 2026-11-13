@@ -84,6 +84,7 @@ async fn spawn_test_server(pool: PgPool) -> TestServer {
         duplicate_radius_meters: 50.0,
         nearby_default_radius_meters: 5000.0,
         admin_bootstrap_phones: vec![],
+        firebase_project_id: "clean-savar".to_string(),
     };
 
     let state = AppState::from_parts(pool.clone(), &cfg);
@@ -469,6 +470,67 @@ async fn otp_rbac_pickup_masking_and_account_erasure_work_end_to_end() {
         .await;
     let _ = sqlx::query("DELETE FROM otp_codes WHERE phone = $1")
         .bind(&formatted_phone)
+        .execute(&server.pool)
+        .await;
+    let _ = sqlx::query("DELETE FROM users WHERE id = $1")
+        .bind(user_id)
+        .execute(&server.pool)
+        .await;
+}
+
+#[tokio::test]
+async fn phone_login_verifies_firebase_token_and_issues_session() {
+    let Some(pool) = setup_test_db().await else {
+        return;
+    };
+    let server = spawn_test_server(pool).await;
+
+    let login_payload = json!({
+        "idToken": "dev_token:+8801715883210:firebase-uid-test-1",
+        "full_name": "সাভার নাগরিক",
+        "ward_id": 1
+    })
+    .to_string();
+
+    // Test /api/v1/auth/phone-login
+    let res = send_http(
+        server.addr,
+        "POST",
+        "/api/v1/auth/phone-login",
+        Some(&login_payload),
+        None,
+        None,
+    )
+    .await;
+
+    assert_eq!(res.status, 200);
+    let body = res.json();
+    assert_eq!(body["token_type"], "Bearer");
+    let access_token = body["access_token"].as_str().expect("access_token");
+    assert!(!access_token.is_empty());
+    assert_eq!(body["token"].as_str(), Some(access_token));
+    assert_eq!(body["profile"]["user"]["phone"], "01715-883210");
+    assert_eq!(body["profile"]["user"]["full_name"], "সাভার নাগরিক");
+
+    // Test /api/v1/auth/me with the issued session token
+    let me_res = send_http(
+        server.addr,
+        "GET",
+        "/api/v1/auth/me",
+        None,
+        Some(&format!("Bearer {access_token}")),
+        None,
+    )
+    .await;
+
+    assert_eq!(me_res.status, 200);
+    let me_body = me_res.json();
+    assert_eq!(me_body["user"]["phone"], "01715-883210");
+
+    // Clean up
+    let user_id = Uuid::parse_str(body["profile"]["user"]["id"].as_str().unwrap()).unwrap();
+    let _ = sqlx::query("DELETE FROM auth_sessions WHERE user_id = $1")
+        .bind(user_id)
         .execute(&server.pool)
         .await;
     let _ = sqlx::query("DELETE FROM users WHERE id = $1")

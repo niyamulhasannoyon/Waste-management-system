@@ -4,10 +4,16 @@ import React, { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { FormField } from '@/components/ui/form-field';
 import { useCleanSavar } from '@/context/CleanSavarContext';
-import { ApiError, requestOtp, verifyOtp } from '@/lib/api-client';
+import { ApiError, loginWithFirebaseToken, requestOtp, verifyOtp } from '@/lib/api-client';
+import {
+  createRecaptchaVerifier,
+  isFirebaseClientConfigured,
+  sendFirebasePhoneOtp,
+} from '@/lib/firebase-client';
 import { DEMO_OTP_ACCOUNTS, SAVAR_WARDS_SEED } from '@/lib/savar-data';
 import type { AuthSession, OtpLoginResponse } from '@/lib/types';
 import { normalizeBdPhone, toBanglaDigits } from '@/lib/utils';
+import type { ConfirmationResult, RecaptchaVerifier } from 'firebase/auth';
 import { KeyRound, Loader2, Phone, RefreshCw, ShieldCheck } from 'lucide-react';
 
 interface OtpAuthPanelProps {
@@ -31,6 +37,8 @@ export function OtpAuthPanel({ onSuccess, titleId }: OtpAuthPanelProps) {
   const [formError, setFormError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [otpChallenge, setOtpChallenge] = useState<OtpLoginResponse | null>(null);
+  const [confirmationResult, setConfirmationResult] = useState<ConfirmationResult | null>(null);
+  const [recaptchaVerifier, setRecaptchaVerifier] = useState<RecaptchaVerifier | null>(null);
 
   const normalizedPhone = normalizeBdPhone(phoneInput);
   const phoneError =
@@ -87,22 +95,59 @@ export function OtpAuthPanel({ onSuccess, titleId }: OtpAuthPanelProps) {
 
     setIsSubmitting(true);
     try {
-      const challenge = await requestOtp({
-        phone: normalizedPhone,
-        full_name: fullName.trim() || undefined,
-        ward_id: wardId,
-        role: 'citizen',
-      });
-      setOtpChallenge(challenge);
-      setOtpInput('');
-      setOtpTouched(false);
-      setStep('otp');
-    } catch (err) {
-      setFormError(
-        err instanceof ApiError
-          ? err.messageBn
-          : 'OTP পাঠানো যায়নি। এপিআই সার্ভার ও নেটওয়ার্ক যাচাই করুন।',
-      );
+      if (isFirebaseClientConfigured() && typeof window !== 'undefined') {
+        let verifier = recaptchaVerifier;
+        if (!verifier) {
+          verifier = createRecaptchaVerifier('firebase-recaptcha-button', {
+            onExpired: () => setFormError('reCAPTCHA এর মেয়াদ শেষ হয়েছে। আবার চেষ্টা করুন।'),
+          });
+          setRecaptchaVerifier(verifier);
+        }
+        const e164 = normalizedPhone.startsWith('+')
+          ? normalizedPhone
+          : `+88${normalizedPhone.replace(/^0/, '')}`;
+        const confirmation = await sendFirebasePhoneOtp(e164, verifier);
+        setConfirmationResult(confirmation);
+        setOtpChallenge(null);
+        setOtpInput('');
+        setOtpTouched(false);
+        setStep('otp');
+      } else {
+        const challenge = await requestOtp({
+          phone: normalizedPhone,
+          full_name: fullName.trim() || undefined,
+          ward_id: wardId,
+          role: 'citizen',
+        });
+        setOtpChallenge(challenge);
+        setConfirmationResult(null);
+        setOtpInput('');
+        setOtpTouched(false);
+        setStep('otp');
+      }
+    } catch (err: unknown) {
+      console.warn('Primary OTP send failed, falling back to backend challenge:', err);
+      try {
+        const challenge = await requestOtp({
+          phone: normalizedPhone,
+          full_name: fullName.trim() || undefined,
+          ward_id: wardId,
+          role: 'citizen',
+        });
+        setOtpChallenge(challenge);
+        setConfirmationResult(null);
+        setOtpInput('');
+        setOtpTouched(false);
+        setStep('otp');
+      } catch (fallbackErr) {
+        setFormError(
+          fallbackErr instanceof ApiError
+            ? fallbackErr.messageBn
+            : err instanceof Error
+              ? err.message
+              : 'OTP পাঠানো যায়নি। এপিআই সার্ভার ও নেটওয়ার্ক যাচাই করুন।',
+        );
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -119,17 +164,34 @@ export function OtpAuthPanel({ onSuccess, titleId }: OtpAuthPanelProps) {
 
     setIsSubmitting(true);
     try {
-      const session = await verifyOtp({
-        phone: normalizedPhone,
-        otp: cleanedOtp,
-      });
+      let session: AuthSession;
+      if (confirmationResult) {
+        // Firebase Client OTP verification: extract idToken and send to backend
+        const userCredential = await confirmationResult.confirm(cleanedOtp);
+        const user = userCredential.user;
+        const idToken = await user.getIdToken();
+        session = await loginWithFirebaseToken({
+          idToken,
+          fullName: fullName.trim() || undefined,
+          wardId: wardId,
+          role: 'citizen',
+        });
+      } else {
+        // Direct backend OTP verification
+        session = await verifyOtp({
+          phone: normalizedPhone,
+          otp: cleanedOtp,
+        });
+      }
       await applyAuthSession(session);
       onSuccess?.(session);
-    } catch (err) {
+    } catch (err: unknown) {
       setFormError(
         err instanceof ApiError
           ? err.messageBn
-          : 'OTP যাচাই করা যায়নি। কোডটি পুনরায় পরীক্ষা করুন।',
+          : err instanceof Error
+            ? err.message
+            : 'OTP যাচাই করা যায়নি। কোডটি পুনরায় পরীক্ষা করুন।',
       );
     } finally {
       setIsSubmitting(false);
@@ -141,16 +203,33 @@ export function OtpAuthPanel({ onSuccess, titleId }: OtpAuthPanelProps) {
     setFormError(null);
     setIsSubmitting(true);
     try {
-      const challenge = await requestOtp({
-        phone: normalizedPhone,
-        full_name: fullName.trim() || undefined,
-        ward_id: wardId,
-        role: 'citizen',
-      });
-      setOtpChallenge(challenge);
-    } catch (err) {
+      if (isFirebaseClientConfigured() && typeof window !== 'undefined') {
+        let verifier = recaptchaVerifier;
+        if (!verifier) {
+          verifier = createRecaptchaVerifier('firebase-recaptcha-button');
+          setRecaptchaVerifier(verifier);
+        }
+        const e164 = normalizedPhone.startsWith('+')
+          ? normalizedPhone
+          : `+88${normalizedPhone.replace(/^0/, '')}`;
+        const confirmation = await sendFirebasePhoneOtp(e164, verifier);
+        setConfirmationResult(confirmation);
+      } else {
+        const challenge = await requestOtp({
+          phone: normalizedPhone,
+          full_name: fullName.trim() || undefined,
+          ward_id: wardId,
+          role: 'citizen',
+        });
+        setOtpChallenge(challenge);
+      }
+    } catch (err: unknown) {
       setFormError(
-        err instanceof ApiError ? err.messageBn : 'পুনরায় OTP পাঠানো যায়নি।',
+        err instanceof ApiError
+          ? err.messageBn
+          : err instanceof Error
+            ? err.message
+            : 'পুনরায় OTP পাঠানো যায়নি।',
       );
     } finally {
       setIsSubmitting(false);
@@ -399,6 +478,7 @@ export function OtpAuthPanel({ onSuccess, titleId }: OtpAuthPanelProps) {
           </div>
         </form>
       )}
+      <div id="firebase-recaptcha-button" className="hidden" aria-hidden="true" />
     </div>
   );
 }

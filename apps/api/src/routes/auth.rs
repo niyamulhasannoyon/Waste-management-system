@@ -14,9 +14,9 @@ use crate::{
     db::{ensure_ward_exists, mask_phone, normalize_bd_phone, record_audit_log, AppState},
     error::{AppError, ErrorBody},
     models::auth::{
-        AccountEraseResponse, AuthenticatedProfile, OtpLoginRequest, OtpLoginResponse,
-        OtpVerifyRequest, OtpVerifyResponse, RetentionPurgeQuery, RetentionPurgeResponse,
-        UserRecord,
+        AccountEraseResponse, AuthenticatedProfile, FirebaseLoginRequest, OtpLoginRequest,
+        OtpLoginResponse, OtpVerifyRequest, OtpVerifyResponse, PhoneLoginRequest,
+        RetentionPurgeQuery, RetentionPurgeResponse, UserRecord,
     },
 };
 
@@ -158,16 +158,260 @@ pub async fn otp_login(
     ))
 }
 
+/// Helper function to atomically resolve user role, insert/update user record,
+/// link collector vehicle / partner, create a hashed Bearer session, and record audit log.
+pub(crate) async fn create_verified_user_session(
+    state: &AppState,
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    phone: &str,
+    full_name: Option<String>,
+    ward_id: Option<i16>,
+    ip: &str,
+    audit_action: &str,
+) -> Result<OtpVerifyResponse, AppError> {
+    if let Some(w) = ward_id {
+        ensure_ward_exists(&state.pool, w).await?;
+    }
+
+    let is_bootstrap_admin = state.admin_bootstrap_phones.iter().any(|p| p == phone);
+    let existing_user_role: Option<String> =
+        sqlx::query_scalar("SELECT role FROM users WHERE phone = $1")
+            .bind(phone)
+            .fetch_optional(&mut **tx)
+            .await?;
+
+    let is_vehicle_collector: bool = sqlx::query_scalar::<_, Uuid>(
+        "SELECT id FROM collector_vehicles WHERE driver_phone = $1 LIMIT 1",
+    )
+    .bind(phone)
+    .fetch_optional(&mut **tx)
+    .await?
+    .is_some();
+
+    let is_verified_partner: bool =
+        sqlx::query_scalar::<_, Uuid>("SELECT id FROM partners WHERE contact_phone = $1 LIMIT 1")
+            .bind(phone)
+            .fetch_optional(&mut **tx)
+            .await?
+            .is_some();
+
+    let resolved_role = if is_bootstrap_admin || existing_user_role.as_deref() == Some("admin") {
+        Role::Admin.as_str()
+    } else if is_vehicle_collector || existing_user_role.as_deref() == Some("collector") {
+        Role::Collector.as_str()
+    } else if is_verified_partner || existing_user_role.as_deref() == Some("partner") {
+        Role::Partner.as_str()
+    } else {
+        Role::Citizen.as_str()
+    };
+
+    let clean_name = full_name.unwrap_or_default();
+
+    let user = sqlx::query_as::<_, UserRecord>(
+        r#"
+        INSERT INTO users (phone, full_name, role, ward_id, is_verified)
+        VALUES ($1, $2, $3, $4, TRUE)
+        ON CONFLICT (phone) DO UPDATE
+        SET full_name = CASE WHEN EXCLUDED.full_name <> '' THEN EXCLUDED.full_name ELSE users.full_name END,
+            ward_id = COALESCE(EXCLUDED.ward_id, users.ward_id),
+            role = EXCLUDED.role,
+            is_verified = TRUE,
+            updated_at = NOW()
+        RETURNING id, phone, full_name, role, ward_id, is_verified, created_at
+        "#,
+    )
+    .bind(phone)
+    .bind(&clean_name)
+    .bind(resolved_role)
+    .bind(ward_id)
+    .fetch_one(&mut **tx)
+    .await?;
+
+    // Link collector/partner records if unassigned.
+    let vehicle_id: Option<Uuid> = sqlx::query_scalar(
+        "UPDATE collector_vehicles SET user_id = $1, updated_at = NOW() WHERE driver_phone = $2 AND (user_id IS NULL OR user_id = $1) RETURNING id",
+    )
+    .bind(user.id)
+    .bind(phone)
+    .fetch_optional(&mut **tx)
+    .await?;
+
+    #[derive(sqlx::FromRow)]
+    struct LinkedPartner {
+        id: Uuid,
+        organization_name: String,
+    }
+
+    let partner = sqlx::query_as::<_, LinkedPartner>(
+        "UPDATE partners SET user_id = $1 WHERE contact_phone = $2 AND (user_id IS NULL OR user_id = $1) RETURNING id, organization_name",
+    )
+    .bind(user.id)
+    .bind(phone)
+    .fetch_optional(&mut **tx)
+    .await?;
+
+    let token = generate_session_token();
+    let token_hash = hmac_hash_hex(&state.auth_secret, &token);
+    let expires_at = Utc::now() + Duration::seconds(state.session_ttl_seconds);
+
+    sqlx::query("DELETE FROM auth_sessions WHERE expires_at < NOW()")
+        .execute(&mut **tx)
+        .await?;
+
+    sqlx::query(
+        r#"
+        INSERT INTO auth_sessions (user_id, token_hash, expires_at)
+        VALUES ($1, $2, $3)
+        "#,
+    )
+    .bind(user.id)
+    .bind(&token_hash)
+    .bind(expires_at)
+    .execute(&mut **tx)
+    .await?;
+
+    record_audit_log(
+        &mut **tx,
+        Some(user.id),
+        Some(user.role.as_str()),
+        audit_action,
+        Some("user"),
+        Some(user.id),
+        Some(ip),
+        serde_json::json!({ "masked_phone": mask_phone(phone) }),
+    )
+    .await?;
+
+    Ok(OtpVerifyResponse {
+        access_token: token.clone(),
+        token: Some(token),
+        token_type: "Bearer",
+        expires_in_seconds: state.session_ttl_seconds,
+        profile: AuthenticatedProfile {
+            user,
+            vehicle_id,
+            partner_id: partner.as_ref().map(|p| p.id),
+            partner_name: partner.map(|p| p.organization_name),
+        },
+    })
+}
+
+/// `POST /api/v1/auth/phone-login`
+/// Verifies a client-provided Firebase ID token (via RS256 Google public keys or dev mock),
+/// extracts the verified phone number, creates/updates user in database, and issues a Clean Savar Bearer session.
+#[utoipa::path(
+    post,
+    path = "/api/v1/auth/phone-login",
+    tag = "Auth",
+    request_body = PhoneLoginRequest,
+    responses(
+        (status = 200, description = "Firebase phone ID token verified and session issued", body = OtpVerifyResponse),
+        (status = 401, description = "Invalid or expired Firebase token", body = ErrorBody),
+        (status = 429, description = "Rate limit exceeded", body = ErrorBody)
+    )
+)]
+pub async fn phone_login(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(payload): Json<PhoneLoginRequest>,
+) -> Result<Json<OtpVerifyResponse>, AppError> {
+    let ip = extract_client_ip(&headers);
+    state
+        .rate_limiter
+        .check(&format!("phone_login_ip:{ip}"), 40, 900)
+        .await?;
+
+    let claims = state
+        .firebase_verifier
+        .verify_id_token(&payload.id_token, state.otp_dev_mode)
+        .await?;
+
+    let raw_phone = claims.extract_phone_number().ok_or_else(|| {
+        AppError::unauthorized(
+            "Firebase token does not contain a verified phone number.",
+            "ফায়ারবেস টোকেনে কোনো যাচাইকৃত ফোন নম্বর পাওয়া যায়নি।",
+        )
+    })?;
+
+    let phone = normalize_bd_phone(&raw_phone)?;
+    state
+        .rate_limiter
+        .check(&format!("phone_login_phone:{phone}"), 20, 900)
+        .await?;
+
+    let clean_name = payload
+        .full_name
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_string)
+        .or_else(|| claims.name.filter(|n| !n.trim().is_empty()));
+
+    if let Some(ref name) = clean_name {
+        if name.chars().count() > 120 {
+            return Err(AppError::validation(
+                "Name cannot exceed 120 characters.",
+                "নাম ১২০ অক্ষরের বেশি হওয়া যাবে না।",
+            ));
+        }
+    }
+
+    let mut tx = state.pool.begin().await?;
+
+    let response = create_verified_user_session(
+        &state,
+        &mut tx,
+        &phone,
+        clean_name,
+        payload.ward_id,
+        &ip,
+        "firebase_phone_verified",
+    )
+    .await?;
+
+    tx.commit().await?;
+
+    tracing::info!(
+        phone = %crate::db::mask_phone(&phone),
+        sub = %claims.sub,
+        "Firebase phone ID token successfully verified and session issued"
+    );
+
+    Ok(Json(response))
+}
+
+/// `POST /api/v1/auth/firebase-login`
+/// Backwards-compatible alias for `phone_login`.
+#[utoipa::path(
+    post,
+    path = "/api/v1/auth/firebase-login",
+    tag = "Auth",
+    request_body = FirebaseLoginRequest,
+    responses(
+        (status = 200, description = "Firebase token verified and session issued", body = OtpVerifyResponse),
+        (status = 401, description = "Invalid or expired Firebase token", body = ErrorBody),
+        (status = 429, description = "Rate limit exceeded", body = ErrorBody)
+    )
+)]
+pub async fn firebase_login(
+    state: State<AppState>,
+    headers: HeaderMap,
+    payload: Json<FirebaseLoginRequest>,
+) -> Result<Json<OtpVerifyResponse>, AppError> {
+    phone_login(state, headers, payload).await
+}
+
 /// `POST /api/v1/auth/otp-verify`
-/// Verifies OTP against its HMAC digest, then creates/updates user & issues a hashed Bearer session.
+/// Verifies either an SMS OTP against HMAC digest, or a Firebase `id_token`,
+/// then creates/updates user & issues a hashed Bearer session.
 #[utoipa::path(
     post,
     path = "/api/v1/auth/otp-verify",
     tag = "Auth",
     request_body = OtpVerifyRequest,
     responses(
-        (status = 200, description = "OTP verified and bearer token issued", body = OtpVerifyResponse),
-        (status = 401, description = "Invalid or expired OTP", body = ErrorBody),
+        (status = 200, description = "OTP or Firebase token verified and bearer token issued", body = OtpVerifyResponse),
+        (status = 401, description = "Invalid or expired OTP/token", body = ErrorBody),
         (status = 429, description = "Too many OTP attempts", body = ErrorBody)
     )
 )]
@@ -177,18 +421,41 @@ pub async fn verify_otp(
     Json(payload): Json<OtpVerifyRequest>,
 ) -> Result<Json<OtpVerifyResponse>, AppError> {
     let ip = extract_client_ip(&headers);
+
+    // If client provided a Firebase ID token, route directly to Firebase verification logic
+    if let Some(id_token) = payload.id_token.filter(|t| !t.trim().is_empty()) {
+        return firebase_login(
+            State(state),
+            headers,
+            Json(FirebaseLoginRequest {
+                id_token,
+                full_name: payload.full_name,
+                ward_id: payload.ward_id,
+                role: payload.role,
+            }),
+        )
+        .await;
+    }
+
     state
         .rate_limiter
         .check(&format!("otp_verify_ip:{ip}"), 30, 900)
         .await?;
 
-    let phone = normalize_bd_phone(&payload.phone)?;
+    let raw_phone = payload.phone.as_deref().ok_or_else(|| {
+        AppError::validation("Phone number is required.", "মোবাইল নম্বর প্রদান করুন।")
+    })?;
+    let phone = normalize_bd_phone(raw_phone)?;
     state
         .rate_limiter
         .check(&format!("otp_verify_phone:{phone}"), 10, 900)
         .await?;
 
-    let otp_input = payload.otp.trim();
+    let raw_otp = payload
+        .otp
+        .as_deref()
+        .ok_or_else(|| AppError::validation("OTP is required.", "ওটিপি প্রদান করুন।"))?;
+    let otp_input = raw_otp.trim();
     if otp_input.len() != 6 || !otp_input.chars().all(|c| c.is_ascii_digit()) {
         return Err(AppError::validation(
             "OTP must be a 6-digit numeric code.",
@@ -284,129 +551,20 @@ pub async fn verify_otp(
         .execute(&mut *tx)
         .await?;
 
-    // Resolve authoritative role from verified staff/partner tables before fallback to pending role.
-    let is_bootstrap_admin = state.admin_bootstrap_phones.iter().any(|p| p == &phone);
-    let existing_user_role: Option<String> =
-        sqlx::query_scalar("SELECT role FROM users WHERE phone = $1")
-            .bind(&phone)
-            .fetch_optional(&mut *tx)
-            .await?;
-
-    let is_vehicle_collector: bool = sqlx::query_scalar::<_, Uuid>(
-        "SELECT id FROM collector_vehicles WHERE driver_phone = $1 LIMIT 1",
-    )
-    .bind(&phone)
-    .fetch_optional(&mut *tx)
-    .await?
-    .is_some();
-
-    let is_verified_partner: bool =
-        sqlx::query_scalar::<_, Uuid>("SELECT id FROM partners WHERE contact_phone = $1 LIMIT 1")
-            .bind(&phone)
-            .fetch_optional(&mut *tx)
-            .await?
-            .is_some();
-
-    let resolved_role = if is_bootstrap_admin || existing_user_role.as_deref() == Some("admin") {
-        Role::Admin.as_str()
-    } else if is_vehicle_collector || existing_user_role.as_deref() == Some("collector") {
-        Role::Collector.as_str()
-    } else if is_verified_partner || existing_user_role.as_deref() == Some("partner") {
-        Role::Partner.as_str()
-    } else {
-        Role::Citizen.as_str()
-    };
-
-    let clean_name = otp_row.pending_full_name.unwrap_or_default();
-
-    let user = sqlx::query_as::<_, UserRecord>(
-        r#"
-        INSERT INTO users (phone, full_name, role, ward_id, is_verified)
-        VALUES ($1, $2, $3, $4, TRUE)
-        ON CONFLICT (phone) DO UPDATE
-        SET full_name = CASE WHEN EXCLUDED.full_name <> '' THEN EXCLUDED.full_name ELSE users.full_name END,
-            ward_id = COALESCE(EXCLUDED.ward_id, users.ward_id),
-            role = EXCLUDED.role,
-            is_verified = TRUE,
-            updated_at = NOW()
-        RETURNING id, phone, full_name, role, ward_id, is_verified, created_at
-        "#,
-    )
-    .bind(&phone)
-    .bind(&clean_name)
-    .bind(resolved_role)
-    .bind(otp_row.pending_ward_id)
-    .fetch_one(&mut *tx)
-    .await?;
-
-    // Link collector/partner records if unassigned.
-    let vehicle_id: Option<Uuid> = sqlx::query_scalar(
-        "UPDATE collector_vehicles SET user_id = $1, updated_at = NOW() WHERE driver_phone = $2 AND (user_id IS NULL OR user_id = $1) RETURNING id",
-    )
-    .bind(user.id)
-    .bind(&phone)
-    .fetch_optional(&mut *tx)
-    .await?;
-
-    #[derive(sqlx::FromRow)]
-    struct LinkedPartner {
-        id: Uuid,
-        organization_name: String,
-    }
-
-    let partner = sqlx::query_as::<_, LinkedPartner>(
-        "UPDATE partners SET user_id = $1 WHERE contact_phone = $2 AND (user_id IS NULL OR user_id = $1) RETURNING id, organization_name",
-    )
-    .bind(user.id)
-    .bind(&phone)
-    .fetch_optional(&mut *tx)
-    .await?;
-
-    let token = generate_session_token();
-    let token_hash = hmac_hash_hex(&state.auth_secret, &token);
-    let expires_at = Utc::now() + Duration::seconds(state.session_ttl_seconds);
-
-    sqlx::query("DELETE FROM auth_sessions WHERE expires_at < NOW()")
-        .execute(&mut *tx)
-        .await?;
-
-    sqlx::query(
-        r#"
-        INSERT INTO auth_sessions (user_id, token_hash, expires_at)
-        VALUES ($1, $2, $3)
-        "#,
-    )
-    .bind(user.id)
-    .bind(&token_hash)
-    .bind(expires_at)
-    .execute(&mut *tx)
-    .await?;
-
-    record_audit_log(
-        &mut *tx,
-        Some(user.id),
-        Some(user.role.as_str()),
+    let response = create_verified_user_session(
+        &state,
+        &mut tx,
+        &phone,
+        otp_row.pending_full_name,
+        otp_row.pending_ward_id,
+        &ip,
         "otp_verified",
-        Some("user"),
-        Some(user.id),
-        Some(&ip),
-        serde_json::json!({ "masked_phone": mask_phone(&phone) }),
     )
     .await?;
 
     tx.commit().await?;
 
-    Ok(Json(OtpVerifyResponse {
-        access_token: token,
-        token_type: "Bearer",
-        expires_in_seconds: state.session_ttl_seconds,
-        profile: AuthenticatedProfile {
-            user,
-            vehicle_id,
-            partner_id: partner.as_ref().map(|p| p.id),
-            partner_name: partner.map(|p| p.organization_name),
-        },
-    }))
+    Ok(Json(response))
 }
 
 /// `GET /api/v1/auth/me`

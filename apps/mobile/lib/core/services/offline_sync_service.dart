@@ -1,10 +1,11 @@
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:clean_savar_core/clean_savar_core.dart' as core;
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+import '../utils/local_file_bytes.dart';
 
 class PendingSyncAction {
   const PendingSyncAction({
@@ -186,13 +187,19 @@ class OfflineSyncStore {
 
       case 'report_create':
         final photoUrls = <String>[];
+        final photoBase64 = p['photoBase64'] as String?;
         final photoPath = p['photoPath'] as String?;
-        if (photoPath != null && photoPath.isNotEmpty) {
-          final file = File(photoPath);
-          if (await file.exists()) {
-            final uploaded = await client.uploadPhoto(file);
-            photoUrls.add(uploaded);
-          }
+        Uint8List? uploadBytes;
+        if (photoBase64 != null && photoBase64.isNotEmpty) {
+          try {
+            uploadBytes = base64Decode(photoBase64);
+          } catch (_) {}
+        } else if (photoPath != null && photoPath.isNotEmpty) {
+          uploadBytes = await readLocalFileBytes(photoPath);
+        }
+        if (uploadBytes != null && uploadBytes.isNotEmpty) {
+          final uploaded = await client.uploadPhotoBytes(uploadBytes);
+          photoUrls.add(uploaded);
         }
         await client.submitDumpReport(
           reporterPhone: (p['reporterPhone'] as String?) ?? '01715-883210',

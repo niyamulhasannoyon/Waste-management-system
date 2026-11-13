@@ -38,6 +38,9 @@ class CollectorState {
       );
 
   CollectorState copyWith({
+    String? workerName,
+    String? vehicleCode,
+    String? routeLabel,
     bool? isOnDuty,
     bool? isNetworkOnline,
     int? pendingSyncCount,
@@ -45,9 +48,9 @@ class CollectorState {
     String? vehicleId,
   }) {
     return CollectorState(
-      workerName: workerName,
-      vehicleCode: vehicleCode,
-      routeLabel: routeLabel,
+      workerName: workerName ?? this.workerName,
+      vehicleCode: vehicleCode ?? this.vehicleCode,
+      routeLabel: routeLabel ?? this.routeLabel,
       isOnDuty: isOnDuty ?? this.isOnDuty,
       isNetworkOnline: isNetworkOnline ?? this.isNetworkOnline,
       pendingSyncCount: pendingSyncCount ?? this.pendingSyncCount,
@@ -58,6 +61,9 @@ class CollectorState {
 
   Map<String, dynamic> toJson() {
     return {
+      'workerName': workerName,
+      'vehicleCode': vehicleCode,
+      'routeLabel': routeLabel,
       'isOnDuty': isOnDuty,
       'isNetworkOnline': isNetworkOnline,
       'pendingSyncCount': pendingSyncCount,
@@ -105,6 +111,9 @@ class CollectorStateNotifier extends Notifier<CollectorState> {
                 .toList() ??
             state.stops;
         state = state.copyWith(
+          workerName: (saved['workerName'] as String?) ?? state.workerName,
+          vehicleCode: (saved['vehicleCode'] as String?) ?? state.vehicleCode,
+          routeLabel: (saved['routeLabel'] as String?) ?? state.routeLabel,
           isOnDuty: (saved['isOnDuty'] as bool?) ?? state.isOnDuty,
           isNetworkOnline:
               (saved['isNetworkOnline'] as bool?) ?? state.isNetworkOnline,
@@ -126,6 +135,39 @@ class CollectorStateNotifier extends Notifier<CollectorState> {
     await _store.writeJsonMap(OfflineSyncStore.collectorStateKey, state.toJson());
   }
 
+  Future<void> refreshFromServer() async {
+    if (state.isNetworkOnline) {
+      await _refreshAssignedStops();
+    }
+  }
+
+  /// Populates realistic Savar collector route data for offline Demo Preview.
+  void loadDemoSample() {
+    state = state.copyWith(
+      workerName: 'মোঃ আলমগীর (ডেমো)',
+      vehicleCode: 'SV-VAN-04',
+      routeLabel: 'ওয়ার্ড ০৫ — ব্যাংক টাউন ও পাকিজা এলাকা',
+      stops: state.stops.isNotEmpty
+          ? state.stops
+          : SavarSeedData.initialRouteStops,
+    );
+  }
+
+  Future<void> resetOnLogout() async {
+    state = const CollectorState(
+      workerName: kDebugMode ? 'মোঃ আলমগীর (ডেমো)' : 'পরিচ্ছন্নতাকর্মী',
+      vehicleCode: kDebugMode ? 'SV-VAN-04' : '—',
+      routeLabel: kDebugMode
+          ? 'ওয়ার্ড ০৫ — ব্যাংক টাউন ও পাকিজা এলাকা'
+          : 'অ্যাসাইন করা রুট লোড হচ্ছে...',
+      isOnDuty: false,
+      isNetworkOnline: true,
+      pendingSyncCount: 0,
+      stops: kDebugMode ? SavarSeedData.initialRouteStops : [],
+    );
+    await _persist();
+  }
+
   Future<void> _refreshAssignedStops() async {
     try {
       if (_api.authToken == null) {
@@ -139,19 +181,65 @@ class CollectorStateNotifier extends Notifier<CollectorState> {
       if (_api.authToken == null) {
         return;
       }
-      final pickups = await _api.fetchPickups();
-      if (pickups.isEmpty) return;
 
-      final existingIds = state.stops.map((s) => s.id).toSet();
-      final newServerStops = pickups
-          .where((p) => !existingIds.contains(p.id))
-          .map(RouteStop.fromCorePickup)
-          .toList();
+      var workerName = state.workerName;
+      var vehicleCode = state.vehicleCode;
+      var routeLabel = state.routeLabel;
+      var vehicleId = state.vehicleId;
 
-      if (newServerStops.isNotEmpty) {
-        state = state.copyWith(stops: [...newServerStops, ...state.stops]);
-        await _persist();
+      try {
+        final vehicles = await _api.fetchVehicles();
+        if (vehicles.isNotEmpty) {
+          final v = vehicles.first;
+          vehicleId = v.id;
+          if (v.code.isNotEmpty) vehicleCode = v.code;
+          if (v.driverNameBn.isNotEmpty) workerName = v.driverNameBn;
+          final ward = core.savarWardsSeed.where((w) => w.id == v.wardId);
+          if (ward.isNotEmpty) {
+            routeLabel = '${ward.first.nameBn} — ${ward.first.zoneLabelBn}';
+          }
+        }
+      } catch (_) {
+        // Vehicles endpoint is restricted to collector/admin; ignore for citizen debug sessions.
       }
+
+      final pickups = await _api.fetchPickups();
+      List<core.DumpReportItem> reports = const [];
+      try {
+        reports = await _api.fetchReports();
+      } catch (_) {}
+
+      final existingById = {for (final s in state.stops) s.id: s};
+      final serverStops = <RouteStop>[
+        ...pickups.map(RouteStop.fromCorePickup),
+        ...reports
+            .where((r) => r.status == 'dispatched' || r.status == 'verified')
+            .map(RouteStop.fromCoreDumpReport),
+      ];
+
+      final newServerStops = serverStops
+          .where((s) => !existingById.containsKey(s.id))
+          .toList(growable: false);
+
+      final refreshedExisting = [
+        for (final stop in state.stops)
+          if (existingById[stop.id] != null && stop.syncedToServer)
+            serverStops.firstWhere(
+              (s) => s.id == stop.id,
+              orElse: () => stop,
+            )
+          else
+            stop,
+      ];
+
+      state = state.copyWith(
+        workerName: workerName,
+        vehicleCode: vehicleCode,
+        routeLabel: routeLabel,
+        vehicleId: vehicleId,
+        stops: [...newServerStops, ...refreshedExisting],
+      );
+      await _persist();
     } catch (_) {
       // Retain cached/seed route when backend is offline
     }

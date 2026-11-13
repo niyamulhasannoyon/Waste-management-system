@@ -33,6 +33,8 @@ impl Modify for SecurityAddon {
         crate::routes::health::health_check,
         crate::routes::auth::otp_login,
         crate::routes::auth::verify_otp,
+        crate::routes::auth::phone_login,
+        crate::routes::auth::firebase_login,
         crate::routes::auth::me,
         crate::routes::auth::logout,
         crate::routes::auth::erase_account,

@@ -1,69 +1,40 @@
-use std::net::SocketAddr;
-use tokio::net::TcpListener;
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
-
 use clean_savar_api::{
     build_router,
     config::AppConfig,
     db::{init_pool, AppState},
-    shutdown_signal,
 };
+use shuttle_runtime::SecretStore;
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+#[shuttle_runtime::main]
+async fn main(
+    #[shuttle_runtime::Secrets] secrets: SecretStore,
+) -> shuttle_axum::ShuttleAxum {
     dotenvy::dotenv().ok();
 
-    let app_env = std::env::var("APP_ENV")
-        .unwrap_or_else(|_| "development".to_string())
-        .trim()
-        .to_ascii_lowercase();
-    let is_production = matches!(app_env.as_str(), "production" | "prod");
-    let default_format = if is_production { "json" } else { "pretty" };
-    let log_format = std::env::var("LOG_FORMAT")
-        .unwrap_or_else(|_| default_format.to_string())
-        .trim()
-        .to_ascii_lowercase();
-
-    let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| {
-        if is_production {
-            "clean_savar_api=info,tower_http=info".into()
-        } else {
-            "clean_savar_api=debug,tower_http=info".into()
-        }
-    });
-
-    if log_format == "json" {
-        tracing_subscriber::registry()
-            .with(env_filter)
-            .with(tracing_subscriber::fmt::layer().json())
-            .init();
-    } else {
-        tracing_subscriber::registry()
-            .with(env_filter)
-            .with(tracing_subscriber::fmt::layer())
-            .init();
-    }
-
-    let cfg = AppConfig::from_env().map_err(|err| {
-        tracing::error!(error = %err, "invalid API configuration");
-        std::io::Error::new(std::io::ErrorKind::InvalidInput, err)
+    let cfg = AppConfig::from_secrets_and_env(&secrets).map_err(|err| {
+        tracing::error!(error = %err, "invalid Shuttle API configuration");
+        shuttle_runtime::Error::Custom(anyhow::anyhow!(err))
     })?;
 
-    let pool = init_pool(&cfg.database_url).await?;
-    tokio::fs::create_dir_all(&cfg.upload_dir).await?;
+    let pool = init_pool(&cfg.database_url).await.map_err(|err| {
+        tracing::error!(error = %err, "database connection or migration failed");
+        shuttle_runtime::Error::Custom(err.into())
+    })?;
+
+    tokio::fs::create_dir_all(&cfg.upload_dir)
+        .await
+        .map_err(|err| {
+            tracing::error!(error = %err, path = %cfg.upload_dir, "failed to create upload directory");
+            shuttle_runtime::Error::Custom(err.into())
+        })?;
 
     let state = AppState::from_parts(pool, &cfg);
     let app = build_router(state, &cfg);
 
-    let listener = TcpListener::bind(&cfg.bind_addr).await?;
-    tracing::info!("Clean Savar unified API listening on {}", cfg.bind_addr);
+    tracing::info!(
+        project_id = %cfg.firebase_project_id,
+        "Clean Savar unified API initialized for Shuttle deployment"
+    );
 
-    axum::serve(
-        listener,
-        app.into_make_service_with_connect_info::<SocketAddr>(),
-    )
-    .with_graceful_shutdown(shutdown_signal())
-    .await?;
-
-    Ok(())
+    Ok(app.into())
 }

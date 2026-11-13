@@ -1,5 +1,6 @@
 import 'package:clean_savar_core/clean_savar_core.dart' as core;
 import 'package:flutter/foundation.dart';
+// ignore: deprecated_member_use
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -226,9 +227,11 @@ class CitizenProfileScreen extends ConsumerWidget {
         _CitizenOtpAuthCard(
           phone: citizen.citizenPhone,
           isAuthenticated: citizen.isAuthenticated,
+          isDemoPreview: citizen.isDemoPreview,
           otpPreview: citizen.otpPreview,
         ),
-        if (kDebugMode ||
+        if (citizen.isDemoPreview ||
+            kDebugMode ||
             citizen.authenticatedRole == 'collector' ||
             citizen.authenticatedRole == 'admin') ...[
           const SizedBox(height: 12),
@@ -285,11 +288,13 @@ class _CitizenOtpAuthCard extends ConsumerStatefulWidget {
   const _CitizenOtpAuthCard({
     required this.phone,
     required this.isAuthenticated,
+    required this.isDemoPreview,
     this.otpPreview,
   });
 
   final String phone;
   final bool isAuthenticated;
+  final bool isDemoPreview;
   final String? otpPreview;
 
   @override
@@ -411,11 +416,11 @@ class _CitizenOtpAuthCardState extends ConsumerState<_CitizenOtpAuthCard> {
                   ),
                 ),
               ),
-              if (widget.isAuthenticated)
+              if (widget.isAuthenticated || widget.isDemoPreview)
                 TextButton(
                   onPressed: () =>
                       ref.read(citizenStateProvider.notifier).logoutCitizenAuth(),
-                  child: const Text('লগআউট'),
+                  child: Text(widget.isAuthenticated ? 'লগআউট' : 'লগইন পেজ'),
                 ),
             ],
           ),

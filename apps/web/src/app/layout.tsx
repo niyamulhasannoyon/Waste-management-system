@@ -36,8 +36,15 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="bn" className={`${hindSiliguri.variable} ${inter.variable}`}>
-      <body className="flex min-h-dvh flex-col bg-[#F8FAFC] text-[#0F172A] antialiased">
+    <html
+      lang="bn"
+      className={`${hindSiliguri.variable} ${inter.variable}`}
+      suppressHydrationWarning
+    >
+      <body
+        className="flex min-h-dvh flex-col bg-[#F8FAFC] text-[#0F172A] antialiased"
+        suppressHydrationWarning
+      >
         <CleanSavarProvider>
           <a href="#main-content" className="cs-skip-link">
             মূল বিষয়বস্তুতে যান

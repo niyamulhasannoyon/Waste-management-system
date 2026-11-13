@@ -18,9 +18,10 @@ import {
 import { StatusBadge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { NativeDialog } from '@/components/ui/native-dialog';
+import { RelativeTimeBn } from '@/components/ui/relative-time';
 import { useCleanSavar } from '@/context/CleanSavarContext';
 import { ROLE_LABELS_BN } from '@/lib/savar-data';
-import { cn, formatRelativeTimeBn, toBanglaDigits } from '@/lib/utils';
+import { cn, toBanglaDigits } from '@/lib/utils';
 
 const NAV_ITEMS = [
   { href: '/', label: 'হোম' },
@@ -371,7 +372,7 @@ export function SiteHeader() {
                     <p className="text-sm font-semibold text-[#0F172A]">{n.title_bn}</p>
                     <p className="text-xs text-[#334155]">{n.body_bn}</p>
                     <p className="text-[11px] text-[#64748B]">
-                      {formatRelativeTimeBn(n.created_at)}
+                      <RelativeTimeBn isoDate={n.created_at} />
                     </p>
                   </div>
                   {!n.is_read ? (

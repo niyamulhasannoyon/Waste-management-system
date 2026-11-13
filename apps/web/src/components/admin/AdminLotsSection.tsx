@@ -5,10 +5,11 @@ import { Loader2, Plus, Recycle } from 'lucide-react';
 import { StatusBadge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { FormField } from '@/components/ui/form-field';
+import { RelativeTimeBn } from '@/components/ui/relative-time';
 import { ApiError, createRecyclableLot } from '@/lib/api-client';
 import { LOT_STATUS_META, MATERIAL_LABELS, SAVAR_WARDS_SEED } from '@/lib/savar-data';
 import type { MaterialType, RecyclableLotRecord, WardSummary } from '@/lib/types';
-import { formatRelativeTimeBn, toBanglaDigits } from '@/lib/utils';
+import { toBanglaDigits } from '@/lib/utils';
 
 interface AdminLotsSectionProps {
   lots: RecyclableLotRecord[];
@@ -177,7 +178,7 @@ export function AdminLotsSection({ lots, wards, onCreated }: AdminLotsSectionPro
                       <td data-label="কোড">
                         <span className="font-metric font-bold">{lot.lot_code}</span>
                         <span className="block text-[11px] text-[#475569]">
-                          {formatRelativeTimeBn(lot.created_at)}
+                          <RelativeTimeBn isoDate={lot.created_at} />
                         </span>
                       </td>
                       <td data-label="উপাদান ও ওজন">

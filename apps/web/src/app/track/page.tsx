@@ -33,8 +33,8 @@ import type {
   PickupRequestRecord,
   TrackedResult,
 } from '@/lib/types';
+import { RelativeTimeBn } from '@/components/ui/relative-time';
 import {
-  formatRelativeTimeBn,
   normalizeBdPhone,
   resolveMediaUrl,
   toBanglaDigits,
@@ -391,7 +391,7 @@ function TrackPageContent() {
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <span className="text-sm font-bold text-[#0F172A]">{ev.note_bn}</span>
                     <span className="text-xs text-[#475569]">
-                      {formatRelativeTimeBn(ev.created_at)}
+                      <RelativeTimeBn isoDate={ev.created_at} />
                     </span>
                   </div>
                   <p className="text-xs text-[#475569]">

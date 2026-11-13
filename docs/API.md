@@ -22,7 +22,8 @@ All endpoints are served under `/api/v1` (default local base URL: `http://localh
 | `GET /health` | Public | Liveness & PostgreSQL connectivity check |
 | `GET /openapi.json` | Public | Generated OpenAPI 3.1 JSON schema specification |
 | `POST /auth/otp-login` | Public | Request 6-digit Phone OTP challenge (cooldown + IP/phone rate limit) |
-| `POST /auth/otp-verify` | Public | Verify OTP and issue session Bearer token + profile |
+| `POST /auth/otp-verify` | Public | Verify SMS OTP or Firebase `id_token` and issue session Bearer token + profile |
+| `POST /auth/firebase-login` | Public | Verify Firebase client `idToken` via RS256/JWKS, extract phone number, upsert user, and issue session Bearer token |
 | `GET /auth/me` | Authenticated | Return active user & collector/partner metadata |
 | `POST /auth/logout` | Authenticated | Revoke current Bearer session token |
 | `POST /auth/erase` | Authenticated (non-admin) | Anonymize user PII & linked pickups/reports and revoke sessions |

@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+// ignore: deprecated_member_use
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -17,7 +18,11 @@ class RoleSwitcherBanner extends ConsumerWidget {
     final authenticatedRole = ref.watch(
       citizenStateProvider.select((s) => s.authenticatedRole),
     );
-    final canSwitchToCollector = kDebugMode ||
+    final isDemoPreview = ref.watch(
+      citizenStateProvider.select((s) => s.isDemoPreview),
+    );
+    final canSwitchToCollector = isDemoPreview ||
+        kDebugMode ||
         authenticatedRole == 'collector' ||
         authenticatedRole == 'admin';
 
@@ -70,7 +75,11 @@ class RoleSwitcherBanner extends ConsumerWidget {
                       ),
                     ),
                     Text(
-                      canSwitchToCollector ? 'মোড পরিবর্তন করুন' : 'নাগরিক সেবা',
+                      isDemoPreview
+                          ? 'ডেমো প্রিভিউ • মোড পরিবর্তন করুন'
+                          : (canSwitchToCollector
+                              ? 'মোড পরিবর্তন করুন'
+                              : 'নাগরিক সেবা'),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(

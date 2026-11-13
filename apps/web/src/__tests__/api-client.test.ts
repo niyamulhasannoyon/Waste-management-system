@@ -4,12 +4,15 @@ import {
   claimRecyclableLot,
   clearStoredSession,
   createPickup,
+  fetchNearbyWorkers,
   fetchPickups,
   fetchWards,
+  markNotificationRead,
   readStoredSession,
   syncCollectorOperations,
   uploadDumpPhoto,
   verifyOtp,
+  loginWithFirebaseToken,
   writeStoredSession,
 } from '@/lib/api-client';
 import type { AuthSession } from '@/lib/types';
@@ -276,5 +279,87 @@ describe('Unified Clean Savar API Client', () => {
       status: 413,
     });
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('unwraps { vehicles } from /workers/nearby NearbyVehiclesResponse', async () => {
+    writeStoredSession(mockSession('partner'));
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          target_lat: 23.8492,
+          target_lng: 90.2546,
+          radius_meters: 5000,
+          count: 1,
+          vehicles: [
+            {
+              id: '11111111-1111-4111-8111-111111111101',
+              code: 'SV-VAN-01',
+              vehicle_type: 'rickshaw_van',
+              driver_name_bn: 'মো. রফিকুল ইসলাম',
+              driver_phone: '01712-448910',
+              ward_id: 3,
+              ward_name_bn: 'ওয়ার্ড ০৩',
+              lat: 23.8492,
+              lng: 90.2546,
+              status: 'available',
+              distance_meters: 120,
+              last_ping_at: '2026-11-12T02:00:00.000Z',
+            },
+          ],
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const workers = await fetchNearbyWorkers(23.8492, 90.2546);
+    expect(workers).toHaveLength(1);
+    expect(workers[0]?.code).toBe('SV-VAN-01');
+  });
+
+  it('handles 204 No Content from markNotificationRead without crashing', async () => {
+    writeStoredSession(mockSession('citizen'));
+    const fetchMock = vi.fn().mockResolvedValueOnce(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const res = await markNotificationRead('55555555-5555-4555-8555-555555555501');
+    expect(res).toBeUndefined();
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toContain('/notifications/55555555-5555-4555-8555-555555555501/read');
+    expect(init.method).toBe('PATCH');
+  });
+
+  it('posts Firebase idToken to /auth/firebase-login and persists AuthSession', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          access_token: 'firebase-bearer-abc-123',
+          token_type: 'Bearer',
+          expires_in_seconds: 604800,
+          profile: mockSession('citizen').profile,
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const session = await loginWithFirebaseToken({
+      idToken: 'firebase-client-jwt-token-xyz',
+      fullName: 'নতুন নাগরিক',
+      wardId: 3,
+      role: 'citizen',
+    });
+
+    expect(session.accessToken).toBe('firebase-bearer-abc-123');
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toContain('/auth/firebase-login');
+    expect(init.method).toBe('POST');
+    expect(JSON.parse(init.body as string)).toEqual({
+      id_token: 'firebase-client-jwt-token-xyz',
+      full_name: 'নতুন নাগরিক',
+      ward_id: 3,
+      role: 'citizen',
+    });
+    expect(readStoredSession()?.accessToken).toBe('firebase-bearer-abc-123');
   });
 });

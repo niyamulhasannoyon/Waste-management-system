@@ -14,9 +14,10 @@ import {
 import { SavarWardMap } from '@/components/savar-ward-map';
 import { StatusBadge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { RelativeTimeBn } from '@/components/ui/relative-time';
 import { useCleanSavar } from '@/context/CleanSavarContext';
 import { REPORT_STATUS_META } from '@/lib/savar-data';
-import { formatRelativeTimeBn, toBanglaDigits } from '@/lib/utils';
+import { toBanglaDigits } from '@/lib/utils';
 
 export function HeroSection() {
   const router = useRouter();
@@ -222,7 +223,9 @@ export function HeroSection() {
                               {spot.ward_name_bn}
                             </span>
                             <span className="font-metric">· {spot.tracking_code}</span>
-                            <span>· {formatRelativeTimeBn(spot.created_at)}</span>
+                            <span>
+                              · <RelativeTimeBn isoDate={spot.created_at} />
+                            </span>
                           </p>
                         </div>
                         <StatusBadge tone={meta.tone}>{meta.label}</StatusBadge>

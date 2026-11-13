@@ -9,12 +9,13 @@ environment:
 dependencies:
   clean_savar_core:
     path: ../../packages/clean_savar_core
+  firebase_core: ^5.1.0
+  firebase_auth: ^7.0.1
   flutter:
     sdk: flutter
   flutter_riverpod: ^2.6.1
   geolocator: ^13.0.2
   google_fonts: ^6.2.1
-  http: ^1.3.0
   image_picker: ^1.1.2
   mobile_scanner: ^6.0.6
   shared_preferences: ^2.3.5

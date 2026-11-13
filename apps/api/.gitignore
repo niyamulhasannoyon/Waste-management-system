@@ -1,3 +1,10 @@
 /target
 /uploads
 .env
+*firebase-adminsdk*.json
+*adminsdk*.json
+serviceAccountKey.json
+*-service-account*.json
+Secrets.toml
+Secrets.*.toml
+Secrets.dev.toml

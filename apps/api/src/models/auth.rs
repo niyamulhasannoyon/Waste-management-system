@@ -45,13 +45,39 @@ pub struct OtpLoginResponse {
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct OtpVerifyRequest {
-    pub phone: String,
-    pub otp: String,
+    #[serde(default)]
+    pub phone: Option<String>,
+    #[serde(default)]
+    pub otp: Option<String>,
+    #[serde(default, alias = "idToken")]
+    pub id_token: Option<String>,
+    #[serde(default)]
+    pub full_name: Option<String>,
+    #[serde(default)]
+    pub ward_id: Option<i16>,
+    #[serde(default)]
+    pub role: Option<String>,
 }
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct PhoneLoginRequest {
+    #[serde(alias = "idToken")]
+    pub id_token: String,
+    #[serde(default)]
+    pub full_name: Option<String>,
+    #[serde(default)]
+    pub ward_id: Option<i16>,
+    #[serde(default)]
+    pub role: Option<String>,
+}
+
+pub type FirebaseLoginRequest = PhoneLoginRequest;
 
 #[derive(Debug, Serialize, ToSchema)]
 pub struct OtpVerifyResponse {
     pub access_token: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub token: Option<String>,
     #[schema(value_type = String)]
     pub token_type: &'static str,
     pub expires_in_seconds: i64,

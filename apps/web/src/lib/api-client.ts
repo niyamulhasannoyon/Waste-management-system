@@ -486,6 +486,30 @@ export async function verifyOtp(input: {
   return session;
 }
 
+export async function loginWithFirebaseToken(input: {
+  idToken: string;
+  fullName?: string;
+  wardId?: number;
+  role?: Extract<UserRole, 'citizen' | 'collector'>;
+}): Promise<AuthSession> {
+  const res = await fetchJson<OtpVerifyResponse>('/auth/firebase-login', {
+    method: 'POST',
+    body: JSON.stringify({
+      id_token: input.idToken,
+      full_name: input.fullName,
+      ward_id: input.wardId,
+      role: input.role,
+    }),
+  });
+  const session: AuthSession = {
+    accessToken: res.access_token,
+    expiresAtIso: new Date(Date.now() + res.expires_in_seconds * 1000).toISOString(),
+    profile: res.profile,
+  };
+  writeStoredSession(session);
+  return session;
+}
+
 export async function fetchMe(): Promise<AuthenticatedProfile> {
   return fetchJson<AuthenticatedProfile>('/auth/me', { auth: true });
 }

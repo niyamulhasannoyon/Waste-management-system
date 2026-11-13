@@ -209,6 +209,33 @@ paths:
           description: Authenticated session returned
         "401":
           description: Invalid or expired OTP
+  /auth/firebase-login:
+    post:
+      summary: Verify Firebase ID token and establish session
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - idToken
+              properties:
+                idToken:
+                  type: string
+                full_name:
+                  type: string
+                ward_id:
+                  type: integer
+                role:
+                  type: string
+      responses:
+        "200":
+          description: Authenticated session returned
+        "401":
+          description: Invalid or expired Firebase token
+        "429":
+          description: Rate limit exceeded
   /auth/me:
     get:
       summary: Fetch authenticated user profile

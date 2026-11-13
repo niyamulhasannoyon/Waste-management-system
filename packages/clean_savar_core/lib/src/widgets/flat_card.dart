@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/widgets.dart';
 import '../theme/app_theme.dart';
 
 /// Flat crisp card with 1px Slate-200 border and zero elevation/shadow overdraw.

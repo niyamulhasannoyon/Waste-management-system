@@ -1,7 +1,9 @@
 import React from 'react';
+import { renderToString } from 'react-dom/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { OtpAuthPanel } from '@/components/OtpAuthPanel';
+import { RelativeTimeBn } from '@/components/ui/relative-time';
 import PickupPage from '@/app/pickup/page';
 import PartnerPage from '@/app/partner/page';
 import { ANALYTICS_SEED, LOTS_SEED, SAVAR_WARDS_SEED } from '@/lib/savar-data';
@@ -247,5 +249,39 @@ describe('Clean Savar interactive web workflows', () => {
         expect.stringContaining('CS-LOT-00401'),
       );
     });
+  });
+
+  it('sends role: citizen when signing in with a collector phone so otp-login does not 403', async () => {
+    mockRequestOtp.mockResolvedValueOnce({
+      phone: '01712-448910',
+      expires_in_seconds: 300,
+      message: 'OTP challenge generated.',
+      message_bn: 'OTP পাঠানো হয়েছে',
+      otp_preview: '654321',
+    });
+
+    render(<OtpAuthPanel />);
+    const phoneInput = screen.getByLabelText(/মোবাইল নম্বর/);
+    fireEvent.change(phoneInput, { target: { value: '01712448910' } });
+    fireEvent.click(screen.getByRole('button', { name: 'মোবাইল OTP পাঠান' }));
+
+    await waitFor(() => {
+      expect(mockRequestOtp).toHaveBeenCalledWith(
+        expect.objectContaining({
+          phone: '01712-448910',
+          role: 'citizen',
+        }),
+      );
+    });
+  });
+
+  it('renders deterministic Dhaka time during SSR and switches to relative time on client mount', () => {
+    const ssrHtml = renderToString(<RelativeTimeBn isoDate="2026-11-12T01:42:00.000Z" />);
+    expect(ssrHtml).toContain('১২/১১, ০৭:৪২');
+
+    render(<RelativeTimeBn isoDate="2026-11-12T01:42:00.000Z" />);
+    const timeEl = screen.getByText(/আগে|এইমাত্র/);
+    expect(timeEl.tagName.toLowerCase()).toBe('time');
+    expect(timeEl).toHaveAttribute('dateTime', '2026-11-12T01:42:00.000Z');
   });
 });

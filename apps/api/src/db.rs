@@ -22,6 +22,7 @@ pub struct AppState {
     pub nearby_default_radius_meters: f64,
     pub admin_bootstrap_phones: Vec<String>,
     pub rate_limiter: RateLimiter,
+    pub firebase_verifier: crate::firebase_auth::FirebaseVerifier,
 }
 
 impl AppState {
@@ -46,6 +47,9 @@ impl AppState {
             nearby_default_radius_meters: cfg.nearby_default_radius_meters,
             admin_bootstrap_phones: normalized_admins,
             rate_limiter: RateLimiter::default(),
+            firebase_verifier: crate::firebase_auth::FirebaseVerifier::from_project_id_or_env(
+                Some(&cfg.firebase_project_id),
+            ),
         }
     }
 }

@@ -5,15 +5,21 @@ edition = "2021"
 description = "Unified, hardened Geospatial REST API for Clean Savar (ক্লিন সাভার) built with Axum, SQLx, and PostGIS"
 
 [dependencies]
+anyhow = "1"
 axum = { version = "0.7", features = ["multipart"] }
+base64 = "0.22"
 chrono = { version = "0.4", features = ["serde"] }
 dotenvy = "0.15"
 hmac = "0.12"
 image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp"] }
+jsonwebtoken = { version = "9", default-features = false }
 rand = "0.8"
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sha2 = "0.10"
+shuttle-axum = { version = "0.57.0", default-features = false, features = ["axum-0-7"] }
+shuttle-runtime = "0.57.0"
 sqlx = { version = "0.8", features = ["runtime-tokio", "tls-rustls", "postgres", "uuid", "chrono", "json"] }
 subtle = "2.6"
 thiserror = "2"

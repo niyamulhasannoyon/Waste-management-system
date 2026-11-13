@@ -1,5 +1,5 @@
 import 'dart:convert';
-import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
 
@@ -150,16 +150,20 @@ class CleanSavarApiClient {
     );
   }
 
-  Future<String> uploadPhoto(File imageFile) async {
-    final byteCount = await imageFile.length();
-    if (byteCount > maxUploadBytes) {
+  Future<String> uploadPhotoBytes(
+    Uint8List bytes, {
+    String filename = 'photo.jpg',
+  }) async {
+    if (bytes.length > maxUploadBytes) {
       throw const CleanSavarApiException(
         413,
         'ছবির আকার সর্বোচ্চ ৫ মেগাবাইট হতে পারবে।',
       );
     }
     final req = http.MultipartRequest('POST', Uri.parse('$baseUrl/uploads/photo'))
-      ..files.add(await http.MultipartFile.fromPath('photo', imageFile.path));
+      ..files.add(
+        http.MultipartFile.fromBytes('photo', bytes, filename: filename),
+      );
     if (_authToken != null) {
       req.headers['Authorization'] = 'Bearer $_authToken';
     }
@@ -386,6 +390,40 @@ class CleanSavarApiClient {
           body: jsonEncode({
             'phone': phone,
             'otp': otp,
+          }),
+        )
+        .timeout(_timeout);
+    if (res.statusCode == 200) {
+      final result = OtpAuthResult.fromJson(
+        jsonDecode(res.body) as Map<String, dynamic>,
+      );
+      if (result.token.isNotEmpty) {
+        setAuthToken(result.token);
+      }
+      return result;
+    }
+    throw CleanSavarApiException(
+      res.statusCode,
+      _extractErrorMessage(res.body, res.statusCode),
+    );
+  }
+
+  Future<OtpAuthResult> loginWithFirebaseToken({
+    required String idToken,
+    String? fullName,
+    int? wardId,
+    String? role,
+  }) async {
+    final res = await _client
+        .post(
+          Uri.parse('$baseUrl/auth/firebase-login'),
+          headers: _headers(),
+          body: jsonEncode({
+            'id_token': idToken,
+            if (fullName != null && fullName.trim().isNotEmpty)
+              'full_name': fullName.trim(),
+            if (wardId != null) 'ward_id': wardId,
+            if (role != null && role.trim().isNotEmpty) 'role': role.trim(),
           }),
         )
         .timeout(_timeout);

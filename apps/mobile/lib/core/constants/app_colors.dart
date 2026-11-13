@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'dart:ui' show Color;
 
 /// Unified flat color palette for Clean Savar (ক্লিন সাভার).
 /// Optimized for budget Android screens and bright outdoor sunlight legibility.

@@ -115,4 +115,22 @@ class RouteStop {
       taskKind: 'pickup',
     );
   }
+
+  factory RouteStop.fromCoreDumpReport(core.DumpReportItem item) {
+    final completed = item.status == 'cleared';
+    return RouteStop(
+      id: item.id,
+      houseNumber: item.trackingCode,
+      roadName: item.landmark.isNotEmpty ? item.landmark : item.titleBn,
+      areaLabel: item.wardNameBn,
+      residentName: item.titleBn,
+      residentPhone: item.reporterPhone,
+      expectedQrCode: item.trackingCode,
+      qrVerified: completed,
+      isCompleted: completed,
+      completedAtLabel: completed ? 'পরিষ্কার সম্পন্ন' : null,
+      syncedToServer: true,
+      taskKind: 'dump_report',
+    );
+  }
 }

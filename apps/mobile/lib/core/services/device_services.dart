@@ -1,6 +1,5 @@
-import 'dart:io';
-
 import 'package:clean_savar_core/clean_savar_core.dart' as core;
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
@@ -9,11 +8,13 @@ import 'package:image_picker/image_picker.dart';
 class CapturedPhoto {
   const CapturedPhoto({
     this.path,
+    this.bytes,
     required this.metaLabel,
     this.sizeBytes,
   });
 
   final String? path;
+  final Uint8List? bytes;
   final String metaLabel;
   final int? sizeBytes;
 }
@@ -51,14 +52,12 @@ class ImagePickerCameraService implements DeviceCameraService {
       );
       if (file == null) return null;
 
-      int sizeBytes = 0;
-      try {
-        sizeBytes = await File(file.path).length();
-      } catch (_) {}
-
+      final bytes = await file.readAsBytes();
+      final sizeBytes = bytes.length;
       final kb = sizeBytes > 0 ? (sizeBytes / 1024).round() : 220;
       return CapturedPhoto(
-        path: file.path,
+        path: kIsWeb ? null : file.path,
+        bytes: bytes,
         metaLabel: '১২৮০px • $kb KB JPEG',
         sizeBytes: sizeBytes > 0 ? sizeBytes : null,
       );
@@ -107,9 +106,15 @@ class GeolocatorLocationService implements DeviceLocationService {
   }
 }
 
-final apiClientProvider = Provider<core.CleanSavarApiClient>(
-  (ref) => core.CleanSavarApiClient(),
-);
+final apiClientProvider = Provider<core.CleanSavarApiClient>((ref) {
+  const definedBaseUrl = String.fromEnvironment('API_BASE_URL');
+  final resolvedUrl = definedBaseUrl.isNotEmpty
+      ? definedBaseUrl
+      : (kIsWeb
+          ? 'http://localhost:8080/api/v1'
+          : 'http://10.0.2.2:8080/api/v1');
+  return core.CleanSavarApiClient(baseUrl: resolvedUrl);
+});
 
 final deviceCameraServiceProvider = Provider<DeviceCameraService>(
   (ref) => ImagePickerCameraService(),

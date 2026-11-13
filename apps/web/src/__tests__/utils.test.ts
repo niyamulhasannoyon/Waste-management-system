@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { formatDhakaDateTimeBn } from '@/components/ui/relative-time';
+import { HOTSPOTS_SEED, LOTS_SEED, PICKUPS_SEED, VEHICLES_SEED } from '@/lib/savar-data';
 import {
   buildSafeCsv,
   isSafeImageUrl,
@@ -58,5 +60,19 @@ describe('CSV formula injection neutralization', () => {
     );
     expect(csv.startsWith('\uFEFF')).toBe(true);
     expect(csv).toContain('"\'=HYPERLINK(""http://evil"")"');
+  });
+});
+
+describe('SSR-safe Dhaka formatting and deterministic seed timestamps', () => {
+  it('formats UTC+6 Dhaka timestamps identically regardless of host timezone', () => {
+    expect(formatDhakaDateTimeBn('2026-11-12T01:42:00.000Z')).toBe('১২/১১, ০৭:৪২');
+    expect(formatDhakaDateTimeBn('invalid-iso')).toBe('সময় অজানা');
+  });
+
+  it('uses fixed deterministic ISO timestamps in seed datasets (no Date.now drift)', () => {
+    expect(PICKUPS_SEED[0]?.created_at).toBe('2026-11-12T01:42:00.000Z');
+    expect(HOTSPOTS_SEED[0]?.created_at).toBe('2026-11-12T00:45:00.000Z');
+    expect(VEHICLES_SEED[0]?.last_ping_at).toBe('2026-11-12T01:56:00.000Z');
+    expect(LOTS_SEED[0]?.created_at).toBe('2026-11-11T23:00:00.000Z');
   });
 });

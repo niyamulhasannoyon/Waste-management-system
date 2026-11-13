@@ -312,6 +312,13 @@ export const SAVAR_WARDS_SEED: WardSummary[] = [
   },
 ];
 
+// Fixed anchor keeps seeded timestamps identical across SSR and browser hydration.
+const SEED_ANCHOR_MS = Date.UTC(2026, 10, 12, 2, 0, 0);
+
+function seedMinutesAgoIso(minutesAgo: number): string {
+  return new Date(SEED_ANCHOR_MS - minutesAgo * 60_000).toISOString();
+}
+
 export const PICKUPS_SEED: PickupRequestRecord[] = [
   {
     id: '22222222-2222-4222-8222-222222222201',
@@ -334,8 +341,8 @@ export const PICKUPS_SEED: PickupRequestRecord[] = [
     assigned_vehicle_id: '11111111-1111-4111-8111-111111111102',
     assigned_vehicle_code: 'SV-CMP-01',
     notes: '',
-    created_at: new Date(Date.now() - 18 * 60_000).toISOString(),
-    updated_at: new Date(Date.now() - 10 * 60_000).toISOString(),
+    created_at: seedMinutesAgoIso(18),
+    updated_at: seedMinutesAgoIso(10),
   },
   {
     id: '22222222-2222-4222-8222-222222222202',
@@ -358,8 +365,8 @@ export const PICKUPS_SEED: PickupRequestRecord[] = [
     assigned_vehicle_id: null,
     assigned_vehicle_code: null,
     notes: '',
-    created_at: new Date(Date.now() - 48 * 60_000).toISOString(),
-    updated_at: new Date(Date.now() - 48 * 60_000).toISOString(),
+    created_at: seedMinutesAgoIso(48),
+    updated_at: seedMinutesAgoIso(48),
   },
 ];
 
@@ -377,7 +384,7 @@ export const HOTSPOTS_SEED: PublicHotspotRecord[] = [
     lng: 90.2546,
     duplicate_count: 2,
     cleared_at: null,
-    created_at: new Date(Date.now() - 75 * 60_000).toISOString(),
+    created_at: seedMinutesAgoIso(75),
   },
   {
     id: '33333333-3333-4333-8333-333333333302',
@@ -392,7 +399,7 @@ export const HOTSPOTS_SEED: PublicHotspotRecord[] = [
     lng: 90.2528,
     duplicate_count: 1,
     cleared_at: null,
-    created_at: new Date(Date.now() - 135 * 60_000).toISOString(),
+    created_at: seedMinutesAgoIso(135),
   },
 ];
 
@@ -422,7 +429,7 @@ export const VEHICLES_SEED: CollectorVehicleRecord[] = [
     lng: 90.2549,
     status: 'available',
     distance_meters: null,
-    last_ping_at: new Date(Date.now() - 4 * 60_000).toISOString(),
+    last_ping_at: seedMinutesAgoIso(4),
   },
   {
     id: '11111111-1111-4111-8111-111111111102',
@@ -436,7 +443,7 @@ export const VEHICLES_SEED: CollectorVehicleRecord[] = [
     lng: 90.2538,
     status: 'en_route',
     distance_meters: null,
-    last_ping_at: new Date(Date.now() - 2 * 60_000).toISOString(),
+    last_ping_at: seedMinutesAgoIso(2),
   },
   {
     id: '11111111-1111-4111-8111-111111111103',
@@ -450,7 +457,7 @@ export const VEHICLES_SEED: CollectorVehicleRecord[] = [
     lng: 90.2575,
     status: 'available',
     distance_meters: null,
-    last_ping_at: new Date(Date.now() - 6 * 60_000).toISOString(),
+    last_ping_at: seedMinutesAgoIso(6),
   },
   {
     id: '11111111-1111-4111-8111-111111111104',
@@ -464,7 +471,7 @@ export const VEHICLES_SEED: CollectorVehicleRecord[] = [
     lng: 90.2681,
     status: 'available',
     distance_meters: null,
-    last_ping_at: new Date(Date.now() - 9 * 60_000).toISOString(),
+    last_ping_at: seedMinutesAgoIso(9),
   },
 ];
 
@@ -479,7 +486,7 @@ export const LOTS_SEED: RecyclableLotRecord[] = [
     pickup_hub_bn: 'ব্যাংক টাউন সেকেন্ডারি ট্রান্সফার স্টেশন',
     status: 'open',
     claimed_partner_name: null,
-    created_at: new Date(Date.now() - 180 * 60_000).toISOString(),
+    created_at: seedMinutesAgoIso(180),
   },
   {
     id: '44444444-4444-4444-8444-444444444402',
@@ -491,7 +498,7 @@ export const LOTS_SEED: RecyclableLotRecord[] = [
     pickup_hub_bn: 'থানা রোড রিসোর্স কালেকশন পয়েন্ট',
     status: 'claimed',
     claimed_partner_name: 'সবুজ রিসাইক্লিং সাভার',
-    created_at: new Date(Date.now() - 240 * 60_000).toISOString(),
+    created_at: seedMinutesAgoIso(240),
   },
   {
     id: '44444444-4444-4444-8444-444444444403',
@@ -503,7 +510,7 @@ export const LOTS_SEED: RecyclableLotRecord[] = [
     pickup_hub_bn: 'ব্যাংক কলোনি ওয়ার্ড হাব',
     status: 'open',
     claimed_partner_name: null,
-    created_at: new Date(Date.now() - 360 * 60_000).toISOString(),
+    created_at: seedMinutesAgoIso(360),
   },
 ];
 

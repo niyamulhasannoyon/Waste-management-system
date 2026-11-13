@@ -315,6 +315,7 @@ export interface DispatchAssignResponse {
   entity_id: string;
   assigned_vehicle_id?: string | null;
   assigned_vehicle_code?: string | null;
+  new_status: string;
   status?: string;
 }
 
