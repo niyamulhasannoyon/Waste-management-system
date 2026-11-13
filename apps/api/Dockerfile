@@ -4,7 +4,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends pkg-config libs
 COPY Cargo.toml ./
 COPY migrations ./migrations
 COPY src ./src
-RUN cargo build --release
+RUN cargo build --release --bin server
 
 FROM debian:bookworm-slim
 WORKDIR /app
@@ -16,7 +16,7 @@ RUN apt-get update \
     && mkdir -p /app/uploads \
     && chown -R clean_savar:clean_savar /app
 
-COPY --from=builder /app/target/release/clean-savar-api /usr/local/bin/clean-savar-api
+COPY --from=builder /app/target/release/server /usr/local/bin/clean-savar-api
 COPY migrations ./migrations
 
 USER clean_savar

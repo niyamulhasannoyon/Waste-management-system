@@ -89,7 +89,9 @@ impl AppConfig {
             .filter(|s| !s.is_empty())
             .unwrap_or_else(|| "clean-savar".to_string());
 
-        let bind_addr = lookup("API_BIND_ADDR").unwrap_or_else(|| "0.0.0.0:8000".to_string());
+        let bind_addr = lookup("API_BIND_ADDR")
+            .or_else(|| lookup("PORT").map(|p| format!("0.0.0.0:{p}")))
+            .unwrap_or_else(|| "0.0.0.0:8080".to_string());
         let upload_dir = lookup("UPLOAD_DIR").unwrap_or_else(|| "./uploads".to_string());
         let public_upload_base_url = lookup("PUBLIC_UPLOAD_BASE_URL")
             .unwrap_or_else(|| "http://localhost:8000/uploads".to_string());

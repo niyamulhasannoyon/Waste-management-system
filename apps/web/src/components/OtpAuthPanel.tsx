@@ -248,7 +248,7 @@ export function OtpAuthPanel({ onSuccess, titleId }: OtpAuthPanelProps) {
 
       {isOfflinePreview ? (
         <div className="rounded-md border border-[#FDE68A] bg-[#FFFBEB] px-3.5 py-2.5 text-xs text-[#92400E]">
-          দ্রষ্টব্য: এপিআই সার্ভার (localhost:8080) বন্ধ থাকলে OTP যাচাই সম্পন্ন হবে না। এপিআই চালু থাকলে প্রকৃত OTP চ্যালেঞ্জ সক্রিয় হবে।
+          দ্রষ্টব্য: এপিআই সার্ভার বন্ধ থাকলে OTP যাচাই সম্পন্ন হবে না। এপিআই চালু থাকলে প্রকৃত OTP চ্যালেঞ্জ সক্রিয় হবে।
         </div>
       ) : null}
 

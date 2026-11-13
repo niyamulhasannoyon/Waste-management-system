@@ -45,9 +45,31 @@ import type {
   WardSummary,
 } from './types';
 
-export const API_BASE = (
-  process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api/v1'
-).replace(/\/$/, '');
+export function getActiveApiBase(): string {
+  const configured = (
+    process.env.INTERNAL_API_URL ||
+    process.env.NEXT_PUBLIC_API_URL ||
+    ''
+  ).trim().replace(/\/$/, '');
+
+  if (typeof window !== 'undefined') {
+    const isLocalhost =
+      window.location.hostname === 'localhost' ||
+      window.location.hostname === '127.0.0.1';
+
+    // When deployed on production (e.g. clean-savar.vercel.app):
+    if (!isLocalhost) {
+      // If configured URL is empty or points to localhost, route through Next.js rewrite / reverse proxy
+      if (!configured || configured.includes('localhost') || configured.includes('127.0.0.1')) {
+        return '/api/v1';
+      }
+    }
+  }
+
+  return configured || 'http://localhost:8080/api/v1';
+}
+
+export const API_BASE = getActiveApiBase();
 
 export const SESSION_STORAGE_KEY = 'clean_savar_auth_session_v1';
 const REQUEST_TIMEOUT_MS = 12000;
@@ -174,8 +196,9 @@ async function fetchJson<T>(
   const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
   let res: Response;
+  const base = getActiveApiBase();
   try {
-    res = await fetch(`${API_BASE}${path}`, {
+    res = await fetch(`${base}${path}`, {
       ...rest,
       signal: controller.signal,
       headers,

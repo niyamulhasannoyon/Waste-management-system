@@ -6,6 +6,7 @@ export default function nextConfig(phase: string): NextConfig {
   const remotePatterns: NonNullable<NextConfig['images']>['remotePatterns'] = [
     { protocol: 'http', hostname: 'localhost' },
     { protocol: 'http', hostname: '127.0.0.1' },
+    { protocol: 'https', hostname: 'clean-savar.shuttle.app' },
   ];
 
   const configuredApi = process.env.NEXT_PUBLIC_API_URL;
@@ -47,6 +48,25 @@ export default function nextConfig(phase: string): NextConfig {
               value: 'camera=(self), geolocation=(self), microphone=()',
             },
           ],
+        },
+      ];
+    },
+    async rewrites() {
+      const apiTarget = (
+        process.env.INTERNAL_API_URL ||
+        process.env.NEXT_PUBLIC_API_URL ||
+        'https://clean-savar.shuttle.app/api/v1'
+      ).replace(/\/$/, '');
+      const uploadsBase = apiTarget.replace(/\/api\/v1\/?$/, '/uploads');
+
+      return [
+        {
+          source: '/api/v1/:path*',
+          destination: `${apiTarget}/:path*`,
+        },
+        {
+          source: '/uploads/:path*',
+          destination: `${uploadsBase}/:path*`,
         },
       ];
     },

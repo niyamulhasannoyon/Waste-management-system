@@ -6,7 +6,9 @@ export const runtime = 'nodejs';
 const API_BASE = (
   process.env.INTERNAL_API_URL ||
   process.env.NEXT_PUBLIC_API_URL ||
-  'http://localhost:8080/api/v1'
+  (process.env.NODE_ENV === 'production'
+    ? 'https://clean-savar.shuttle.app/api/v1'
+    : 'http://localhost:8080/api/v1')
 ).replace(/\/$/, '');
 
 export async function POST(request: Request) {

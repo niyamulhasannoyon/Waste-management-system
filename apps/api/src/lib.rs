@@ -18,7 +18,11 @@ use axum::{
     Router,
 };
 use std::net::{IpAddr, SocketAddr};
-use tower_http::{cors::CorsLayer, services::ServeDir, trace::TraceLayer};
+use tower_http::{
+    cors::{AllowOrigin, CorsLayer},
+    services::ServeDir,
+    trace::TraceLayer,
+};
 
 use crate::{config::AppConfig, db::AppState};
 
@@ -31,7 +35,23 @@ pub fn build_router(state: AppState, cfg: &AppConfig) -> Router {
         .collect();
 
     let cors = CorsLayer::new()
-        .allow_origin(origins)
+        .allow_origin(AllowOrigin::predicate(
+            move |origin: &HeaderValue, _parts: &axum::http::request::Parts| {
+                if origins.iter().any(|allowed| allowed == origin) {
+                    return true;
+                }
+                if let Ok(origin_str) = origin.to_str() {
+                    let origin_clean = origin_str.trim().trim_end_matches('/');
+                    if origin_clean == "https://clean-savar.vercel.app"
+                        || origin_clean.ends_with(".vercel.app")
+                        || origin_clean.ends_with(".shuttle.app")
+                    {
+                        return true;
+                    }
+                }
+                false
+            },
+        ))
         .allow_methods([Method::GET, Method::POST, Method::PATCH, Method::OPTIONS])
         .allow_headers([
             AUTHORIZATION,
