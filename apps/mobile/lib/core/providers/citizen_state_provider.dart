@@ -376,7 +376,8 @@ class CitizenStateNotifier extends Notifier<CitizenState> {
   }
 
   Future<core.OtpAuthResult> loginWithFirebaseToken({
-    required String idToken,
+    String? idToken,
+    String? accessToken,
     String? phone,
     AppRole expectedRole = AppRole.citizen,
     String? fullName,
@@ -385,6 +386,7 @@ class CitizenStateNotifier extends Notifier<CitizenState> {
     final targetPhone = (phone ?? state.citizenPhone).trim();
     final auth = await _api.loginWithFirebaseToken(
       idToken: idToken,
+      accessToken: accessToken,
       phone: targetPhone,
       fullName: fullName ??
           (state.citizenFullName.isNotEmpty ? state.citizenFullName : null),
@@ -431,7 +433,7 @@ class CitizenStateNotifier extends Notifier<CitizenState> {
       }
     }
     await _persist();
-    await refreshFromServer();
+    unawaited(refreshFromServer());
     return auth;
   }
 

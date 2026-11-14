@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:clean_savar_core/clean_savar_core.dart' as core;
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
@@ -111,38 +113,35 @@ class _AuthLoginScreenState extends ConsumerState<AuthLoginScreen> {
 
     try {
       String? idToken;
+      String? accessToken;
       String? googleDisplayName;
 
-      // 1. Native Android Google Sign-In with configured Client ID
+      // 1. Native Android Google Sign-In with configured Server Client ID
       try {
-        await GoogleSignIn.instance.initialize(
-          serverClientId: AppBuildConfig.googleServerClientId,
-          clientId: AppBuildConfig.googleAndroidClientId,
-        );
-
-        final GoogleSignInAccount googleAccount =
-            await GoogleSignIn.instance.authenticate();
+        final GoogleSignInAccount googleAccount = await GoogleSignIn.instance
+            .authenticate()
+            .timeout(const Duration(seconds: 40));
 
         googleDisplayName = googleAccount.displayName;
         final GoogleSignInAuthentication auth = googleAccount.authentication;
         final rawGoogleIdToken = auth.idToken;
 
         if (rawGoogleIdToken != null && rawGoogleIdToken.isNotEmpty) {
+          idToken = rawGoogleIdToken;
+        } else {
+          // If ID token was not returned directly, obtain access token via authorization client
           try {
-            final credential = GoogleAuthProvider.credential(
-              idToken: rawGoogleIdToken,
-            );
-            final userCred =
-                await FirebaseAuth.instance.signInWithCredential(credential);
-            final user = userCred.user;
-            if (user != null) {
-              idToken = await user.getIdToken();
-              googleDisplayName ??= user.displayName;
+            final authClient = googleAccount.authorizationClient;
+            final tokens = await authClient.authorizationForScopes([
+              'openid',
+              'email',
+              'profile',
+            ]).timeout(const Duration(seconds: 15));
+            if (tokens != null && tokens.accessToken.isNotEmpty) {
+              accessToken = tokens.accessToken;
             }
-          } catch (fbErr) {
-            debugPrint('Firebase signInWithCredential note: $fbErr');
-            // If Firebase exchange fails, pass the verified Google ID token
-            idToken = rawGoogleIdToken;
+          } catch (scopeErr) {
+            debugPrint('Google authorizationForScopes note: $scopeErr');
           }
         }
       } on GoogleSignInException catch (gErr) {
@@ -158,31 +157,17 @@ class _AuthLoginScreenState extends ConsumerState<AuthLoginScreen> {
         debugPrint('GoogleSignIn native attempt note: $nativeErr');
       }
 
-      // 2. Fallback to Firebase signInWithProvider if native flow did not complete
-      if (idToken == null || idToken.isEmpty) {
-        try {
-          final googleProvider = GoogleAuthProvider();
-          googleProvider.setCustomParameters({'prompt': 'select_account'});
-          final userCred =
-              await FirebaseAuth.instance.signInWithProvider(googleProvider);
-          final user = userCred.user;
-          if (user != null) {
-            idToken = await user.getIdToken();
-            googleDisplayName ??= user.displayName;
-          }
-        } catch (authErr) {
-          debugPrint('Firebase Google Sign-In note: $authErr');
-          // Support offline / mock token fallback in debug or demo mode or widget tests
-          if (kDebugMode || AppBuildConfig.enableDemoMode) {
-            idToken = 'dev_token:$cleanDigits:google-user';
-          } else {
-            rethrow;
-          }
+      // 2. Fallback to demo token in debug/demo preview or return clean message if tokens unavailable
+      if ((idToken == null || idToken.isEmpty) &&
+          (accessToken == null || accessToken.isEmpty)) {
+        if (kDebugMode || AppBuildConfig.enableDemoMode) {
+          idToken = 'dev_token:$cleanDigits:google-user';
+        } else {
+          throw const core.CleanSavarApiException(
+            400,
+            'Google অ্যাকাউন্ট নির্বাচন করা যায়নি বা ডিভাইসে Google Play Services অনুপস্থিত। অনুগ্রহ করে প্লে সার্ভিস পরীক্ষা করে আবার চেষ্টা করুন।',
+          );
         }
-      }
-
-      if (idToken == null || idToken.isEmpty) {
-        idToken = 'dev_token:$cleanDigits:google-user';
       }
 
       final finalName = rawName.isNotEmpty
@@ -193,6 +178,7 @@ class _AuthLoginScreenState extends ConsumerState<AuthLoginScreen> {
 
       await notifier.loginWithFirebaseToken(
         idToken: idToken,
+        accessToken: accessToken,
         phone: rawPhone,
         expectedRole: _selectedRole,
         fullName: finalName,
@@ -203,6 +189,13 @@ class _AuthLoginScreenState extends ConsumerState<AuthLoginScreen> {
       setState(() {
         _isError = true;
         _statusMessage = e.message;
+      });
+    } on TimeoutException {
+      if (!mounted) return;
+      setState(() {
+        _isError = true;
+        _statusMessage =
+            'সার্ভার সংযোগে সময় বেশি লেগেছে। ইন্টারনেট সংযোগ পরীক্ষা করে আবার চেষ্টা করুন।';
       });
     } catch (e) {
       if (!mounted) return;

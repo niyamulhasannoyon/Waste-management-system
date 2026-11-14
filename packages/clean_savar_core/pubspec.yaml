@@ -1,6 +1,6 @@
 name: clean_savar_core
 description: Shared theme, Savar models, and lightweight HTTP client for Clean Savar Flutter apps.
-version: 1.2.0
+version: 1.2.1
 publish_to: none
 
 environment:

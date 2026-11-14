@@ -22,14 +22,15 @@ class _MockFirebaseApiClient extends core.CleanSavarApiClient {
 
   @override
   Future<core.OtpAuthResult> loginWithFirebaseToken({
-    required String idToken,
+    String? idToken,
+    String? accessToken,
     String? phone,
     String? fullName,
     int? wardId,
     String? role,
   }) async {
     firebaseTokenEndpointCalled = true;
-    lastIdTokenReceived = idToken;
+    lastIdTokenReceived = idToken ?? accessToken;
     lastExpectedRole = role;
 
     if (idToken == 'invalid_token') {
@@ -39,7 +40,7 @@ class _MockFirebaseApiClient extends core.CleanSavarApiClient {
       );
     }
 
-    if (role == 'collector' && idToken.contains('non_collector')) {
+    if (role == 'collector' && (idToken?.contains('non_collector') == true)) {
       return const core.OtpAuthResult(
         token: 'citizen_jwt_token',
         userId: 'cit-uuid-1',
@@ -317,6 +318,30 @@ void main() {
       // Ensure Google Sign-In button exists
       expect(find.byKey(const ValueKey('login_google_btn')), findsOneWidget);
       expect(find.text('Google দিয়ে সাইন-ইন করুন'), findsOneWidget);
+    });
+
+    testWidgets('Google sign-in button completes login and transitions to Citizen shell cleanly', (tester) async {
+      final mockApi = _MockFirebaseApiClient();
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            apiClientProvider.overrideWithValue(mockApi),
+            deviceCameraServiceProvider.overrideWithValue(_DummyCameraService()),
+            deviceLocationServiceProvider.overrideWithValue(_DummyLocationService()),
+            qrCameraScannerEnabledProvider.overrideWithValue(false),
+          ],
+          child: const CleanSavarApp(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final googleBtnFinder = find.byKey(const ValueKey('login_google_btn'));
+      await tester.ensureVisible(googleBtnFinder);
+      await tester.tap(googleBtnFinder);
+      await tester.pumpAndSettle();
+
+      expect(mockApi.firebaseTokenEndpointCalled, isTrue);
+      expect(find.textContaining('রাফি'), findsWidgets);
     });
   });
 }

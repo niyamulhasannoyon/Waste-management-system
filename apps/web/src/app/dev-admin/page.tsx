@@ -524,7 +524,7 @@ function DevAdminConsoleContent() {
                 </span>
               </div>
               <p className="text-xs text-slate-400 font-mono">
-                Savar Smart Municipal Operating System • v1.2.0-dev
+                Savar Smart Municipal Operating System • v1.2.1-dev
               </p>
             </div>
           </div>

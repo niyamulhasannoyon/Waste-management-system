@@ -411,26 +411,31 @@ class CleanSavarApiClient {
   }
 
   Future<OtpAuthResult> loginWithFirebaseToken({
-    required String idToken,
+    String? idToken,
+    String? accessToken,
     String? phone,
     String? fullName,
     int? wardId,
     String? role,
   }) async {
+    final payload = <String, dynamic>{
+      if (idToken != null && idToken.trim().isNotEmpty)
+        'id_token': idToken.trim(),
+      if (accessToken != null && accessToken.trim().isNotEmpty)
+        'access_token': accessToken.trim(),
+      if (phone != null && phone.trim().isNotEmpty) 'phone': phone.trim(),
+      if (fullName != null && fullName.trim().isNotEmpty)
+        'full_name': fullName.trim(),
+      if (wardId != null) 'ward_id': wardId,
+      if (role != null && role.trim().isNotEmpty) 'role': role.trim(),
+    };
     final res = await _client
         .post(
           Uri.parse('$baseUrl/auth/firebase-login'),
           headers: _headers(),
-          body: jsonEncode({
-            'id_token': idToken,
-            if (phone != null && phone.trim().isNotEmpty) 'phone': phone.trim(),
-            if (fullName != null && fullName.trim().isNotEmpty)
-              'full_name': fullName.trim(),
-            if (wardId != null) 'ward_id': wardId,
-            if (role != null && role.trim().isNotEmpty) 'role': role.trim(),
-          }),
+          body: jsonEncode(payload),
         )
-        .timeout(_timeout);
+        .timeout(const Duration(seconds: 40));
     if (res.statusCode == 200) {
       final result = OtpAuthResult.fromJson(
         jsonDecode(res.body) as Map<String, dynamic>,
