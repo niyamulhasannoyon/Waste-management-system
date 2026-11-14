@@ -1,11 +1,13 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import {
   Activity,
   ArrowRight,
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
   Database,
   Download,
   Flame,
@@ -139,6 +141,37 @@ function DevAdminConsoleContent() {
   const [adminApprovals, setAdminApprovals] = useState<ApprovedAdminRecord[]>(getApprovedAdminRecords());
   const [newAdminPhone, setNewAdminPhone] = useState('');
   const [newAdminName, setNewAdminName] = useState('');
+
+  // Horizontal Tab Navigation Slider Controls
+  const tabsContainerRef = useRef<HTMLDivElement>(null);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(true);
+
+  const checkScrollability = useCallback(() => {
+    const el = tabsContainerRef.current;
+    if (!el) return;
+    setCanScrollLeft(el.scrollLeft > 6);
+    setCanScrollRight(el.scrollLeft < el.scrollWidth - el.clientWidth - 6);
+  }, []);
+
+  useEffect(() => {
+    const el = tabsContainerRef.current;
+    if (!el) return;
+    checkScrollability();
+    el.addEventListener('scroll', checkScrollability, { passive: true });
+    window.addEventListener('resize', checkScrollability);
+    return () => {
+      el.removeEventListener('scroll', checkScrollability);
+      window.removeEventListener('resize', checkScrollability);
+    };
+  }, [checkScrollability]);
+
+  const scrollTabs = (direction: 'left' | 'right') => {
+    const el = tabsContainerRef.current;
+    if (!el) return;
+    const scrollAmount = direction === 'left' ? -280 : 280;
+    el.scrollBy({ left: scrollAmount, behavior: 'smooth' });
+  };
 
   useEffect(() => {
     const handleApprovalsChanged = () => {
@@ -342,7 +375,7 @@ function DevAdminConsoleContent() {
   }, [auditLogs, auditSearchQuery]);
 
   return (
-    <div className="min-h-screen bg-slate-950 font-sans text-slate-100 antialiased selection:bg-emerald-500 selection:text-black">
+    <div className="min-h-screen bg-slate-950 font-sans text-slate-100 antialiased selection:bg-emerald-500 selection:text-black" style={{ colorScheme: 'dark' }}>
       {/* Toast Notification */}
       {toastMessage && (
         <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3 rounded-xl border border-emerald-500/40 bg-slate-900/95 px-5 py-3.5 text-sm font-medium text-emerald-300 shadow-2xl backdrop-blur ring-1 ring-emerald-500/30 animate-in fade-in slide-in-from-bottom-3">
@@ -425,32 +458,69 @@ function DevAdminConsoleContent() {
           </div>
         </div>
 
-        {/* Tab Navigation Menu */}
-        <div className="mx-auto max-w-7xl overflow-x-auto px-4 sm:px-6">
-          <nav className="flex space-x-1 border-t border-slate-800/60 py-2" aria-label="Developer Tabs">
-            {DEV_TABS.map((tab) => {
-              const Icon = tab.icon;
-              const isActive = activeTab === tab.key;
-              return (
+        {/* Tab Navigation Menu with Professional Sleek Slider Controls */}
+        <div className="border-t border-slate-800/80 bg-slate-950/70 backdrop-blur-md">
+          <div className="mx-auto max-w-7xl px-4 sm:px-6">
+            <div className="relative flex items-center">
+              {/* Left Scroll Button */}
+              {canScrollLeft && (
                 <button
-                  key={tab.key}
                   type="button"
-                  onClick={() => setActiveTab(tab.key)}
-                  className={`flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition-all ${
-                    isActive
-                      ? 'bg-emerald-500/15 text-emerald-400 shadow-sm ring-1 ring-emerald-500/30'
-                      : 'text-slate-400 hover:bg-slate-900 hover:text-slate-200'
-                  }`}
+                  onClick={() => scrollTabs('left')}
+                  aria-label="বামে স্ক্রোল করুন"
+                  className="absolute left-0 z-20 flex h-8 w-8 items-center justify-center rounded-lg border border-slate-700/80 bg-slate-900/95 text-slate-300 shadow-md backdrop-blur transition hover:border-emerald-500/50 hover:bg-slate-800 hover:text-white"
                 >
-                  <Icon className={`h-4 w-4 ${isActive ? 'text-emerald-400' : 'text-slate-500'}`} />
-                  <span>{tab.labelBn}</span>
-                  <span className="hidden lg:inline text-[10px] text-slate-500 font-mono">
-                    ({tab.labelEn})
-                  </span>
+                  <ChevronLeft className="h-4 w-4" />
                 </button>
-              );
-            })}
-          </nav>
+              )}
+
+              {/* Scrollable Tabs */}
+              <div
+                ref={tabsContainerRef}
+                className="cs-admin-scrollbar flex w-full overflow-x-auto scroll-smooth py-2.5 space-x-1.5 focus:outline-none"
+                tabIndex={0}
+                role="region"
+                aria-label="ডেভেলপার অ্যাডমিন ট্যাব তালিকা"
+              >
+                <nav className="flex space-x-1.5 shrink-0" aria-label="Developer Tabs">
+                  {DEV_TABS.map((tab) => {
+                    const Icon = tab.icon;
+                    const isActive = activeTab === tab.key;
+                    return (
+                      <button
+                        key={tab.key}
+                        type="button"
+                        onClick={() => setActiveTab(tab.key)}
+                        className={`flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition-all ${
+                          isActive
+                            ? 'bg-emerald-500/15 text-emerald-400 shadow-sm ring-1 ring-emerald-500/30'
+                            : 'text-slate-400 hover:bg-slate-900 hover:text-slate-200'
+                        }`}
+                      >
+                        <Icon className={`h-4 w-4 ${isActive ? 'text-emerald-400' : 'text-slate-500'}`} />
+                        <span>{tab.labelBn}</span>
+                        <span className="hidden lg:inline text-[10px] text-slate-500 font-mono">
+                          ({tab.labelEn})
+                        </span>
+                      </button>
+                    );
+                  })}
+                </nav>
+              </div>
+
+              {/* Right Scroll Button */}
+              {canScrollRight && (
+                <button
+                  type="button"
+                  onClick={() => scrollTabs('right')}
+                  aria-label="ডানে স্ক্রোল করুন"
+                  className="absolute right-0 z-20 flex h-8 w-8 items-center justify-center rounded-lg border border-slate-700/80 bg-slate-900/95 text-slate-300 shadow-md backdrop-blur transition hover:border-emerald-500/50 hover:bg-slate-800 hover:text-white"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+          </div>
         </div>
       </header>
 
@@ -972,7 +1042,7 @@ function DevAdminConsoleContent() {
               )}
 
               {/* Approved Municipal Admins Table */}
-              <div className="overflow-x-auto rounded-lg border border-slate-800">
+              <div className="overflow-x-auto rounded-lg border border-slate-800 cs-admin-scrollbar">
                 <table className="w-full text-left text-xs">
                   <thead className="border-b border-slate-800 bg-slate-950 font-mono uppercase text-slate-400">
                     <tr>
@@ -1063,7 +1133,7 @@ function DevAdminConsoleContent() {
             </div>
 
             {/* Users Table */}
-            <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-900/30">
+            <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-900/30 cs-admin-scrollbar">
               <table className="w-full text-left text-xs">
                 <thead className="border-b border-slate-800 bg-slate-900/80 font-mono uppercase text-slate-400">
                   <tr>
@@ -1424,7 +1494,7 @@ function DevAdminConsoleContent() {
               </p>
             </div>
 
-            <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-900/30">
+            <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-900/30 cs-admin-scrollbar">
               <table className="w-full text-left text-xs">
                 <thead className="border-b border-slate-800 bg-slate-900/80 font-mono uppercase text-slate-400">
                   <tr>
