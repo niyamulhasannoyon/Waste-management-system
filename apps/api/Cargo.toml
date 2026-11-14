@@ -1,6 +1,6 @@
 [package]
 name = "clean-savar-api"
-version = "1.1.0"
+version = "1.2.0"
 edition = "2021"
 description = "Unified, hardened Geospatial REST API for Clean Savar (ক্লিন সাভার) built with Axum, SQLx, and PostGIS"
 

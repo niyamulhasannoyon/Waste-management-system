@@ -97,7 +97,7 @@ export default function DownloadPage() {
                 <Smartphone className="h-12 w-12 text-[#15803D]" aria-hidden="true" />
               </div>
               <p className="mt-4 text-base font-bold text-[#0F172A]">Clean Savar Mobile</p>
-              <p className="font-metric text-xs text-[#64748B]">v1.1.0 · Production</p>
+              <p className="font-metric text-xs text-[#64748B]">v1.2.0 · Production</p>
               <div className="mt-3 flex items-center gap-1.5 rounded-full bg-[#DCFCE7] px-3 py-1 text-xs font-semibold text-[#14532D]">
                 <ShieldCheck className="h-4 w-4" aria-hidden="true" />
                 ম্যালওয়্যার ও ভাইরাস মুক্ত
