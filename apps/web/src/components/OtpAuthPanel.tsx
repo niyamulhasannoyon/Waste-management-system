@@ -7,6 +7,7 @@ import {
   CheckCircle2,
   Loader2,
   Phone,
+  Shield,
   User as UserIcon,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -15,7 +16,7 @@ import { useCleanSavar } from '@/context/CleanSavarContext';
 import { ApiError, loginWithFirebaseToken, loginWithGoogleAuth } from '@/lib/api-client';
 import { signInWithGoogleCloud, type GoogleCloudAuthResult } from '@/lib/google-cloud-client';
 import { DEMO_OTP_ACCOUNTS, SAVAR_WARDS_SEED } from '@/lib/savar-data';
-import type { AuthSession } from '@/lib/types';
+import type { AuthSession, UserRole } from '@/lib/types';
 import { normalizeBdPhone } from '@/lib/utils';
 
 interface OtpAuthPanelProps {
@@ -25,12 +26,20 @@ interface OtpAuthPanelProps {
 
 const SHOW_DEMO_ACCOUNTS = process.env.NEXT_PUBLIC_SHOW_DEMO_ACCOUNTS === 'true';
 
+const ROLES: { role: UserRole; labelBn: string; descBn: string }[] = [
+  { role: 'citizen', labelBn: 'সাধারণ নাগরিক', descBn: 'বর্জ্য পিকআপ বুকিং ও ডাম্পিং অভিযোগ' },
+  { role: 'collector', labelBn: 'পরিচ্ছন্নতাকর্মী', descBn: 'পৌরসভার বর্জ্য সংগ্রহ ও রুট আপডেট' },
+  { role: 'partner', labelBn: 'রিসাইক্লিং পার্টনার', descBn: 'পুনর্ব্যবহারযোগ্য বর্জ্য লট ও প্রক্রিয়াজাতকরণ' },
+  { role: 'admin', labelBn: 'পৌর অ্যাডমিন', descBn: 'সাভার পৌরসভা সার্বিক প্রশাসনিক তদারকি' },
+];
+
 export function OtpAuthPanel({ onSuccess, titleId }: OtpAuthPanelProps) {
   const { applyAuthSession, wards, isOfflinePreview, authPromptReason } = useCleanSavar();
 
   const [fullName, setFullName] = useState<string>('');
   const [phoneInput, setPhoneInput] = useState<string>('');
-  const [wardId, setWardId] = useState<number>(SAVAR_WARDS_SEED[2]?.id ?? 3);
+  const [selectedRole, setSelectedRole] = useState<UserRole>('citizen');
+  const [wardId, setWardId] = useState<number | ''>(SAVAR_WARDS_SEED[2]?.id ?? 3);
 
   const [nameTouched, setNameTouched] = useState<boolean>(false);
   const [phoneTouched, setPhoneTouched] = useState<boolean>(false);
@@ -66,6 +75,11 @@ export function OtpAuthPanel({ onSuccess, titleId }: OtpAuthPanelProps) {
       return;
     }
 
+    const validWardId =
+      wardId !== '' && !isNaN(Number(wardId)) && Number(wardId) > 0
+        ? Number(wardId)
+        : undefined;
+
     setIsSubmitting(true);
     try {
       let gcpResult: GoogleCloudAuthResult;
@@ -91,18 +105,26 @@ export function OtpAuthPanel({ onSuccess, titleId }: OtpAuthPanelProps) {
           idToken: gcpResult.idToken,
           accessToken: gcpResult.accessToken,
           phone: normalizedPhone,
+          email: gcpResult.userEmail,
           fullName: finalName,
-          wardId: wardId,
-          role: 'citizen',
+          wardId: validWardId,
+          role: selectedRole,
+          redirectUri:
+            typeof window !== 'undefined'
+              ? `${window.location.origin}/api/auth/google/callback`
+              : undefined,
         });
       } catch (authErr) {
-        console.warn('Google Cloud direct route note, trying fallback:', authErr);
+        console.warn('Google direct route note, trying fallback:', authErr);
         session = await loginWithFirebaseToken({
-          idToken: gcpResult.idToken || gcpResult.accessToken || `dev_token:${normalizedPhone}:google-user`,
+          idToken:
+            gcpResult.idToken ||
+            gcpResult.accessToken ||
+            `dev_token:${normalizedPhone}:google-user`,
           phone: normalizedPhone,
           fullName: finalName,
-          wardId: wardId,
-          role: 'citizen',
+          wardId: validWardId,
+          role: selectedRole,
         });
       }
 
@@ -110,13 +132,13 @@ export function OtpAuthPanel({ onSuccess, titleId }: OtpAuthPanelProps) {
       onSuccess?.(session);
     } catch (err: unknown) {
       console.error('Google Sign-in / session creation failed:', err);
-      setFormError(
+      const errorMessage =
         err instanceof ApiError
           ? err.messageBn
           : err instanceof Error
             ? err.message
-            : 'Google সাইন-ইন প্রক্রিয়া সম্পন্ন করা যায়নি। অনুগ্রহ করে পুনরায় চেষ্টা করুন।',
-      );
+            : 'Google সাইন-ইন প্রক্রিয়া সম্পন্ন করা যায়নি। অনুগ্রহ করে পুনরায় চেষ্টা করুন।';
+      setFormError(errorMessage);
     } finally {
       setIsSubmitting(false);
     }
@@ -149,7 +171,7 @@ export function OtpAuthPanel({ onSuccess, titleId }: OtpAuthPanelProps) {
             </div>
             <p className="text-xs leading-relaxed text-amber-800">
               টেলিকম এসএমএস গেটওয়েতে সাময়িক যান্ত্রিক ত্রুটির কারণে মোবাইল OTP যাচাইকরণ সাময়িকভাবে স্থগিত রয়েছে।
-              ব্যবহারকারীদের দ্রুত ও নির্বিঘ্ন সেবা প্রদানের জন্য আপনার <strong>পূর্ণ নাম ও মোবাইল নম্বর</strong> পূরণ করে
+              ব্যবহারকারীদের দ্রুত ও নির্বিঘ্ন সেবা প্রদানের জন্য আপনার <strong>ভূমিকা, পূর্ণ নাম ও মোবাইল নম্বর</strong> পূরণ করে
               নিচের <strong>Google অ্যাকাউন্ট দিয়ে সাইন-ইন</strong> সম্পন্ন করুন।
             </p>
           </div>
@@ -165,9 +187,10 @@ export function OtpAuthPanel({ onSuccess, titleId }: OtpAuthPanelProps) {
       {formError ? (
         <div
           role="alert"
-          className="rounded-md border border-[#FECACA] bg-[#FEF2F2] px-3.5 py-2.5 text-sm font-medium text-[#B91C1C]"
+          className="rounded-md border border-[#FECACA] bg-[#FEF2F2] px-3.5 py-2.5 text-sm font-medium text-[#B91C1C] flex items-start gap-2"
         >
-          {formError}
+          <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" aria-hidden="true" />
+          <span>{formError}</span>
         </div>
       ) : null}
 
@@ -185,11 +208,16 @@ export function OtpAuthPanel({ onSuccess, titleId }: OtpAuthPanelProps) {
                   onClick={() => {
                     setPhoneInput(acc.phone);
                     setFullName(acc.nameBn);
+                    setSelectedRole(acc.role);
                     setNameTouched(false);
                     setPhoneTouched(false);
                     setFormError(null);
                   }}
-                  className="min-h-10 rounded border border-[#CBD5E1] bg-white px-3 py-1 text-xs font-medium text-[#0F172A] transition-colors hover:border-[#15803D] hover:bg-[#F0FDF4] hover:text-[#14532D]"
+                  className={`min-h-10 rounded border px-3 py-1 text-xs font-medium transition-colors ${
+                    selectedRole === acc.role
+                      ? 'border-[#15803D] bg-[#F0FDF4] text-[#14532D] font-bold'
+                      : 'border-[#CBD5E1] bg-white text-[#0F172A] hover:border-[#15803D] hover:bg-[#F0FDF4]'
+                  }`}
                 >
                   {acc.labelBn}
                 </button>
@@ -197,6 +225,41 @@ export function OtpAuthPanel({ onSuccess, titleId }: OtpAuthPanelProps) {
             </div>
           </div>
         ) : null}
+
+        {/* Role Selector */}
+        <fieldset className="space-y-1.5">
+          <legend className="text-sm font-semibold text-[#0F172A] flex items-center gap-1.5">
+            <Shield className="h-4 w-4 text-[#15803D]" aria-hidden="true" />
+            অ্যাকাউন্টের ধরন / ভূমিকা <span className="text-[#B91C1C]">*</span>
+          </legend>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-2">
+            {ROLES.map((r) => (
+              <label
+                key={r.role}
+                className={`flex cursor-pointer flex-col rounded-lg border p-2.5 text-left transition-all ${
+                  selectedRole === r.role
+                    ? 'border-[#15803D] bg-[#F0FDF4] shadow-xs ring-1 ring-[#15803D]'
+                    : 'border-[#CBD5E1] bg-white hover:border-[#94A3B8] hover:bg-[#F8FAFC]'
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <input
+                    type="radio"
+                    name="accountRole"
+                    value={r.role}
+                    checked={selectedRole === r.role}
+                    onChange={() => setSelectedRole(r.role)}
+                    className="h-4 w-4 accent-[#15803D]"
+                  />
+                  <span className="text-xs font-bold text-[#0F172A]">{r.labelBn}</span>
+                </div>
+                <span className="mt-1 pl-6 text-[11px] text-[#64748B] leading-tight">
+                  {r.descBn}
+                </span>
+              </label>
+            ))}
+          </div>
+        </fieldset>
 
         {/* Required Full Name */}
         <FormField
@@ -263,19 +326,22 @@ export function OtpAuthPanel({ onSuccess, titleId }: OtpAuthPanelProps) {
           )}
         </FormField>
 
-        {/* Ward Selector */}
+        {/* Ward Selector (Optional) */}
         <FormField
           id={titleId ? `${titleId}-ward` : 'auth-ward-select'}
-          label="আপনার সাভার এলাকা / ওয়ার্ড"
-          hint="পৌরসভা ওয়ার্ড বা ইউনিয়ন নির্বাচন করুন"
+          label="আপনার সাভার এলাকা / ওয়ার্ড (ঐচ্ছিক)"
+          hint="পৌরসভা ওয়ার্ড বা ইউনিয়ন নির্বাচন করুন অথবা খালি রাখুন"
         >
           {(a11y) => (
             <select
               {...a11y}
               value={wardId}
-              onChange={(e) => setWardId(Number(e.target.value))}
+              onChange={(e) =>
+                setWardId(e.target.value === '' ? '' : Number(e.target.value))
+              }
               className="cs-input"
             >
+              <option value="">ওয়ার্ড নম্বর / এলাকা নির্বাচন করুন (ঐচ্ছিক)</option>
               {wardList.map((ward) => (
                 <option key={ward.id} value={ward.id}>
                   {ward.name_bn}
@@ -291,7 +357,7 @@ export function OtpAuthPanel({ onSuccess, titleId }: OtpAuthPanelProps) {
             নিরাপদ Google অথেনটিকেশন নীতি:
           </div>
           <p>
-            নাম ও মোবাইল নম্বর স্বয়ংক্রিয়ভাবে আপনার ক্লিন সাভার প্রোফাইলে সংযুক্ত হবে এবং Google সাইন-ইন দিয়ে অ্যাকাউন্ট সুরক্ষিত থাকবে।
+            নির্বাচিত ভূমিকা ({ROLES.find((r) => r.role === selectedRole)?.labelBn}), নাম ও মোবাইল নম্বর স্বয়ংক্রিয়ভাবে আপনার ক্লিন সাভার প্রোফাইলে সংযুক্ত হবে এবং Google সাইন-ইন দিয়ে অ্যাকাউন্ট সুরক্ষিত থাকবে।
           </p>
         </div>
 

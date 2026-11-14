@@ -61,8 +61,10 @@ pub struct OtpVerifyRequest {
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct PhoneLoginRequest {
-    #[serde(alias = "idToken")]
-    pub id_token: String,
+    #[serde(default, alias = "idToken")]
+    pub id_token: Option<String>,
+    #[serde(default, alias = "accessToken")]
+    pub access_token: Option<String>,
     #[serde(default)]
     pub phone: Option<String>,
     #[serde(default)]

@@ -7,7 +7,7 @@ const API_BASE = (
   process.env.INTERNAL_API_URL ||
   process.env.NEXT_PUBLIC_API_URL ||
   (process.env.NODE_ENV === 'production'
-    ? 'https://clean-savar.shuttle.app/api/v1'
+    ? 'https://clean-savar-api.onrender.com/api/v1'
     : 'http://localhost:8080/api/v1')
 ).replace(/\/$/, '');
 
@@ -16,8 +16,16 @@ export async function POST(request: Request) {
     const body = await request.json();
     const idToken = body.idToken || body.id_token;
     const fullName = body.full_name || body.fullName;
-    const wardId = body.ward_id || body.wardId;
+    const rawWardId = body.ward_id ?? body.wardId;
     const role = body.role;
+
+    let resolvedWardId: number | null = null;
+    if (rawWardId !== undefined && rawWardId !== null && rawWardId !== '') {
+      const num = Number(rawWardId);
+      if (!isNaN(num) && num > 0) {
+        resolvedWardId = num;
+      }
+    }
 
     if (!idToken || typeof idToken !== 'string') {
       return NextResponse.json(
@@ -99,7 +107,7 @@ export async function POST(request: Request) {
         id_token: idToken,
         phone: rawPhone.trim(),
         full_name: resolvedFullName,
-        ward_id: wardId,
+        ward_id: resolvedWardId,
         role: role,
       }),
     });

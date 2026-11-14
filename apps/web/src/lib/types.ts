@@ -28,6 +28,7 @@ export interface UserRecord {
   id: string;
   phone: string;
   full_name: string;
+  email?: string | null;
   role: UserRole;
   ward_id: number | null;
   is_verified: boolean;

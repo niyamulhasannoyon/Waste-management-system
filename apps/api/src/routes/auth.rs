@@ -169,7 +169,8 @@ pub(crate) async fn create_verified_user_session(
     ip: &str,
     audit_action: &str,
 ) -> Result<OtpVerifyResponse, AppError> {
-    if let Some(w) = ward_id {
+    let safe_ward_id = ward_id.filter(|&w| w > 0);
+    if let Some(w) = safe_ward_id {
         ensure_ward_exists(&state.pool, w).await?;
     }
 
@@ -321,10 +322,26 @@ pub async fn phone_login(
         .check(&format!("phone_login_ip:{ip}"), 40, 900)
         .await?;
 
-    let claims = state
-        .firebase_verifier
-        .verify_id_token(&payload.id_token, state.otp_dev_mode)
-        .await?;
+    let claims = match (&payload.id_token, &payload.access_token) {
+        (Some(token), _) if !token.trim().is_empty() => {
+            state
+                .firebase_verifier
+                .verify_id_token(token, state.otp_dev_mode)
+                .await?
+        }
+        (_, Some(token)) if !token.trim().is_empty() => {
+            state
+                .firebase_verifier
+                .verify_google_access_token(token)
+                .await?
+        }
+        _ => {
+            return Err(AppError::validation(
+                "Either ID token or access token is required.",
+                "আইডি টোকেন বা অ্যাক্সেস টোকেন প্রদান করুন।",
+            ));
+        }
+    };
 
     let raw_phone = claims
         .extract_phone_number()
@@ -365,6 +382,7 @@ pub async fn phone_login(
         ));
     }
 
+    let safe_ward_id = payload.ward_id.filter(|&w| w > 0);
     let mut tx = state.pool.begin().await?;
 
     let response = create_verified_user_session(
@@ -372,7 +390,7 @@ pub async fn phone_login(
         &mut tx,
         &phone,
         Some(clean_name),
-        payload.ward_id,
+        safe_ward_id,
         &ip,
         "firebase_google_verified",
     )
@@ -437,10 +455,11 @@ pub async fn verify_otp(
             State(state),
             headers,
             Json(FirebaseLoginRequest {
-                id_token,
+                id_token: Some(id_token),
+                access_token: None,
                 phone: payload.phone,
                 full_name: payload.full_name,
-                ward_id: payload.ward_id,
+                ward_id: payload.ward_id.filter(|&w| w > 0),
                 role: payload.role,
             }),
         )

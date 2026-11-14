@@ -409,6 +409,78 @@ impl FirebaseVerifier {
             }),
         })
     }
+
+    /// Verifies a direct Google OAuth Access Token via Google's official userinfo endpoint.
+    pub async fn verify_google_access_token(&self, access_token: &str) -> Result<FirebaseClaims, AppError> {
+        let trimmed = access_token.trim();
+        if trimmed.is_empty() {
+            return Err(AppError::validation(
+                "Google access token is required.",
+                "Google অ্যাক্সেস টোকেন প্রদান করুন।",
+            ));
+        }
+
+        let res = self
+            .client
+            .get("https://www.googleapis.com/oauth2/v3/userinfo")
+            .bearer_auth(trimmed)
+            .send()
+            .await
+            .map_err(|e| {
+                tracing::warn!(error = %e, "Failed to reach Google userinfo endpoint");
+                AppError::unauthorized(
+                    "Unable to verify Google authentication token.",
+                    "Google টোকেন যাচাই করা যায়নি।",
+                )
+            })?;
+
+        if !res.status().is_success() {
+            let status = res.status();
+            let body = res.text().await.unwrap_or_default();
+            tracing::warn!(status = %status, body = %body, "Google userinfo verification rejected");
+            return Err(AppError::unauthorized(
+                "Invalid or expired Google access token.",
+                "Google অ্যাক্সেস টোকেন অবৈধ বা মেয়াদোত্তীর্ণ।",
+            ));
+        }
+
+        #[derive(Deserialize)]
+        struct GoogleUserInfo {
+            sub: String,
+            #[serde(default)]
+            email: Option<String>,
+            #[serde(default)]
+            name: Option<String>,
+        }
+
+        let info = res.json::<GoogleUserInfo>().await.map_err(|e| {
+            tracing::warn!(error = %e, "Failed to parse Google userinfo payload");
+            AppError::unauthorized(
+                "Invalid Google userinfo response format.",
+                "Google তথ্য ফরম্যাট সঠিক নয়।",
+            )
+        })?;
+
+        let now = chrono::Utc::now().timestamp();
+        Ok(FirebaseClaims {
+            sub: info.sub,
+            aud: self.project_id.clone(),
+            iss: "https://accounts.google.com".to_string(),
+            exp: now + 3600,
+            iat: now,
+            auth_time: Some(now),
+            phone_number: None,
+            email: info.email.clone(),
+            name: info.name,
+            firebase: Some(FirebaseIdentitiesHolder {
+                identities: Some(FirebaseIdentities {
+                    phone: vec![],
+                    email: info.email.into_iter().collect(),
+                }),
+                sign_in_provider: Some("google.com".to_string()),
+            }),
+        })
+    }
 }
 
 #[cfg(test)]

@@ -13,7 +13,6 @@ import {
   LogOut,
   Menu,
   RefreshCw,
-  ShieldCheck,
   X,
 } from 'lucide-react';
 import { StatusBadge } from '@/components/ui/badge';
@@ -190,7 +189,7 @@ export function SiteHeader() {
                   onClick={() => openAuthModal()}
                 >
                   <LogIn className="h-4 w-4" aria-hidden="true" />
-                  লগইন (OTP)
+                  লগইন (রোল)
                 </Button>
               )}
             </div>
@@ -352,8 +351,8 @@ export function SiteHeader() {
                     openAuthModal();
                   }}
                 >
-                  <ShieldCheck className="h-4 w-4" aria-hidden="true" />
-                  মোবাইল OTP দিয়ে লগইন
+                  <LogIn className="h-4 w-4" aria-hidden="true" />
+                  লগইন (রোল)
                 </Button>
                 <Link
                   href="/login"

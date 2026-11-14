@@ -126,8 +126,11 @@ export function CleanSavarProvider({ children }: { children: React.ReactNode }) 
       setNotifications(list);
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
+        console.error('Session verification rejected with 401 in refreshNotifications:', err);
         setSession(null);
         setNotifications([]);
+      } else {
+        console.warn('Notification sync background note (non-fatal):', err);
       }
     }
   }, []);
@@ -188,7 +191,11 @@ export function CleanSavarProvider({ children }: { children: React.ReactNode }) 
       setAuthModalOpen(false);
       setAuthPromptReason(null);
       announce(`${nextSession.profile.user.full_name} হিসেবে লগইন সম্পন্ন হয়েছে।`);
-      await Promise.all([refreshNotifications(), refreshPublicData()]);
+      try {
+        await Promise.all([refreshNotifications(), refreshPublicData()]);
+      } catch (syncErr) {
+        console.warn('Post-login background sync note:', syncErr);
+      }
     },
     [announce, refreshNotifications, refreshPublicData],
   );

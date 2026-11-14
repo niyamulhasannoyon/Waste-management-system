@@ -520,7 +520,7 @@ export async function loginWithFirebaseToken(input: {
   phone?: string;
   fullName?: string;
   wardId?: number;
-  role?: Extract<UserRole, 'citizen' | 'collector'>;
+  role?: UserRole;
 }): Promise<AuthSession> {
   const res = await fetchJson<OtpVerifyResponse>('/auth/firebase-login', {
     method: 'POST',
@@ -546,9 +546,11 @@ export async function loginWithGoogleAuth(input: {
   accessToken?: string;
   code?: string;
   phone?: string;
+  email?: string;
   fullName?: string;
   wardId?: number;
-  role?: Extract<UserRole, 'citizen' | 'collector'>;
+  role?: UserRole;
+  redirectUri?: string;
 }): Promise<AuthSession> {
   const res = await fetchJson<OtpVerifyResponse>('/api/auth/google', {
     method: 'POST',
@@ -557,9 +559,11 @@ export async function loginWithGoogleAuth(input: {
       access_token: input.accessToken,
       code: input.code,
       phone: input.phone,
+      email: input.email,
       full_name: input.fullName,
       ward_id: input.wardId,
       role: input.role,
+      redirect_uri: input.redirectUri,
     }),
   });
   const session: AuthSession = {
