@@ -372,11 +372,20 @@ impl FirebaseVerifier {
             )
         })?;
 
-        let web_client_id = std::env::var("GOOGLE_CLIENT_ID").unwrap_or_default();
-        let android_client_id = std::env::var("GOOGLE_ANDROID_CLIENT_ID").unwrap_or_default();
+        const DEFAULT_WEB_CLIENT_ID: &str =
+            "969714135854-1hd9ek2mkkv7m6s1617jm16pd4e55mhe.apps.googleusercontent.com";
+        const DEFAULT_ANDROID_CLIENT_ID: &str =
+            "969714135854-c3abr34d896uvqb90ekgjhhpmndkmgsu.apps.googleusercontent.com";
+
+        let web_client_id = std::env::var("GOOGLE_CLIENT_ID")
+            .unwrap_or_else(|_| DEFAULT_WEB_CLIENT_ID.to_string());
+        let android_client_id = std::env::var("GOOGLE_ANDROID_CLIENT_ID")
+            .unwrap_or_else(|_| DEFAULT_ANDROID_CLIENT_ID.to_string());
 
         let aud_matches = (!web_client_id.is_empty() && info.aud == web_client_id)
-            || (!android_client_id.is_empty() && info.aud == android_client_id);
+            || (!android_client_id.is_empty() && info.aud == android_client_id)
+            || info.aud == DEFAULT_WEB_CLIENT_ID
+            || info.aud == DEFAULT_ANDROID_CLIENT_ID;
 
         if !aud_matches {
             tracing::warn!(aud = %info.aud, "Google token audience mismatch");

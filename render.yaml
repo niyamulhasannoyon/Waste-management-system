@@ -19,6 +19,10 @@ services:
         value: https://clean-savar.vercel.app,https://waste-management-system-inky.vercel.app,https://clean-savar.web.app,http://localhost:3000,http://127.0.0.1:3000
       - key: PUBLIC_UPLOAD_BASE_URL
         value: https://wosjqtspcblftirykphs.supabase.co/storage/v1/object/public/reports
+      - key: GOOGLE_CLIENT_ID
+        value: 969714135854-1hd9ek2mkkv7m6s1617jm16pd4e55mhe.apps.googleusercontent.com
+      - key: GOOGLE_ANDROID_CLIENT_ID
+        value: 969714135854-c3abr34d896uvqb90ekgjhhpmndkmgsu.apps.googleusercontent.com
       - key: DATABASE_URL
         sync: false
       - key: AUTH_SECRET

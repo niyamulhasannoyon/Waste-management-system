@@ -16,6 +16,8 @@
 -dontwarn com.google.android.gms.**
 -keep class com.google.firebase.** { *; }
 -dontwarn com.google.firebase.**
+-keep class com.google.android.gms.auth.api.signin.** { *; }
+-keep class io.flutter.plugins.googlesignin.** { *; }
 
 # Firebase Authentication & Play Services Phone Login (SMS Retriever / SafetyNet / Play Integrity)
 -keep class com.google.firebase.auth.** { *; }

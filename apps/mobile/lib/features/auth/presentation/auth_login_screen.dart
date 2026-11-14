@@ -86,13 +86,6 @@ class _AuthLoginScreenState extends ConsumerState<AuthLoginScreen> {
 
   Future<void> _signInWithGoogle() async {
     final rawName = _nameCtrl.text.trim();
-    if (rawName.isEmpty) {
-      setState(() {
-        _isError = true;
-        _statusMessage = 'অনুগ্রহ করে আপনার পূর্ণ নাম লিখুন।';
-      });
-      return;
-    }
 
     final rawPhone = _phoneCtrl.text.trim();
     final cleanDigits = rawPhone.replaceAll(RegExp(r'\D'), '');
@@ -100,7 +93,7 @@ class _AuthLoginScreenState extends ConsumerState<AuthLoginScreen> {
       setState(() {
         _isError = true;
         _statusMessage =
-            'অনুগ্রহ করে সঠিক ১১ সংখ্যার মোবাইল নম্বর লিখুন (যেমন: 01715-883210)।';
+            'পৌরসভা সেবার জন্য অনুগ্রহ করে আপনার ১১ সংখ্যার সচল মোবাইল নম্বরটি লিখুন (যেমন: 01715-883210)।';
       });
       return;
     }
