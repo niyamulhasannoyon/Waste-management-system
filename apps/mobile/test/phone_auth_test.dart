@@ -343,5 +343,36 @@ void main() {
       expect(mockApi.firebaseTokenEndpointCalled, isTrue);
       expect(find.textContaining('রাফি'), findsWidgets);
     });
+
+    testWidgets('Google sign-in fallback with custom phone number transitions cleanly without getting stuck', (tester) async {
+      final mockApi = _MockFirebaseApiClient();
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            apiClientProvider.overrideWithValue(mockApi),
+            deviceCameraServiceProvider.overrideWithValue(_DummyCameraService()),
+            deviceLocationServiceProvider.overrideWithValue(_DummyLocationService()),
+            qrCameraScannerEnabledProvider.overrideWithValue(false),
+          ],
+          child: const CleanSavarApp(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Enter user details as shown in user video: Name and Phone number
+      final nameField = find.byKey(const ValueKey('login_name_input'));
+      final phoneField = find.byKey(const ValueKey('login_phone_input'));
+      await tester.enterText(nameField, 'Niyamul Hasan');
+      await tester.enterText(phoneField, '01733919156');
+      await tester.pump();
+
+      final googleBtnFinder = find.byKey(const ValueKey('login_google_btn'));
+      await tester.ensureVisible(googleBtnFinder);
+      await tester.tap(googleBtnFinder);
+      await tester.pumpAndSettle();
+
+      expect(mockApi.firebaseTokenEndpointCalled, isTrue);
+      expect(find.textContaining('রাফি'), findsWidgets);
+    });
   });
 }

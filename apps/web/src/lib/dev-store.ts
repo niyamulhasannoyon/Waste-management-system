@@ -461,8 +461,8 @@ const DEFAULT_MARKET_RATES: DevMarketRate[] = [
 ];
 
 const DEFAULT_APK_CONFIG: DevApkReleaseConfig = {
-  versionName: '1.2.1',
-  versionCode: 4,
+  versionName: '2.0.0',
+  versionCode: 5,
   releaseDate: '2026-11-14',
   apkSizeMb: 26.8,
   downloadUrl: '/clean-savar.apk',
@@ -470,6 +470,8 @@ const DEFAULT_APK_CONFIG: DevApkReleaseConfig = {
   minSupportedVersionCode: 1,
   forceUpdateEnabled: false,
   changelogBn: [
+    'গুগল সাইন-ইন সমাধান ও ক্রেডেনশিয়াল ম্যানেজার সেশন রিকভারি (Android 14/15/MIUI)',
+    'মোবাইল ওটিপি (OTP) ও গুগল উভয় পদ্ধতিতে দ্রুত ও নির্ভরযোগ্য সাইন-ইন',
     'অফিসিয়াল অ্যান্ড্রয়েড ফুল-স্কেল অ্যাডাপ্টিভ আইকন (Circle & Squircle ফ্রেন্ডলি)',
     'সাভার পৌরসভার ৯টি ওয়ার্ড ও ৬টি ইউনিয়নের লাইভ ড্যাশবোর্ড',
     'নাগরিক ডোর-টু-ডোর ময়লা পিকআপ শিডিউল ও অন-ডিমান্ড বুকিং',

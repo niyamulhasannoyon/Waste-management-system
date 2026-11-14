@@ -72,7 +72,7 @@ export default function DownloadPage() {
     return () => window.removeEventListener('cs:dev-downloads-changed', handleDownloadsChanged);
   }, []);
 
-  const triggerDownloadTracking = (fileName: string, fileId: string, version = 'v1.2.1') => {
+  const triggerDownloadTracking = (fileName: string, fileId: string, version = 'v2.0.0') => {
     const cachedGeoStr = typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('cs_geo_cache_v1') : null;
     const geo = cachedGeoStr ? JSON.parse(cachedGeoStr) : { ip: '103.114.98.45', city: 'সাভার পৌরসভা' };
     const visitorId = typeof localStorage !== 'undefined' ? localStorage.getItem('cs_visitor_id_v1') || 'cs-vid-guest' : 'cs-vid-guest';
@@ -134,7 +134,7 @@ export default function DownloadPage() {
               <a
                 href="/clean-savar.apk"
                 download="clean-savar.apk"
-                onClick={() => triggerDownloadTracking('clean-savar.apk', 'apk-universal', 'v1.2.1')}
+                onClick={() => triggerDownloadTracking('clean-savar.apk', 'apk-universal', 'v2.0.0')}
                 className="inline-flex min-h-12 items-center justify-center gap-2.5 rounded-lg bg-[#15803D] px-6 py-3 text-sm font-bold text-white shadow-md transition-all hover:bg-[#14532D] hover:shadow-lg focus:outline-hidden focus:ring-2 focus:ring-[#15803D] focus:ring-offset-2"
               >
                 <ArrowDownToLine className="h-5 w-5" aria-hidden="true" />
@@ -142,7 +142,7 @@ export default function DownloadPage() {
               </a>
 
               <span className="text-xs text-[#64748B] sm:text-left">
-                অ্যান্ড্রয়েড ৮.০+ সমর্থিত · সাইজ অপ্টিমাইজড (২৬.৮ MB)
+                অ্যান্ড্রয়েড ৮.০+ সমর্থিত · সংস্করণ ২.০.০ (Build 5) · ২৬.৮ MB
               </span>
             </div>
           </div>
@@ -153,7 +153,7 @@ export default function DownloadPage() {
                 <Smartphone className="h-12 w-12 text-[#15803D]" aria-hidden="true" />
               </div>
               <p className="mt-4 text-base font-bold text-[#0F172A]">Clean Savar Mobile</p>
-              <p className="font-metric text-xs text-[#64748B]">v1.2.1 · Production</p>
+              <p className="font-metric text-xs text-[#64748B]">v2.0.0 · Production</p>
               <div className="mt-3 flex items-center gap-1.5 rounded-full bg-[#DCFCE7] px-3 py-1 text-xs font-semibold text-[#14532D]">
                 <ShieldCheck className="h-4 w-4" aria-hidden="true" />
                 ম্যালওয়্যার ও ভাইরাস মুক্ত
@@ -230,7 +230,7 @@ export default function DownloadPage() {
               <a
                 href="/downloads/clean-savar-arm64.apk"
                 download="clean-savar-arm64.apk"
-                onClick={() => triggerDownloadTracking('clean-savar-arm64.apk', 'apk-arm64', 'v1.2.1')}
+                onClick={() => triggerDownloadTracking('clean-savar-arm64.apk', 'apk-arm64', 'v2.0.0')}
                 className="rounded border border-[#CBD5E1] bg-white px-2.5 py-1 text-xs font-semibold text-[#0F172A] hover:bg-[#F1F5F9]"
               >
                 ARM64 (আধুনিক ফোন · ১১.০ MB)
@@ -238,7 +238,7 @@ export default function DownloadPage() {
               <a
                 href="/downloads/clean-savar-armeabi-v7a.apk"
                 download="clean-savar-armeabi-v7a.apk"
-                onClick={() => triggerDownloadTracking('clean-savar-armeabi-v7a.apk', 'apk-armv7', 'v1.2.1')}
+                onClick={() => triggerDownloadTracking('clean-savar-armeabi-v7a.apk', 'apk-armv7', 'v2.0.0')}
                 className="rounded border border-[#CBD5E1] bg-white px-2.5 py-1 text-xs font-semibold text-[#0F172A] hover:bg-[#F1F5F9]"
               >
                 ARMv7 (পুরোনো ৩২-বিট · ১০.৬ MB)

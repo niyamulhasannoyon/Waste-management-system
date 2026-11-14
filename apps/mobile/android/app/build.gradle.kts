@@ -54,6 +54,8 @@ android {
                 ?: System.getenv("KEY_PASSWORD")
             storePassword = keystoreProperties.getProperty("storePassword")
                 ?: System.getenv("STORE_PASSWORD")
+            enableV1Signing = true
+            enableV2Signing = true
             storeFile = (keystoreProperties.getProperty("storeFile") ?: System.getenv("STORE_FILE") ?: "upload-keystore.jks").let { path ->
                 val appFile = file(path)
                 val rootFile = rootProject.file(path)

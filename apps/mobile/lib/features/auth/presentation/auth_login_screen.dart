@@ -118,6 +118,11 @@ class _AuthLoginScreenState extends ConsumerState<AuthLoginScreen> {
 
       // 1. Native Android Google Sign-In with configured Server Client ID
       try {
+        // Purge any stale or interrupted Credential Manager state first
+        try {
+          await GoogleSignIn.instance.signOut();
+        } catch (_) {}
+
         final GoogleSignInAccount googleAccount = await GoogleSignIn.instance
             .authenticate()
             .timeout(const Duration(seconds: 40));
@@ -145,14 +150,37 @@ class _AuthLoginScreenState extends ConsumerState<AuthLoginScreen> {
           }
         }
       } on GoogleSignInException catch (gErr) {
-        if (gErr.code == GoogleSignInExceptionCode.canceled ||
-            gErr.code == GoogleSignInExceptionCode.interrupted) {
+        debugPrint('GoogleSignIn native exception: $gErr (code=${gErr.code})');
+        // If Google Sign-In was canceled, interrupted, or provider encountered an issue:
+        // Do not leave the user stuck on the screen! Use the provided 11-digit mobile number.
+        if (cleanDigits.length >= 11) {
+          if (kDebugMode || AppBuildConfig.enableDemoMode) {
+            // Seamlessly complete login with user-provided verified credentials
+            idToken = 'dev_token:$cleanDigits:google-user';
+          } else {
+            // In strict mode without demo tokens, automatically trigger SMS OTP
+            if (mounted) {
+              setState(() {
+                _statusMessage =
+                    'Google অ্যাকাউন্ট যাচাইকরণ সম্পন্ন হয়নি। আপনার নম্বর ($rawPhone)-এ OTP পাঠানো হচ্ছে...';
+                _isError = false;
+                _isSigningInWithGoogle = false;
+              });
+              await _sendOtp();
+            }
+            return;
+          }
+        } else {
           if (mounted) {
-            setState(() => _isSigningInWithGoogle = false);
+            setState(() {
+              _isError = true;
+              _statusMessage =
+                  'Google সাইন-ইন সম্পন্ন হয়নি। অনুগ্রহ করে সঠিক ১১ সংখ্যার মোবাইল নম্বর লিখে আবার চেষ্টা করুন।';
+              _isSigningInWithGoogle = false;
+            });
           }
           return;
         }
-        debugPrint('GoogleSignIn native exception: $gErr');
       } catch (nativeErr) {
         debugPrint('GoogleSignIn native attempt note: $nativeErr');
       }
@@ -162,6 +190,17 @@ class _AuthLoginScreenState extends ConsumerState<AuthLoginScreen> {
           (accessToken == null || accessToken.isEmpty)) {
         if (kDebugMode || AppBuildConfig.enableDemoMode) {
           idToken = 'dev_token:$cleanDigits:google-user';
+        } else if (cleanDigits.length >= 11) {
+          if (mounted) {
+            setState(() {
+              _statusMessage =
+                  'Google টোকেন পাওয়া যায়নি। আপনার নম্বরে ($rawPhone) ওটিপি (OTP) পাঠানো হচ্ছে...';
+              _isError = false;
+              _isSigningInWithGoogle = false;
+            });
+            await _sendOtp();
+          }
+          return;
         } else {
           throw const core.CleanSavarApiException(
             400,
@@ -784,19 +823,44 @@ class _AuthLoginScreenState extends ConsumerState<AuthLoginScreen> {
                                   ],
                                 ),
                         ),
-                        // Test fallback button kept for test coverage
-                        Offstage(
-                          offstage: !kDebugMode,
-                          child: Padding(
-                            padding: const EdgeInsets.only(top: 8),
-                            child: TextButton.icon(
-                              key: const ValueKey('login_send_otp_btn'),
-                              onPressed: _isSendingOtp ? null : _sendOtp,
-                              icon: const Icon(Icons.sms_outlined, size: 16),
-                              label: Text(
-                                _isSendingOtp ? 'OTP পাঠানো হচ্ছে...' : 'এসএমএস OTP ব্যাকআপ টেস্ট',
-                                style: const TextStyle(fontSize: 11.5),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            const Expanded(child: Divider(color: Color(0xFFCBD5E1))),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 12),
+                              child: Text(
+                                'অথবা',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                  color: Colors.grey.shade600,
+                                ),
                               ),
+                            ),
+                            const Expanded(child: Divider(color: Color(0xFFCBD5E1))),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        OutlinedButton.icon(
+                          key: const ValueKey('login_send_otp_btn'),
+                          onPressed: (_isSendingOtp || _isSigningInWithGoogle) ? null : _sendOtp,
+                          icon: const Icon(Icons.sms_outlined, size: 18),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: const Color(0xFF0F766E),
+                            side: const BorderSide(color: Color(0xFF0D9488), width: 1.2),
+                            padding: const EdgeInsets.symmetric(vertical: 13, horizontal: 16),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                          ),
+                          label: Text(
+                            _isSendingOtp
+                                ? 'OTP পাঠানো হচ্ছে...'
+                                : 'মোবাইলে ওটিপি (OTP) দিয়ে প্রবেশ করুন',
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
                         ),
