@@ -44,11 +44,6 @@ android {
         resourceConfigurations += listOf("en", "bn")
     }
 
-    splits {
-        abi {
-            isEnable = false
-        }
-    }
 
     signingConfigs {
         create("release") {
@@ -99,6 +94,9 @@ android {
                 "META-INF/DEPENDENCIES",
                 "META-INF/androidx/**/LICENSE.txt",
             )
+        }
+        jniLibs {
+            useLegacyPackaging = true
         }
     }
 }

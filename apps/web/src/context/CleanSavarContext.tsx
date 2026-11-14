@@ -22,6 +22,7 @@ import {
   writeStoredSession,
 } from '@/lib/api-client';
 import { ANALYTICS_SEED, HOTSPOTS_SEED, SAVAR_WARDS_SEED } from '@/lib/savar-data';
+import { recordDevLogin } from '@/lib/dev-store';
 import type {
   AnalyticsSummary,
   AuthSession,
@@ -191,6 +192,26 @@ export function CleanSavarProvider({ children }: { children: React.ReactNode }) 
       setAuthModalOpen(false);
       setAuthPromptReason(null);
       announce(`${nextSession.profile.user.full_name} হিসেবে লগইন সম্পন্ন হয়েছে।`);
+
+      // Track login in developer intelligence store
+      try {
+        const cachedGeoStr = typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('cs_geo_cache_v1') : null;
+        const geo = cachedGeoStr ? JSON.parse(cachedGeoStr) : { ip: '103.114.98.15', city: 'সাভার পৌরসভা', isp: 'Optical Fiber' };
+        recordDevLogin({
+          userId: nextSession.profile.user.id,
+          userName: nextSession.profile.user.full_name,
+          userPhone: nextSession.profile.user.phone,
+          userRole: nextSession.profile.user.role,
+          ip: geo.ip || '103.114.98.15',
+          location: `${geo.city || 'সাভার পৌরসভা'}, বাংলাদেশ`,
+          isp: geo.isp,
+          device: typeof navigator !== 'undefined' ? (navigator.userAgent.includes('Mobile') ? 'Mobile Device (Chrome/Browser)' : 'Desktop Browser') : 'Web Client',
+          authMethod: 'google_auth',
+          status: 'success',
+        });
+      } catch (loginLogErr) {
+        console.warn('Dev login logging note:', loginLogErr);
+      }
       try {
         await Promise.all([refreshNotifications(), refreshPublicData()]);
       } catch (syncErr) {

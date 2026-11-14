@@ -1,17 +1,22 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import {
   ArrowDownToLine,
   Camera,
   CheckCircle2,
+  Download,
   MapPin,
   QrCode,
   ShieldCheck,
   Smartphone,
+  Sparkles,
   Truck,
 } from 'lucide-react';
+import { useCleanSavar } from '@/context/CleanSavarContext';
+import { getDevDownloadSummary, recordDevDownload } from '@/lib/dev-store';
+import { toBanglaDigits } from '@/lib/utils';
 
 const APP_FEATURES = [
   {
@@ -55,15 +60,65 @@ const INSTALL_STEPS = [
 ];
 
 export default function DownloadPage() {
+  const { profile } = useCleanSavar();
+  const [downloadSummary, setDownloadSummary] = useState(getDevDownloadSummary());
+  const [downloadToast, setDownloadToast] = useState<string | null>(null);
+
+  useEffect(() => {
+    function handleDownloadsChanged() {
+      setDownloadSummary(getDevDownloadSummary());
+    }
+    window.addEventListener('cs:dev-downloads-changed', handleDownloadsChanged);
+    return () => window.removeEventListener('cs:dev-downloads-changed', handleDownloadsChanged);
+  }, []);
+
+  const triggerDownloadTracking = (fileName: string, fileId: string, version = 'v1.2.0') => {
+    const cachedGeoStr = typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('cs_geo_cache_v1') : null;
+    const geo = cachedGeoStr ? JSON.parse(cachedGeoStr) : { ip: '103.114.98.45', city: 'সাভার পৌরসভা' };
+    const visitorId = typeof localStorage !== 'undefined' ? localStorage.getItem('cs_visitor_id_v1') || 'cs-vid-guest' : 'cs-vid-guest';
+
+    recordDevDownload({
+      fileId,
+      fileName,
+      fileVersion: version,
+      fileSizeMb: 53.4,
+      downloaderId: profile?.user.id || profile?.user.phone || visitorId,
+      downloaderName: profile?.user.full_name || `গেস্ট ভিজিটর #${visitorId.replace(/\D/g, '').slice(-3) || '১০১'}`,
+      downloaderPhone: profile?.user.phone,
+      downloaderRole: profile?.user.role || 'guest',
+      ip: geo.ip || '103.114.98.45',
+      location: `${geo.city || 'সাভার পৌরসভা'}, বাংলাদেশ`,
+      device: typeof navigator !== 'undefined' && /Android/i.test(navigator.userAgent) ? 'Android Mobile' : 'Web Device',
+      status: 'completed',
+    });
+
+    setDownloadToast(`ডাউনলোড শুরু হয়েছে: ${fileName} (${version})`);
+    setTimeout(() => setDownloadToast(null), 4000);
+  };
+
   return (
-    <div className="mx-auto max-w-4xl space-y-10 px-4 py-8 sm:px-6 sm:py-12">
+    <div className="relative mx-auto max-w-4xl space-y-10 px-4 py-8 sm:px-6 sm:py-12">
+      {/* Toast Notification */}
+      {downloadToast && (
+        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2 rounded-xl border border-[#BBF7D0] bg-[#F0FDF4] px-5 py-3 text-sm font-semibold text-[#14532D] shadow-xl animate-in fade-in slide-in-from-bottom-2">
+          <Sparkles className="h-4 w-4 text-[#15803D]" />
+          <span>{downloadToast}</span>
+        </div>
+      )}
+
       {/* Hero Header */}
       <div className="rounded-2xl border border-[#BBF7D0] bg-gradient-to-br from-[#F0FDF4] via-white to-[#F8FAFC] p-6 shadow-xs sm:p-10">
         <div className="grid grid-cols-1 items-center gap-8 md:grid-cols-12">
           <div className="space-y-4 md:col-span-7">
-            <div className="inline-flex items-center gap-2 rounded-full border border-[#BBF7D0] bg-white px-3 py-1 text-xs font-semibold text-[#14532D]">
-              <span className="h-2 w-2 rounded-full bg-[#15803D]" aria-hidden="true" />
-              অফিশিয়াল রিলিজ · সংস্করণ ১.০.০
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="inline-flex items-center gap-2 rounded-full border border-[#BBF7D0] bg-white px-3 py-1 text-xs font-semibold text-[#14532D]">
+                <span className="h-2 w-2 rounded-full bg-[#15803D]" aria-hidden="true" />
+                অফিশিয়াল রিলিজ · সংস্করণ ১.২.০
+              </div>
+              <div className="inline-flex items-center gap-1.5 rounded-full border border-[#E2E8F0] bg-white px-3 py-1 text-xs font-semibold text-[#334155] shadow-xs">
+                <Download className="h-3.5 w-3.5 text-[#15803D]" />
+                <span>সর্বমোট {toBanglaDigits(downloadSummary.totalDownloads)}+ বার ডাউনলোড সম্পন্ন</span>
+              </div>
             </div>
 
             <h1 className="text-2xl font-bold tracking-tight text-[#0F172A] sm:text-3xl">
@@ -79,14 +134,15 @@ export default function DownloadPage() {
               <a
                 href="/clean-savar.apk"
                 download="clean-savar.apk"
+                onClick={() => triggerDownloadTracking('clean-savar.apk', 'apk-universal', 'v1.2.0')}
                 className="inline-flex min-h-12 items-center justify-center gap-2.5 rounded-lg bg-[#15803D] px-6 py-3 text-sm font-bold text-white shadow-md transition-all hover:bg-[#14532D] hover:shadow-lg focus:outline-hidden focus:ring-2 focus:ring-[#15803D] focus:ring-offset-2"
               >
                 <ArrowDownToLine className="h-5 w-5" aria-hidden="true" />
-                <span>সরাসরি অফিসিয়াল APK ডাউনলোড (Universal v1.2.0)</span>
+                <span>সরাসরি অফিসিয়াল APK ডাউনলোড (Universal · ২৪ MB)</span>
               </a>
 
               <span className="text-xs text-[#64748B] sm:text-left">
-                অ্যান্ড্রয়েড ৮.০+ সমর্থিত · সম্পূর্ণ ফ্রি
+                অ্যান্ড্রয়েড ৮.০+ সমর্থিত · সাইজ অপ্টিমাইজড (২৪ MB)
               </span>
             </div>
           </div>
@@ -174,16 +230,18 @@ export default function DownloadPage() {
               <a
                 href="/downloads/clean-savar-arm64.apk"
                 download="clean-savar-arm64.apk"
+                onClick={() => triggerDownloadTracking('clean-savar-arm64.apk', 'apk-arm64', 'v1.2.0')}
                 className="rounded border border-[#CBD5E1] bg-white px-2.5 py-1 text-xs font-semibold text-[#0F172A] hover:bg-[#F1F5F9]"
               >
-                ARM64 (আধুনিক ফোন)
+                ARM64 (আধুনিক ফোন · ১০.৫ MB)
               </a>
               <a
                 href="/downloads/clean-savar-armeabi-v7a.apk"
                 download="clean-savar-armeabi-v7a.apk"
+                onClick={() => triggerDownloadTracking('clean-savar-armeabi-v7a.apk', 'apk-armv7', 'v1.2.0')}
                 className="rounded border border-[#CBD5E1] bg-white px-2.5 py-1 text-xs font-semibold text-[#0F172A] hover:bg-[#F1F5F9]"
               >
-                ARMv7 (পুরোনো ৩২-বিট)
+                ARMv7 (পুরোনো ৩২-বিট · ১০.০ MB)
               </a>
             </div>
           </div>

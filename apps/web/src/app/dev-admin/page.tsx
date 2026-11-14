@@ -33,6 +33,9 @@ import {
 } from 'lucide-react';
 
 import { DevAuthGate } from '@/components/dev/DevAuthGate';
+import { DevTrafficTab } from '@/components/dev/DevTrafficTab';
+import { DevDownloadsTab } from '@/components/dev/DevDownloadsTab';
+import { DevLoginsTab } from '@/components/dev/DevLoginsTab';
 import {
   DevFeatureFlags,
   DevUserAccount,
@@ -40,6 +43,14 @@ import {
   DevVehicleSim,
   DevMarketRate,
   DevAuditEvent,
+  DevVisitorLog,
+  DevTrafficSummary,
+  DevDownloadEvent,
+  DevUserDownloadStat,
+  DevDownloadSummary,
+  DevLoginEvent,
+  DevUserLoginStat,
+  DevLoginSummary,
   ExtendedRole,
   ApprovedAdminRecord,
   getApprovedAdminRecords,
@@ -62,20 +73,39 @@ import {
   clearDevAuditLogs,
   recordDevAudit,
   resetDevConsoleToDefaults,
+  getDevVisitorLogs,
+  getDevTrafficSummary,
+  simulateDevTrafficVisit,
+  clearDevVisitorLogs,
+  getDevDownloadEvents,
+  getDevUserDownloadStats,
+  recordDevDownload,
+  getDevDownloadSummary,
+  simulateDevDownload,
+  clearDevDownloadLogs,
+  getDevLoginEvents,
+  getDevUserLoginStats,
+  recordDevLogin,
+  getDevLoginSummary,
+  simulateDevLogin,
+  clearDevLoginLogs,
 } from '@/lib/dev-store';
 import { SAVAR_WARDS_SEED } from '@/lib/savar-data';
 import { toBanglaDigits } from '@/lib/utils';
 
 type DevTabKey =
   | 'switchboard'
-  | 'telemetry'
+  | 'traffic'
+  | 'downloads'
+  | 'logins'
   | 'users'
-  | 'otp'
+  | 'apk'
+  | 'telemetry'
   | 'fleet'
+  | 'otp'
   | 'pricing'
   | 'wards'
   | 'sandbox'
-  | 'apk'
   | 'audit';
 
 interface TabItem {
@@ -87,15 +117,18 @@ interface TabItem {
 }
 
 const DEV_TABS: TabItem[] = [
-  { key: 'switchboard', labelBn: 'সুইচবোর্ড ও ফ্ল্যাগ', labelEn: 'Feature Flags', icon: Sliders },
-  { key: 'telemetry', labelBn: 'ইনফ্রাস্ট্রাকচার হেলথ', labelEn: 'Telemetry & Cloud', icon: Server },
+  { key: 'switchboard', labelBn: 'সুইচবোর্ড ও কন্ট্রোল', labelEn: 'Master Switchboard', icon: Sliders },
+  { key: 'traffic', labelBn: 'ভিজিটর ও ট্রাফিক', labelEn: 'Traffic & Visitors', icon: Activity, badge: 'Live' },
+  { key: 'downloads', labelBn: 'ডাউনলোড ট্র্যাকার', labelEn: 'Download Analytics', icon: Download, badge: 'Hot' },
+  { key: 'logins', labelBn: 'লগইন ও সেশন জিও', labelEn: 'Login Geolocation', icon: ShieldCheck },
   { key: 'users', labelBn: 'ইউজার ও রোল (RBAC)', labelEn: 'User RBAC Matrix', icon: Users },
-  { key: 'otp', labelBn: 'OTP ও SMS ডিবাগার', labelEn: 'OTP & Rate Limits', icon: KeyRound },
+  { key: 'apk', labelBn: 'মোবাইল APK ও রিলিজ', labelEn: 'Mobile App & OTA', icon: Smartphone },
+  { key: 'telemetry', labelBn: 'ইনফ্রাস্ট্রাকচার হেলথ', labelEn: 'Telemetry & Cloud', icon: Server },
   { key: 'fleet', labelBn: 'ফ্লিট ও GPS সিমুলেটর', labelEn: 'Fleet GPS Simulator', icon: Truck },
+  { key: 'otp', labelBn: 'OTP ও SMS ডিবাগার', labelEn: 'OTP & Rate Limits', icon: KeyRound },
   { key: 'pricing', labelBn: 'বর্জ্য মার্কেট ও অকশন', labelEn: 'Marketplace Pricing', icon: Zap },
   { key: 'wards', labelBn: 'ওয়ার্ড জিওফেন্স ইন্সপেক্টর', labelEn: 'Wards & Geofencing', icon: Globe },
   { key: 'sandbox', labelBn: 'স্যান্ডবক্স সিডার ও ক্লিন', labelEn: 'Data Seeder & Purge', icon: Database },
-  { key: 'apk', labelBn: 'মোবাইল APK ও রিলিজ', labelEn: 'Mobile App & OTA', icon: Smartphone },
   { key: 'audit', labelBn: 'লাইভ অডিট ট্রেইল', labelEn: 'Security Audit Log', icon: Terminal },
 ];
 
@@ -116,6 +149,16 @@ function DevAdminConsoleContent() {
   const [marketRates, setMarketRates] = useState<DevMarketRate[]>(getDevMarketRates());
   const [apkConfig] = useState(getDevApkConfig());
   const [auditLogs, setAuditLogs] = useState<DevAuditEvent[]>(getDevAuditLogs());
+
+  // Real-time Traffic, Download and Login States
+  const [visitorLogs, setVisitorLogs] = useState<DevVisitorLog[]>(getDevVisitorLogs());
+  const [trafficSummary, setTrafficSummary] = useState<DevTrafficSummary>(getDevTrafficSummary());
+  const [downloadEvents, setDownloadEvents] = useState<DevDownloadEvent[]>(getDevDownloadEvents());
+  const [userDownloadStats, setUserDownloadStats] = useState<DevUserDownloadStat[]>(getDevUserDownloadStats());
+  const [downloadSummary, setDownloadSummary] = useState<DevDownloadSummary>(getDevDownloadSummary());
+  const [loginEvents, setLoginEvents] = useState<DevLoginEvent[]>(getDevLoginEvents());
+  const [userLoginStats, setUserLoginStats] = useState<DevUserLoginStat[]>(getDevUserLoginStats());
+  const [loginSummary, setLoginSummary] = useState<DevLoginSummary>(getDevLoginSummary());
 
   // Notification Toast / Flash message
   const [toastMessage, setToastMessage] = useState<string | null>(null);

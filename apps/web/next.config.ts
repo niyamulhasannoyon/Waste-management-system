@@ -32,7 +32,7 @@ export default function nextConfig(phase: string): NextConfig {
       process.env.NEXT_DIST_DIR ||
       (phase === PHASE_DEVELOPMENT_SERVER ? '.next-dev' : '.next'),
     output: 'standalone',
-    serverExternalPackages: ['firebase-admin'],
+    serverExternalPackages: ['firebase-admin', 'jwks-rsa', 'jose'],
     outputFileTracingRoot: path.join(__dirname, '../..'),
     images: {
       unoptimized: true,
@@ -73,10 +73,6 @@ export default function nextConfig(phase: string): NextConfig {
         },
         {
           source: '/downloads/clean-savar.apk',
-          destination: '/clean-savar.apk',
-        },
-        {
-          source: '/downloads/clean-savar-arm64.apk',
           destination: '/clean-savar.apk',
         },
       ];

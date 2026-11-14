@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { Hind_Siliguri, Inter } from 'next/font/google';
 import React from 'react';
 import { DevBroadcastBanners } from '@/components/dev/DevBroadcastBanners';
+import { TrafficTracker } from '@/components/dev/TrafficTracker';
 import { OtpAuthDialog } from '@/components/OtpAuthDialog';
 import { SiteFooter } from '@/components/site-footer';
 import { SiteHeader } from '@/components/site-header';
@@ -47,6 +48,7 @@ export default function RootLayout({
         suppressHydrationWarning
       >
         <CleanSavarProvider>
+          <TrafficTracker />
           <DevBroadcastBanners />
           <a href="#main-content" className="cs-skip-link">
             মূল বিষয়বস্তুতে যান
