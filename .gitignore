@@ -53,6 +53,7 @@ target/
 .flutter-plugins-dependencies
 **/android/.gradle/
 **/android/local.properties
+**/.kotlin/
 **/ios/Pods/
 **/ios/Flutter/.last_build_id
 

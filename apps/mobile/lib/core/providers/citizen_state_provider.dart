@@ -385,6 +385,7 @@ class CitizenStateNotifier extends Notifier<CitizenState> {
     final targetPhone = (phone ?? state.citizenPhone).trim();
     final auth = await _api.loginWithFirebaseToken(
       idToken: idToken,
+      phone: targetPhone,
       fullName: fullName ??
           (state.citizenFullName.isNotEmpty ? state.citizenFullName : null),
       wardId: wardId ?? state.selectedWard.id,

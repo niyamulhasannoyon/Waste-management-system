@@ -17,6 +17,8 @@ services:
         value: 01711-240100
       - key: CORS_ALLOWED_ORIGINS
         value: https://clean-savar.vercel.app,https://waste-management-system-inky.vercel.app,https://clean-savar.web.app,http://localhost:3000,http://127.0.0.1:3000
+      - key: PUBLIC_UPLOAD_BASE_URL
+        value: https://wosjqtspcblftirykphs.supabase.co/storage/v1/object/public/reports
       - key: DATABASE_URL
         sync: false
       - key: AUTH_SECRET

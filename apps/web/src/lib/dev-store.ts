@@ -7,6 +7,8 @@
 export interface DevFeatureFlags {
   enableDemoMode: boolean;
   strictOtp: boolean;
+  otpPaused: boolean;
+  otpPauseNoticeBn: string;
   maintenanceMode: boolean;
   maintenanceMessage: string;
   emergencyAlertActive: boolean;
@@ -89,6 +91,9 @@ export interface DevApkReleaseConfig {
 const DEFAULT_FLAGS: DevFeatureFlags = {
   enableDemoMode: true,
   strictOtp: false,
+  otpPaused: true,
+  otpPauseNoticeBn:
+    'টেলিকম এসএমএস গেটওয়েতে সাময়িক যান্ত্রিক ত্রুটির কারণে মোবাইল OTP যাচাইকরণ সাময়িকভাবে স্থগিত রাখা হয়েছে। দ্রুত ও নিরবচ্ছিন্ন সেবার জন্য আপনার পূর্ণ নাম ও মোবাইল নম্বর পূরণ করে Google অ্যাকাউন্টের মাধ্যমে সাইন-ইন সম্পন্ন করুন।',
   maintenanceMode: false,
   maintenanceMessage: 'সিস্টেম উন্নয়নের কাজ চলছে। শীঘ্রই আমরা ফিরে আসব।',
   emergencyAlertActive: false,
@@ -98,6 +103,65 @@ const DEFAULT_FLAGS: DevFeatureFlags = {
   strictGeofence: false,
   simulateGpsMovement: false,
 };
+
+export const ALLOWED_DEV_EMAILS: readonly string[] = [
+  'niyamulhasanbd@gmail.com',
+  'niyamulhasan1089@gmail.com',
+];
+
+export function isAllowedDevEmail(email: string | null | undefined): boolean {
+  if (!email) return false;
+  const clean = email.trim().toLowerCase();
+  return ALLOWED_DEV_EMAILS.some((allowed) => allowed.toLowerCase() === clean);
+}
+
+export interface ApprovedAdminRecord {
+  id: string;
+  phone: string;
+  fullName: string;
+  email?: string;
+  role: 'admin';
+  status: 'approved' | 'pending' | 'revoked';
+  approvedAt?: string;
+  approvedBy?: string;
+  requestedAt?: string;
+  note?: string;
+}
+
+const DEFAULT_APPROVED_ADMINS: ApprovedAdminRecord[] = [
+  {
+    id: 'adm-001',
+    phone: '01711-240100',
+    fullName: 'সাভার পৌরসভা প্রধান অ্যাডমিন',
+    role: 'admin',
+    status: 'approved',
+    approvedAt: '2026-11-01 09:00',
+    approvedBy: 'Developer SuperAdmin (System Bootstrap)',
+    note: 'সাভার পৌরসভা অফিসিয়াল অ্যাডমিন নম্বর',
+  },
+  {
+    id: 'adm-002',
+    phone: '01700-000000',
+    fullName: 'সুপার অ্যাডমিন / ডেভেলপার',
+    email: 'niyamulhasanbd@gmail.com',
+    role: 'admin',
+    status: 'approved',
+    approvedAt: '2026-11-01 00:00',
+    approvedBy: 'Developer SuperAdmin',
+    note: 'প্রধান সিস্টেম ডেভেলপার অ্যাকাউন্ট',
+  },
+  {
+    id: 'adm-003',
+    phone: '01715-883210',
+    fullName: 'নিয়ামুল হাসান (ম্যানেজমেন্ট অ্যাডমিন)',
+    email: 'niyamulhasan1089@gmail.com',
+    role: 'admin',
+    status: 'approved',
+    approvedAt: '2026-11-01 00:00',
+    approvedBy: 'Developer SuperAdmin',
+    note: 'ম্যানেজমেন্ট ও টেকনিক্যাল অ্যাডমিন অ্যাকাউন্ট',
+  },
+];
 
 const DEFAULT_USERS: DevUserAccount[] = [
   {
@@ -280,6 +344,7 @@ const DEFAULT_APK_CONFIG: DevApkReleaseConfig = {
 const DEV_STORAGE_KEYS = {
   FLAGS: 'cs_dev_feature_flags_v1',
   USERS: 'cs_dev_users_v1',
+  APPROVED_ADMINS: 'cs_dev_approved_admins_v1',
   OTPS: 'cs_dev_otps_v1',
   VEHICLES: 'cs_dev_vehicles_v1',
   MARKET: 'cs_dev_market_v1',
@@ -378,6 +443,139 @@ export function addNewDevUser(user: Omit<DevUserAccount, 'id' | 'createdAt' | 'l
     details: `Created new user ${newUser.phone} (${newUser.role})`,
   });
   return updated;
+}
+
+function cleanDigits(p?: string | null): string {
+  if (!p) return '';
+  return p.replace(/\D/g, '').replace(/^880/, '0');
+}
+
+export function getApprovedAdminRecords(): ApprovedAdminRecord[] {
+  if (!isClient()) return DEFAULT_APPROVED_ADMINS;
+  try {
+    const raw = localStorage.getItem(DEV_STORAGE_KEYS.APPROVED_ADMINS);
+    if (!raw) return DEFAULT_APPROVED_ADMINS;
+    return JSON.parse(raw);
+  } catch {
+    return DEFAULT_APPROVED_ADMINS;
+  }
+}
+
+export function isUserApprovedAdmin(phone?: string | null, email?: string | null): boolean {
+  if (isAllowedDevEmail(email)) return true;
+  const targetDigits = cleanDigits(phone);
+  const targetEmail = (email || '').trim().toLowerCase();
+  const list = getApprovedAdminRecords();
+  return list.some((rec) => {
+    if (rec.status !== 'approved') return false;
+    if (targetDigits && cleanDigits(rec.phone) === targetDigits) return true;
+    if (targetEmail && rec.email && rec.email.toLowerCase() === targetEmail) return true;
+    return false;
+  });
+}
+
+export function approveAdminUser(
+  phone: string,
+  fullName?: string,
+  email?: string,
+  approvedBy = 'Developer SuperAdmin',
+): ApprovedAdminRecord[] {
+  const list = getApprovedAdminRecords();
+  const targetDigits = cleanDigits(phone);
+  const existingIndex = list.findIndex((a) => cleanDigits(a.phone) === targetDigits);
+  const now = new Date().toLocaleString('bn-BD');
+  let updated: ApprovedAdminRecord[];
+  if (existingIndex >= 0) {
+    updated = list.map((a, idx) =>
+      idx === existingIndex
+        ? {
+            ...a,
+            fullName: fullName || a.fullName,
+            email: email || a.email,
+            status: 'approved' as const,
+            approvedAt: now,
+            approvedBy,
+          }
+        : a,
+    );
+  } else {
+    const newRecord: ApprovedAdminRecord = {
+      id: `adm-${Date.now().toString(36)}`,
+      phone: phone.trim(),
+      fullName: fullName?.trim() || 'পৌরসভা অ্যাডমিন',
+      email: email?.trim(),
+      role: 'admin',
+      status: 'approved',
+      approvedAt: now,
+      approvedBy,
+      note: 'ডেভেলপার কনসোল থেকে অনুমোদিত',
+    };
+    updated = [newRecord, ...list];
+  }
+  if (isClient()) {
+    try {
+      localStorage.setItem(DEV_STORAGE_KEYS.APPROVED_ADMINS, JSON.stringify(updated));
+      window.dispatchEvent(new CustomEvent('cs:admin-approvals-changed', { detail: updated }));
+    } catch (e) {
+      console.warn('Failed to save approved admin', e);
+    }
+  }
+  recordDevAudit({
+    actor: approvedBy,
+    action: 'APPROVE_MUNICIPAL_ADMIN',
+    category: 'auth',
+    details: `Approved municipal/management admin access for ${phone}`,
+  });
+  return updated;
+}
+
+export function revokeAdminUser(phone: string): ApprovedAdminRecord[] {
+  const list = getApprovedAdminRecords();
+  const targetDigits = cleanDigits(phone);
+  const updated = list.map((a) =>
+    cleanDigits(a.phone) === targetDigits ? { ...a, status: 'revoked' as const } : a,
+  );
+  if (isClient()) {
+    try {
+      localStorage.setItem(DEV_STORAGE_KEYS.APPROVED_ADMINS, JSON.stringify(updated));
+      window.dispatchEvent(new CustomEvent('cs:admin-approvals-changed', { detail: updated }));
+    } catch (e) {
+      console.warn('Failed to revoke admin', e);
+    }
+  }
+  recordDevAudit({
+    actor: 'Developer SuperAdmin',
+    action: 'REVOKE_MUNICIPAL_ADMIN',
+    category: 'auth',
+    details: `Revoked municipal admin access for ${phone}`,
+  });
+  return updated;
+}
+
+export function requestAdminAccess(phone: string, fullName: string, email?: string): void {
+  const list = getApprovedAdminRecords();
+  const targetDigits = cleanDigits(phone);
+  const exists = list.some((a) => cleanDigits(a.phone) === targetDigits);
+  if (exists) return;
+  const newReq: ApprovedAdminRecord = {
+    id: `adm-req-${Date.now().toString(36)}`,
+    phone: phone.trim(),
+    fullName: fullName.trim(),
+    email: email?.trim(),
+    role: 'admin',
+    status: 'pending',
+    requestedAt: new Date().toLocaleString('bn-BD'),
+    note: 'পৌর অ্যাডমিন প্যানেলে প্রবেশের অপেক্ষমাণ আবেদন',
+  };
+  const updated = [...list, newReq];
+  if (isClient()) {
+    try {
+      localStorage.setItem(DEV_STORAGE_KEYS.APPROVED_ADMINS, JSON.stringify(updated));
+      window.dispatchEvent(new CustomEvent('cs:admin-approvals-changed', { detail: updated }));
+    } catch (e) {
+      console.warn('Failed to save admin request', e);
+    }
+  }
 }
 
 export function getDevOtps(): DevOtpRecord[] {

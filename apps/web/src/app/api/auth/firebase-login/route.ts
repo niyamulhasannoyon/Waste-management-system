@@ -50,20 +50,42 @@ export async function POST(request: Request) {
       );
     }
 
-    const verifiedPhone =
+    const rawPhone =
+      body.phone ||
+      body.phoneNumber ||
+      body.phone_number ||
       decodedToken.phone_number ||
       decodedToken.firebase?.identities?.phone?.[0];
 
-    if (!verifiedPhone) {
+    if (!rawPhone || typeof rawPhone !== 'string' || rawPhone.trim().length === 0) {
       return NextResponse.json(
         {
           error: {
-            code: 'UNAUTHORIZED',
-            message: 'Firebase ID token does not have an associated phone number.',
-            message_bn: 'ফায়ারবেস টোকেনে কোনো ফোন নম্বর পাওয়া যায়নি।',
+            code: 'VALIDATION_ERROR',
+            message: 'A valid Bangladeshi mobile phone number is required.',
+            message_bn: 'মোবাইল নম্বর প্রদান করা আবশ্যক।',
           },
         },
-        { status: 401 },
+        { status: 400 },
+      );
+    }
+
+    const resolvedFullName = (
+      fullName ||
+      decodedToken.name ||
+      ''
+    ).trim();
+
+    if (!resolvedFullName) {
+      return NextResponse.json(
+        {
+          error: {
+            code: 'VALIDATION_ERROR',
+            message: 'Full name is required.',
+            message_bn: 'আপনার পূর্ণ নাম প্রদান করা আবশ্যক।',
+          },
+        },
+        { status: 400 },
       );
     }
 
@@ -75,7 +97,8 @@ export async function POST(request: Request) {
       },
       body: JSON.stringify({
         id_token: idToken,
-        full_name: fullName,
+        phone: rawPhone.trim(),
+        full_name: resolvedFullName,
         ward_id: wardId,
         role: role,
       }),

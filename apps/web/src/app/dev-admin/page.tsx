@@ -18,6 +18,7 @@ import {
   Search,
   Server,
   ShieldAlert,
+  ShieldCheck,
   Smartphone,
   Sliders,
   Sparkles,
@@ -38,6 +39,10 @@ import {
   DevMarketRate,
   DevAuditEvent,
   ExtendedRole,
+  ApprovedAdminRecord,
+  getApprovedAdminRecords,
+  approveAdminUser,
+  revokeAdminUser,
   getDevFeatureFlags,
   saveDevFeatureFlags,
   getDevUsers,
@@ -130,6 +135,42 @@ function DevAdminConsoleContent() {
   const [newUserName, setNewUserName] = useState('');
   const [newUserPhone, setNewUserPhone] = useState('');
   const [newUserRole, setNewUserRole] = useState<ExtendedRole>('citizen');
+
+  const [adminApprovals, setAdminApprovals] = useState<ApprovedAdminRecord[]>(getApprovedAdminRecords());
+  const [newAdminPhone, setNewAdminPhone] = useState('');
+  const [newAdminName, setNewAdminName] = useState('');
+
+  useEffect(() => {
+    const handleApprovalsChanged = () => {
+      setAdminApprovals(getApprovedAdminRecords());
+    };
+    window.addEventListener('cs:admin-approvals-changed', handleApprovalsChanged);
+    return () => {
+      window.removeEventListener('cs:admin-approvals-changed', handleApprovalsChanged);
+    };
+  }, []);
+
+  const handleApproveAdmin = (phone: string, name?: string, email?: string) => {
+    const updated = approveAdminUser(phone, name, email);
+    setAdminApprovals([...updated]);
+    showToast(`পৌর অ্যাডমিন অনুমোদন নিশ্চিত করা হয়েছে: ${phone}`);
+  };
+
+  const handleRevokeAdmin = (phone: string) => {
+    const updated = revokeAdminUser(phone);
+    setAdminApprovals([...updated]);
+    showToast(`পৌর অ্যাডমিন অনুমোদন প্রত্যাহার করা হয়েছে: ${phone}`);
+  };
+
+  const handleAddDirectAdmin = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newAdminPhone.trim()) return;
+    const updated = approveAdminUser(newAdminPhone.trim(), newAdminName.trim() || undefined);
+    setAdminApprovals([...updated]);
+    setNewAdminPhone('');
+    setNewAdminName('');
+    showToast(`নতুন পৌর অ্যাডমিন অনুমোদন যোগ করা হয়েছে!`);
+  };
 
   // Periodic GPS simulation tick if enabled
   useEffect(() => {
@@ -439,6 +480,48 @@ function DevAdminConsoleContent() {
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {/* Flag: OTP Paused & Google Login Active */}
+              <div className="rounded-xl border border-amber-500/40 bg-amber-950/20 p-5 transition hover:border-amber-500/60 sm:col-span-2 lg:col-span-3">
+                <div className="flex flex-wrap items-start justify-between gap-4">
+                  <div>
+                    <span className="text-xs font-mono uppercase tracking-wider text-amber-400 font-bold">
+                      FLAG: OTP_VERIFICATION_PAUSED (যান্ত্রিক ত্রুটির কারণে OTP স্থগিত)
+                    </span>
+                    <h3 className="mt-1 text-base font-bold text-white flex items-center gap-2">
+                      <span>SMS OTP যাচাইকরণ স্থগিত &amp; নাম + মোবাইল + Google সাইন-ইন সক্রিয়</span>
+                    </h3>
+                    <p className="mt-1 text-xs text-slate-300 max-w-3xl leading-relaxed">
+                      টেলিকম এসএমএস গেটওয়ে যান্ত্রিক সমস্যার কারণে পাবলিক OTP চ্যালেঞ্জ সাময়িক স্থগিত রয়েছে।
+                      ব্যবহারকারীরা নাম এবং ১১ সংখ্যার মোবাইল নম্বর প্রদান করে Google সাইন-ইনের মাধ্যমে লগইন করতে পারবেন।
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleToggleFlag('otpPaused')}
+                    className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                      flags.otpPaused ? 'bg-amber-500' : 'bg-slate-700'
+                    }`}
+                  >
+                    <span
+                      className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition duration-200 ease-in-out ${
+                        flags.otpPaused ? 'translate-x-5' : 'translate-x-0'
+                      }`}
+                    />
+                  </button>
+                </div>
+                <div className="mt-3 flex items-center gap-2 text-[11px] font-mono">
+                  <span
+                    className={`inline-flex rounded px-2 py-0.5 font-bold ${
+                      flags.otpPaused
+                        ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                        : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                    }`}
+                  >
+                    STATUS: {flags.otpPaused ? 'PAUSED (স্থগিত - Google Sign-in Enforced)' : 'NORMAL (স্বাভাবিক OTP সক্রিয়)'}
+                  </span>
+                </div>
+              </div>
+
               {/* Flag: Offline Demo Mode */}
               <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-5 transition hover:border-slate-700">
                 <div className="flex items-start justify-between">
@@ -750,20 +833,20 @@ function DevAdminConsoleContent() {
                     ACTIVE
                   </span>
                 </div>
-                <h3 className="mt-2 text-base font-bold text-white">Firebase Phone Auth</h3>
-                <p className="text-xs text-slate-400 font-mono mt-0.5">clean-savar.firebaseapp.com</p>
+                <h3 className="mt-2 text-base font-bold text-white">Google Cloud OAuth 2.0</h3>
+                <p className="text-xs text-slate-400 font-mono mt-0.5 truncate">Client ID: 969714135854...</p>
                 <div className="mt-4 space-y-1.5 text-xs text-slate-300 border-t border-slate-800/80 pt-3">
                   <div className="flex justify-between">
-                    <span className="text-slate-500">প্রজেক্ট আইডি:</span>
-                    <span className="font-mono text-slate-400">clean-savar</span>
+                    <span className="text-slate-500">প্রোভাইডার:</span>
+                    <span className="font-mono text-emerald-400">Google Cloud (GCP)</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-slate-500">টোকেন ভেরিফায়ার:</span>
-                    <span className="font-mono text-amber-400">Google JWKS RS256</span>
+                    <span className="font-mono text-amber-400">Google TokenInfo V3</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-slate-500">ক্যাশ টিটিএল:</span>
-                    <span className="font-mono text-slate-400">৬ ঘণ্টা (In-Memory)</span>
+                    <span className="text-slate-500">আর্কিটেকচার:</span>
+                    <span className="font-mono text-sky-400">Pure GCP Web Client</span>
                   </div>
                 </div>
               </div>
@@ -800,6 +883,153 @@ function DevAdminConsoleContent() {
         {/* TAB 3: USER RBAC MATRIX & 1-CLICK ROLE PROMOTION */}
         {activeTab === 'users' && (
           <div className="space-y-6">
+            {/* Municipal & Management Admin Approval Control Card */}
+            <div className="rounded-xl border border-emerald-500/30 bg-slate-900/80 p-5 space-y-5">
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-4">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <ShieldCheck className="h-5 w-5 text-emerald-400" />
+                    <h2 className="text-base font-bold text-white">
+                      পৌর ও ম্যানেজমেন্ট অ্যাডমিন অনুমোদন নিয়ন্ত্রণ (Municipal Admin Approvals)
+                    </h2>
+                  </div>
+                  <p className="text-xs text-slate-400 mt-1">
+                    সাভার পৌরসভা অপারেশনস ও ম্যানেজমেন্ট অ্যাডমিন প্যানেল (/admin) ব্যবহারের জন্য ডেভেলপার সুপার-অ্যাডমিনের অনুমোদন বাধ্যতামূলক।
+                  </p>
+                </div>
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-400 ring-1 ring-emerald-500/30">
+                  <ShieldCheck className="h-3.5 w-3.5" />
+                  SuperAdmin Enforcement Active
+                </span>
+              </div>
+
+              {/* Direct Add Admin Form */}
+              <form onSubmit={handleAddDirectAdmin} className="rounded-lg border border-slate-800 bg-slate-950/60 p-4">
+                <p className="text-xs font-semibold text-slate-300 mb-2">
+                  + সরাসরি নতুন পৌর / ম্যানেজমেন্ট অ্যাডমিন অনুমোদন দিন:
+                </p>
+                <div className="flex flex-wrap items-center gap-2.5">
+                  <input
+                    type="tel"
+                    value={newAdminPhone}
+                    onChange={(e) => setNewAdminPhone(e.target.value)}
+                    placeholder="মোবাইল নম্বর (যেমন: 01711-240100)"
+                    className="flex-1 min-w-[200px] rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-white placeholder-slate-500 font-mono focus:border-emerald-500 focus:outline-none"
+                  />
+                  <input
+                    type="text"
+                    value={newAdminName}
+                    onChange={(e) => setNewAdminName(e.target.value)}
+                    placeholder="নাম / পদবী (ঐচ্ছিক)"
+                    className="flex-1 min-w-[180px] rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-white placeholder-slate-500 focus:border-emerald-500 focus:outline-none"
+                  />
+                  <button
+                    type="submit"
+                    className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-500 transition-colors shadow"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    <span>অনুমোদন যোগ করুন</span>
+                  </button>
+                </div>
+              </form>
+
+              {/* Pending Approval Requests */}
+              {adminApprovals.some((a) => a.status === 'pending') && (
+                <div className="space-y-3 rounded-lg border border-amber-500/30 bg-amber-950/20 p-4">
+                  <div className="flex items-center gap-2 text-xs font-bold text-amber-400">
+                    <ShieldAlert className="h-4 w-4" />
+                    <span>অপেক্ষমাণ পৌর অ্যাডমিন আবেদন (Pending Requests):</span>
+                  </div>
+                  <div className="space-y-2">
+                    {adminApprovals
+                      .filter((a) => a.status === 'pending')
+                      .map((req) => (
+                        <div
+                          key={req.id}
+                          className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-500/20 bg-slate-900/90 p-3 text-xs"
+                        >
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-white">{req.fullName}</span>
+                              <span className="font-mono text-amber-300">({req.phone})</span>
+                            </div>
+                            <p className="text-[11px] text-slate-400 mt-0.5">
+                              {req.note} • আবেদন সময়: {req.requestedAt || 'আজ'}
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleApproveAdmin(req.phone, req.fullName, req.email)}
+                            className="flex items-center gap-1.5 rounded bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-500 transition-colors"
+                          >
+                            <CheckCircle2 className="h-3.5 w-3.5" />
+                            <span>অনুমোদন দিন</span>
+                          </button>
+                        </div>
+                      ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Approved Municipal Admins Table */}
+              <div className="overflow-x-auto rounded-lg border border-slate-800">
+                <table className="w-full text-left text-xs">
+                  <thead className="border-b border-slate-800 bg-slate-950 font-mono uppercase text-slate-400">
+                    <tr>
+                      <th className="px-3.5 py-2.5">অ্যাডমিন মোবাইল</th>
+                      <th className="px-3.5 py-2.5">নাম / পদবী</th>
+                      <th className="px-3.5 py-2.5">অনুমোদনকারী</th>
+                      <th className="px-3.5 py-2.5">অনুমোদনের তারিখ</th>
+                      <th className="px-3.5 py-2.5">স্ট্যাটাস</th>
+                      <th className="px-3.5 py-2.5 text-right">অ্যাকশন</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800/60 font-mono text-slate-300">
+                    {adminApprovals.map((adm) => (
+                      <tr key={adm.id} className="hover:bg-slate-900/50">
+                        <td className="px-3.5 py-2.5 font-bold text-white">{adm.phone}</td>
+                        <td className="px-3.5 py-2.5 font-sans text-slate-200">{adm.fullName}</td>
+                        <td className="px-3.5 py-2.5 text-slate-400">{adm.approvedBy || 'Developer'}</td>
+                        <td className="px-3.5 py-2.5 text-slate-500">{adm.approvedAt || 'পূর্বনির্ধারিত'}</td>
+                        <td className="px-3.5 py-2.5">
+                          <span
+                            className={`inline-flex rounded px-2 py-0.5 text-[11px] font-bold ${
+                              adm.status === 'approved'
+                                ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                                : adm.status === 'pending'
+                                ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                                : 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+                            }`}
+                          >
+                            {adm.status === 'approved' ? 'APPROVED' : adm.status === 'pending' ? 'PENDING' : 'REVOKED'}
+                          </span>
+                        </td>
+                        <td className="px-3.5 py-2.5 text-right">
+                          {adm.status === 'approved' ? (
+                            <button
+                              type="button"
+                              onClick={() => handleRevokeAdmin(adm.phone)}
+                              className="rounded border border-rose-500/30 bg-rose-500/10 px-2 py-1 text-[11px] text-rose-300 hover:bg-rose-500/20 transition-colors"
+                            >
+                              প্রত্যাহার করুন
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => handleApproveAdmin(adm.phone, adm.fullName, adm.email)}
+                              className="rounded border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 text-[11px] text-emerald-300 hover:bg-emerald-500/20 transition-colors"
+                            >
+                              অনুমোদন দিন
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
             <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-slate-800 bg-slate-900/60 p-5">
               <div>
                 <h2 className="text-lg font-bold text-white flex items-center gap-2">

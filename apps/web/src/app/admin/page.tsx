@@ -1,14 +1,17 @@
 'use client';
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import {
   CheckCircle2,
   Download,
   RefreshCw,
   Search,
+  ShieldAlert,
   ShieldCheck,
   Truck,
 } from 'lucide-react';
+import { isUserApprovedAdmin, requestAdminAccess } from '@/lib/dev-store';
 import { AuthGateCard } from '@/components/AuthGateCard';
 import {
   AdminDispatchDialog,
@@ -718,6 +721,117 @@ function AdminCommandInner() {
   );
 }
 
+function AdminApprovalGate({ children }: { children: React.ReactNode }) {
+  const { profile, logout } = useCleanSavar();
+  const [isApproved, setIsApproved] = useState<boolean>(false);
+  const [checked, setChecked] = useState<boolean>(false);
+  const [refreshKey, setRefreshKey] = useState<number>(0);
+
+  useEffect(() => {
+    if (!profile?.user) {
+      setIsApproved(false);
+      setChecked(true);
+      return;
+    }
+    const approved = isUserApprovedAdmin(profile.user.phone);
+    setIsApproved(approved);
+    setChecked(true);
+
+    if (!approved) {
+      // Automatically register pending access request for the developer admin to see & approve
+      requestAdminAccess(profile.user.phone, profile.user.full_name);
+    }
+
+    const handleApprovalsChanged = () => {
+      if (profile?.user?.phone) {
+        setIsApproved(isUserApprovedAdmin(profile.user.phone));
+      }
+    };
+    window.addEventListener('cs:admin-approvals-changed', handleApprovalsChanged);
+    return () => {
+      window.removeEventListener('cs:admin-approvals-changed', handleApprovalsChanged);
+    };
+  }, [profile, refreshKey]);
+
+  if (!checked) {
+    return (
+      <div className="cs-card p-6 sm:p-8">
+        <div className="h-5 w-48 animate-pulse rounded bg-[#E2E8F0]" />
+        <div className="mt-3 h-4 w-72 animate-pulse rounded bg-[#F1F5F9]" />
+      </div>
+    );
+  }
+
+  if (!isApproved && profile?.user) {
+    return (
+      <section className="cs-card border-amber-300 bg-amber-50/50 p-6 sm:p-8">
+        <div className="space-y-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <ShieldAlert className="h-5 w-5 text-amber-700" aria-hidden="true" />
+            <StatusBadge tone="warning">অনুমোদনের অপেক্ষায়</StatusBadge>
+            <span className="text-xs font-semibold text-amber-900">
+              Developer SuperAdmin Approval Required
+            </span>
+          </div>
+
+          <div className="space-y-2">
+            <h2 className="text-xl font-bold text-[#0F172A]">
+              পৌর বা ব্যবস্থাপনা অ্যাডমিন অনুমোদনের প্রয়োজন
+            </h2>
+            <p className="max-w-2xl text-sm leading-relaxed text-[#475569]">
+              সাভার পৌরসভা অপারেশনস ও ডিসপ্যাচ কমান্ড প্যানেলে প্রবেশের জন্য প্রধান ডেভেলপার অ্যাডমিন প্যানেল অথবা মূল ব্যবস্থাপনা প্রধানের অনুমোদনের প্রয়োজন। আপনার অ্যাকাউন্টের অনুমোদন অনুরোধটি সিস্টেমে নথিবদ্ধ রয়েছে।
+            </p>
+          </div>
+
+          <div className="rounded-lg border border-amber-200 bg-white p-4 text-xs space-y-2 max-w-lg">
+            <div className="flex justify-between border-b border-slate-100 pb-1.5">
+              <span className="text-slate-500">আপনার নাম:</span>
+              <span className="font-semibold text-slate-900">{profile.user.full_name}</span>
+            </div>
+            <div className="flex justify-between border-b border-slate-100 pb-1.5">
+              <span className="text-slate-500">নিবন্ধিত মোবাইল:</span>
+              <span className="font-metric font-semibold text-slate-900">{profile.user.phone}</span>
+            </div>
+            <div className="flex justify-between border-b border-slate-100 pb-1.5">
+              <span className="text-slate-500">আবেদনের স্ট্যাটাস:</span>
+              <span className="font-semibold text-amber-700">বিবেচনাধীন (Pending Approval)</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-500">অনুমোদন কর্তৃপক্ষ:</span>
+              <span className="font-mono text-slate-700">niyamulhasanbd@gmail.com</span>
+            </div>
+          </div>
+
+          <p className="text-xs text-slate-500">
+            ডেভেলপার অ্যাডমিন কনসোল (<Link href="/dev-admin" className="text-emerald-700 underline font-medium">/dev-admin</Link>) থেকে আপনার অ্যাকাউন্ট অনুমোদন করা মাত্রই এই ড্যাশবোর্ড সরাসরি উন্মুক্ত হবে।
+          </p>
+
+          <div className="flex flex-wrap gap-2 pt-2">
+            <Button
+              type="button"
+              variant="primary"
+              onClick={() => setRefreshKey((k) => k + 1)}
+              className="gap-2"
+            >
+              <RefreshCw className="h-4 w-4" />
+              অনুমোদনের স্ট্যাটাস রিফ্রেশ করুন
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => void logout()}
+            >
+              লগআউট / অন্য অ্যাকাউন্ট
+            </Button>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  return <>{children}</>;
+}
+
 export default function AdminPage() {
   return (
     <div className="space-y-6">
@@ -736,10 +850,12 @@ export default function AdminPage() {
 
       <AuthGateCard
         titleBn="পৌর অ্যাডমিন অ্যাকাউন্ট দিয়ে লগইন করুন"
-        descriptionBn="অপারেশনস কমান্ড ড্যাশবোর্ড দেখতে অনুমোদিত পৌর অ্যাডমিন মোবাইল নম্বর (যেমন: 01711-240100) দিয়ে OTP লগইন করুন।"
+        descriptionBn="অপারেশনস কমান্ড ড্যাশবোর্ড দেখতে অনুমোদিত পৌর অ্যাডমিন মোবাইল নম্বর বা Google অ্যাকাউন্ট দিয়ে সাইন-ইন করুন।"
         allowedRoles={['admin']}
       >
-        <AdminCommandInner />
+        <AdminApprovalGate>
+          <AdminCommandInner />
+        </AdminApprovalGate>
       </AuthGateCard>
     </div>
   );

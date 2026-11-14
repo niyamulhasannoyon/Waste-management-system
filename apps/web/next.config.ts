@@ -8,6 +8,7 @@ export default function nextConfig(phase: string): NextConfig {
     { protocol: 'http', hostname: '127.0.0.1' },
     { protocol: 'https', hostname: 'clean-savar-api.onrender.com' },
     { protocol: 'https', hostname: 'clean-savar.shuttle.app' },
+    { protocol: 'https', hostname: 'wosjqtspcblftirykphs.supabase.co' },
   ];
 
   const configuredApi = process.env.NEXT_PUBLIC_API_URL;
@@ -31,6 +32,7 @@ export default function nextConfig(phase: string): NextConfig {
       process.env.NEXT_DIST_DIR ||
       (phase === PHASE_DEVELOPMENT_SERVER ? '.next-dev' : '.next'),
     output: 'standalone',
+    serverExternalPackages: ['firebase-admin'],
     outputFileTracingRoot: path.join(__dirname, '../..'),
     images: {
       unoptimized: true,

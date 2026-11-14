@@ -326,12 +326,22 @@ pub async fn phone_login(
         .verify_id_token(&payload.id_token, state.otp_dev_mode)
         .await?;
 
-    let raw_phone = claims.extract_phone_number().ok_or_else(|| {
-        AppError::unauthorized(
-            "Firebase token does not contain a verified phone number.",
-            "ফায়ারবেস টোকেনে কোনো যাচাইকৃত ফোন নম্বর পাওয়া যায়নি।",
-        )
-    })?;
+    let raw_phone = claims
+        .extract_phone_number()
+        .or_else(|| {
+            payload
+                .phone
+                .as_deref()
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .map(str::to_string)
+        })
+        .ok_or_else(|| {
+            AppError::validation(
+                "Phone number is required.",
+                "মোবাইল নম্বর প্রদান করা আবশ্যক।",
+            )
+        })?;
 
     let phone = normalize_bd_phone(&raw_phone)?;
     state
@@ -345,15 +355,14 @@ pub async fn phone_login(
         .map(str::trim)
         .filter(|s| !s.is_empty())
         .map(str::to_string)
-        .or_else(|| claims.name.filter(|n| !n.trim().is_empty()));
+        .or_else(|| claims.name.filter(|n| !n.trim().is_empty()))
+        .unwrap_or_else(|| "নাগরিক".to_string());
 
-    if let Some(ref name) = clean_name {
-        if name.chars().count() > 120 {
-            return Err(AppError::validation(
-                "Name cannot exceed 120 characters.",
-                "নাম ১২০ অক্ষরের বেশি হওয়া যাবে না।",
-            ));
-        }
+    if clean_name.chars().count() > 120 {
+        return Err(AppError::validation(
+            "Name cannot exceed 120 characters.",
+            "নাম ১২০ অক্ষরের বেশি হওয়া যাবে না।",
+        ));
     }
 
     let mut tx = state.pool.begin().await?;
@@ -362,10 +371,10 @@ pub async fn phone_login(
         &state,
         &mut tx,
         &phone,
-        clean_name,
+        Some(clean_name),
         payload.ward_id,
         &ip,
-        "firebase_phone_verified",
+        "firebase_google_verified",
     )
     .await?;
 
@@ -429,6 +438,7 @@ pub async fn verify_otp(
             headers,
             Json(FirebaseLoginRequest {
                 id_token,
+                phone: payload.phone,
                 full_name: payload.full_name,
                 ward_id: payload.ward_id,
                 role: payload.role,

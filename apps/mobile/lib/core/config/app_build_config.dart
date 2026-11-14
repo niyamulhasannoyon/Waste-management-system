@@ -11,4 +11,18 @@ class AppBuildConfig {
     'ENABLE_DEMO_MODE',
     defaultValue: true,
   );
+
+  /// Google OAuth Web Client ID (used as serverClientId for Google Play Services ID token exchange)
+  static const String googleServerClientId = String.fromEnvironment(
+    'GOOGLE_SERVER_CLIENT_ID',
+    defaultValue:
+        '969714135854-1hd9ek2mkkv7m6s1617jm16pd4e55mhe.apps.googleusercontent.com',
+  );
+
+  /// Google OAuth Android Client ID (configured with package name & SHA-1 fingerprint)
+  static const String googleAndroidClientId = String.fromEnvironment(
+    'GOOGLE_ANDROID_CLIENT_ID',
+    defaultValue:
+        '969714135854-c3abr34d896uvqb90ekgjhhpmndkmgsu.apps.googleusercontent.com',
+  );
 }

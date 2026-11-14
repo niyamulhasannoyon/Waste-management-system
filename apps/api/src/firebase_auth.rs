@@ -247,91 +247,167 @@ impl FirebaseVerifier {
             }
         }
 
-        let header = decode_header(trimmed).map_err(|e| {
-            tracing::warn!(error = %e, "Invalid JWT header in Firebase ID token");
-            AppError::unauthorized(
-                "Invalid Firebase authentication token format.",
-                "টোকেন ফরম্যাট সঠিক নয়।",
-            )
-        })?;
+        let token_data = match decode_header(trimmed) {
+            Ok(header) if header.alg == Algorithm::RS256 && header.kid.is_some() => {
+                let kid = header.kid.unwrap();
+                let mut keys = self.get_public_keys().await?;
+                let key_pair = match keys.get(&kid) {
+                    Some(pair) => Some(pair.clone()),
+                    None => {
+                        // Key might have rotated, force refresh
+                        {
+                            let mut cache = self.cached_keys.write().await;
+                            cache.0 = Instant::now() - JWKS_CACHE_TTL * 2;
+                        }
+                        keys = self.get_public_keys().await?;
+                        keys.get(&kid).cloned()
+                    }
+                };
 
-        if header.alg != Algorithm::RS256 {
-            return Err(AppError::unauthorized(
-                "Invalid token signing algorithm.",
-                "অননুমোদিত টোকেন স্বাক্ষর।",
+                if let Some((n, e)) = key_pair {
+                    if let Ok(decoding_key) = DecodingKey::from_rsa_components(&n, &e) {
+                        let mut validation = Validation::new(Algorithm::RS256);
+                        validation.set_audience(&[&self.project_id]);
+                        validation.set_issuer(&[format!("https://securetoken.google.com/{}", self.project_id)]);
+                        validation.validate_exp = true;
+
+                        decode::<FirebaseClaims>(trimmed, &decoding_key, &validation).ok()
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        };
+
+        if let Some(token_data) = token_data {
+            if token_data.claims.sub.trim().is_empty() {
+                return Err(AppError::unauthorized(
+                    "Firebase token contains empty subject UID.",
+                    "টোকেন ইউজার আইডি সঠিক নয়।",
+                ));
+            }
+
+            let now = chrono::Utc::now().timestamp();
+            if token_data.claims.iat > now + 300 {
+                return Err(AppError::unauthorized(
+                    "Firebase token issued in the future.",
+                    "টোকেন ইস্যুর সময় সঠিক নয়।",
+                ));
+            }
+
+            if let Some(auth_time) = token_data.claims.auth_time {
+                if auth_time > now + 300 {
+                    return Err(AppError::unauthorized(
+                        "Firebase token auth_time is in the future.",
+                        "টোকেন প্রমাণীকরণের সময় সঠিক নয়।",
+                    ));
+                }
+            }
+
+            return Ok(token_data.claims);
+        }
+
+        // Fallback: verify as a direct Google OAuth ID token (from mobile Google Sign-In or Web OAuth)
+        self.verify_google_oauth_token(trimmed).await
+    }
+
+    /// Verifies a direct Google OAuth ID token using Google's official tokeninfo endpoint.
+    /// Validates that audience matches configured Android client ID or Web client ID.
+    pub async fn verify_google_oauth_token(&self, id_token: &str) -> Result<FirebaseClaims, AppError> {
+        let trimmed = id_token.trim();
+        if trimmed.is_empty() {
+            return Err(AppError::validation(
+                "Google ID token is required.",
+                "Google আইডি টোকেন প্রদান করুন।",
             ));
         }
 
-        let kid = header.kid.ok_or_else(|| {
-            AppError::unauthorized(
-                "Token missing signing key ID (kid).",
-                "টোকেনে সঠিক কী আইডি নেই।",
-            )
-        })?;
-
-        let mut keys = self.get_public_keys().await?;
-        let (n, e) = match keys.get(&kid) {
-            Some(pair) => pair.clone(),
-            None => {
-                // Key might have rotated, force refresh
-                {
-                    let mut cache = self.cached_keys.write().await;
-                    cache.0 = Instant::now() - JWKS_CACHE_TTL * 2;
-                }
-                keys = self.get_public_keys().await?;
-                keys.get(&kid).cloned().ok_or_else(|| {
-                    AppError::unauthorized(
-                        "Firebase token signed by unknown certificate authority.",
-                        "অজ্ঞাত সার্টিফিকেট দ্বারা স্বাক্ষরিত টোকেন।",
-                    )
-                })?
-            }
-        };
-
-        let decoding_key = DecodingKey::from_rsa_components(&n, &e).map_err(|err| {
-            tracing::error!(error = %err, "Failed to build RSA decoding key from JWK components");
-            AppError::Internal(format!("Failed to parse Firebase public JWK components: {err}"))
-        })?;
-
-        let mut validation = Validation::new(Algorithm::RS256);
-        validation.set_audience(&[&self.project_id]);
-        validation.set_issuer(&[format!("https://securetoken.google.com/{}", self.project_id)]);
-        validation.validate_exp = true;
-
-        let token_data = decode::<FirebaseClaims>(trimmed, &decoding_key, &validation)
-            .map_err(|err| {
-                tracing::warn!(error = %err, "Firebase ID token verification failed");
+        let res = self
+            .client
+            .get("https://oauth2.googleapis.com/tokeninfo")
+            .query(&[("id_token", trimmed)])
+            .send()
+            .await
+            .map_err(|e| {
+                tracing::warn!(error = %e, "Failed to reach Google tokeninfo endpoint");
                 AppError::unauthorized(
-                    format!("Firebase token verification failed: {err}"),
-                    "ফায়ারবেস আইডি টোকেন যাচাইকরণ ব্যর্থ হয়েছে। পুনরায় লগইন করুন।",
+                    "Unable to verify Google authentication token.",
+                    "Google টোকেন যাচাই করা যায়নি।",
                 )
             })?;
 
-        if token_data.claims.sub.trim().is_empty() {
+        if !res.status().is_success() {
+            let status = res.status();
+            let body = res.text().await.unwrap_or_default();
+            tracing::warn!(status = %status, body = %body, "Google tokeninfo verification rejected");
             return Err(AppError::unauthorized(
-                "Firebase token contains empty subject UID.",
-                "টোকেন ইউজার আইডি সঠিক নয়।",
+                "Invalid or expired Google authentication token.",
+                "Google আইডি টোকেন অবৈধ বা মেয়াদোত্তীর্ণ।",
+            ));
+        }
+
+        #[derive(Deserialize)]
+        struct GoogleTokenInfo {
+            sub: String,
+            aud: String,
+            iss: String,
+            #[serde(default)]
+            email: Option<String>,
+            #[serde(default)]
+            name: Option<String>,
+            #[serde(default)]
+            exp: Option<String>,
+            #[serde(default)]
+            iat: Option<String>,
+        }
+
+        let info = res.json::<GoogleTokenInfo>().await.map_err(|e| {
+            tracing::warn!(error = %e, "Failed to parse Google tokeninfo payload");
+            AppError::unauthorized(
+                "Invalid Google token response format.",
+                "Google টোকেন ফরম্যাট সঠিক নয়।",
+            )
+        })?;
+
+        let web_client_id = std::env::var("GOOGLE_CLIENT_ID").unwrap_or_default();
+        let android_client_id = std::env::var("GOOGLE_ANDROID_CLIENT_ID").unwrap_or_default();
+
+        let aud_matches = (!web_client_id.is_empty() && info.aud == web_client_id)
+            || (!android_client_id.is_empty() && info.aud == android_client_id);
+
+        if !aud_matches {
+            tracing::warn!(aud = %info.aud, "Google token audience mismatch");
+            return Err(AppError::unauthorized(
+                "Google token audience does not match this application.",
+                "Google টোকেন এই অ্যাপ্লিকেশনের জন্য প্রযোজ্য নয়।",
             ));
         }
 
         let now = chrono::Utc::now().timestamp();
-        if token_data.claims.iat > now + 300 {
-            return Err(AppError::unauthorized(
-                "Firebase token issued in the future.",
-                "টোকেন ইস্যুর সময় সঠিক নয়।",
-            ));
-        }
+        let exp = info.exp.as_deref().and_then(|s| s.parse::<i64>().ok()).unwrap_or(now + 3600);
+        let iat = info.iat.as_deref().and_then(|s| s.parse::<i64>().ok()).unwrap_or(now);
 
-        if let Some(auth_time) = token_data.claims.auth_time {
-            if auth_time > now + 300 {
-                return Err(AppError::unauthorized(
-                    "Firebase token auth_time is in the future.",
-                    "টোকেন প্রমাণীকরণের সময় সঠিক নয়।",
-                ));
-            }
-        }
-
-        Ok(token_data.claims)
+        Ok(FirebaseClaims {
+            sub: info.sub,
+            aud: info.aud,
+            iss: info.iss,
+            exp,
+            iat,
+            auth_time: Some(iat),
+            phone_number: None,
+            email: info.email.clone(),
+            name: info.name,
+            firebase: Some(FirebaseIdentitiesHolder {
+                identities: Some(FirebaseIdentities {
+                    phone: vec![],
+                    email: info.email.into_iter().collect(),
+                }),
+                sign_in_provider: Some("google.com".to_string()),
+            }),
+        })
     }
 }
 

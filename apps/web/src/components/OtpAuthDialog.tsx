@@ -13,8 +13,8 @@ export function OtpAuthDialog() {
     <NativeDialog
       open={authModalOpen}
       onClose={closeAuthModal}
-      title="ক্লিন সাভার — মোবাইল OTP লগইন"
-      description="নাগরিক, সংগ্রহকারী, রিসাইক্লিং পার্টনার ও পৌর অ্যাডমিন যাচাইকরণ"
+      title="ক্লিন সাভার — ব্যবহারকারী লগইন"
+      description="নাম, মোবাইল নম্বর ও Google সাইন-ইন দিয়ে যাচাইকরণ"
     >
       <div className="space-y-4">
         <OtpAuthPanel onSuccess={() => closeAuthModal()} titleId="modal-otp" />

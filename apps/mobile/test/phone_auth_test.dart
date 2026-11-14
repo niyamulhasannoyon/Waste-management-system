@@ -23,6 +23,7 @@ class _MockFirebaseApiClient extends core.CleanSavarApiClient {
   @override
   Future<core.OtpAuthResult> loginWithFirebaseToken({
     required String idToken,
+    String? phone,
     String? fullName,
     int? wardId,
     String? role,
@@ -289,6 +290,33 @@ void main() {
 
       // Should be navigated to citizen home screen
       expect(find.textContaining('রাফি'), findsWidgets);
+    });
+
+    testWidgets('Auth screen displays OTP paused banner and requires Name and Phone with Google Login button', (tester) async {
+      final mockApi = _MockFirebaseApiClient();
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            apiClientProvider.overrideWithValue(mockApi),
+            deviceCameraServiceProvider.overrideWithValue(_DummyCameraService()),
+            deviceLocationServiceProvider.overrideWithValue(_DummyLocationService()),
+            qrCameraScannerEnabledProvider.overrideWithValue(false),
+          ],
+          child: const CleanSavarApp(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Ensure OTP paused notice banner is displayed
+      expect(find.textContaining('SMS OTP সাময়িক স্থগিত'), findsOneWidget);
+
+      // Ensure Name and Phone input fields exist
+      expect(find.byKey(const ValueKey('login_name_input')), findsOneWidget);
+      expect(find.byKey(const ValueKey('login_phone_input')), findsOneWidget);
+
+      // Ensure Google Sign-In button exists
+      expect(find.byKey(const ValueKey('login_google_btn')), findsOneWidget);
+      expect(find.text('Google দিয়ে সাইন-ইন করুন'), findsOneWidget);
     });
   });
 }

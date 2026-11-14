@@ -197,8 +197,14 @@ async function fetchJson<T>(
 
   let res: Response;
   const base = getActiveApiBase();
+  const url =
+    path.startsWith('http://') ||
+    path.startsWith('https://') ||
+    path.startsWith('/api/auth/')
+      ? path
+      : `${base}${path}`;
   try {
-    res = await fetch(`${base}${path}`, {
+    res = await fetch(url, {
       ...rest,
       signal: controller.signal,
       headers,
@@ -511,6 +517,7 @@ export async function verifyOtp(input: {
 
 export async function loginWithFirebaseToken(input: {
   idToken: string;
+  phone?: string;
   fullName?: string;
   wardId?: number;
   role?: Extract<UserRole, 'citizen' | 'collector'>;
@@ -519,6 +526,37 @@ export async function loginWithFirebaseToken(input: {
     method: 'POST',
     body: JSON.stringify({
       id_token: input.idToken,
+      phone: input.phone,
+      full_name: input.fullName,
+      ward_id: input.wardId,
+      role: input.role,
+    }),
+  });
+  const session: AuthSession = {
+    accessToken: res.access_token,
+    expiresAtIso: new Date(Date.now() + res.expires_in_seconds * 1000).toISOString(),
+    profile: res.profile,
+  };
+  writeStoredSession(session);
+  return session;
+}
+
+export async function loginWithGoogleAuth(input: {
+  idToken?: string;
+  accessToken?: string;
+  code?: string;
+  phone?: string;
+  fullName?: string;
+  wardId?: number;
+  role?: Extract<UserRole, 'citizen' | 'collector'>;
+}): Promise<AuthSession> {
+  const res = await fetchJson<OtpVerifyResponse>('/api/auth/google', {
+    method: 'POST',
+    body: JSON.stringify({
+      id_token: input.idToken,
+      access_token: input.accessToken,
+      code: input.code,
+      phone: input.phone,
       full_name: input.fullName,
       ward_id: input.wardId,
       role: input.role,

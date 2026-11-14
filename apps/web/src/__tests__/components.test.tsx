@@ -18,10 +18,33 @@ vi.mock('next/navigation', () => ({
 
 const mockRequestOtp = vi.fn();
 const mockVerifyOtp = vi.fn();
+const mockLoginWithFirebaseToken = vi.fn();
+const mockLoginWithGoogleAuth = vi.fn();
 const mockCreatePickup = vi.fn();
 const mockFetchPickups = vi.fn();
 const mockFetchRecyclableLots = vi.fn();
 const mockClaimRecyclableLot = vi.fn();
+
+vi.mock('@/lib/google-cloud-client', () => ({
+  signInWithGoogleCloud: vi.fn().mockResolvedValue({
+    accessToken: 'mock-gcp-access-token',
+    userEmail: 'user@example.com',
+    userName: 'রাফি আহমেদ',
+  }),
+}));
+
+vi.mock('@/lib/firebase-client', () => ({
+  signInWithGoogle: vi.fn().mockResolvedValue({
+    user: {
+      getIdToken: vi.fn().mockResolvedValue('mock-google-id-token'),
+      displayName: 'রাফি আহমেদ',
+      email: 'user@example.com',
+    },
+  }),
+  isFirebaseClientConfigured: () => true,
+  signOutFirebaseUser: vi.fn(),
+  subscribeToFirebaseUser: vi.fn().mockReturnValue(() => {}),
+}));
 
 vi.mock('@/lib/api-client', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/api-client')>();
@@ -29,6 +52,8 @@ vi.mock('@/lib/api-client', async (importOriginal) => {
     ...actual,
     requestOtp: (...args: unknown[]) => mockRequestOtp(...args),
     verifyOtp: (...args: unknown[]) => mockVerifyOtp(...args),
+    loginWithFirebaseToken: (...args: unknown[]) => mockLoginWithFirebaseToken(...args),
+    loginWithGoogleAuth: (...args: unknown[]) => mockLoginWithGoogleAuth(...args),
     createPickup: (...args: unknown[]) => mockCreatePickup(...args),
     fetchPickups: (...args: unknown[]) => mockFetchPickups(...args),
     fetchRecyclableLots: (...args: unknown[]) => mockFetchRecyclableLots(...args),
@@ -96,48 +121,37 @@ describe('Clean Savar interactive web workflows', () => {
     mockSession = null;
   });
 
-  it('validates OTP phone after interaction and progresses through single-input WebOTP flow', async () => {
-    mockRequestOtp.mockResolvedValueOnce({
-      phone: '01715-883210',
-      expires_in_seconds: 300,
-      message: 'OTP issued',
-      message_bn: 'OTP পাঠানো হয়েছে',
-      otp_preview: '654321',
-    });
+  it('validates required name & phone number and logs in with Google', async () => {
     const verified = buildSession('citizen');
-    mockVerifyOtp.mockResolvedValueOnce(verified);
+    mockLoginWithGoogleAuth.mockResolvedValueOnce(verified);
 
     render(<OtpAuthPanel />);
 
+    // Shows professional notice that OTP is paused
+    expect(screen.getByText(/জরুরী নোটিশ: SMS OTP সাময়িক স্থগিত/)).toBeInTheDocument();
+
+    const nameInput = screen.getByLabelText(/আপনার পূর্ণ নাম/);
     const phoneInput = screen.getByLabelText(/মোবাইল নম্বর/);
+
     // Error is not shown before interaction
-    expect(screen.queryByText(/সঠিক বাংলাদেশি মোবাইল নম্বর/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/সঠিক বাংলাদেশি মোবাইল নম্বর দিন/)).not.toBeInTheDocument();
 
     fireEvent.change(phoneInput, { target: { value: '123' } });
     fireEvent.blur(phoneInput);
-    expect(screen.getByText(/সঠিক বাংলাদেশি মোবাইল নম্বর/)).toBeInTheDocument();
+    expect(screen.getByText(/সঠিক.*বাংলাদেশি মোবাইল নম্বর/)).toBeInTheDocument();
 
+    fireEvent.change(nameInput, { target: { value: 'রাফি আহমেদ' } });
     fireEvent.change(phoneInput, { target: { value: '01715883210' } });
-    fireEvent.click(screen.getByRole('button', { name: /মোবাইল OTP পাঠান/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Google দিয়ে সাইন-ইন করে প্রবেশ করুন/ }));
 
     await waitFor(() => {
-      expect(mockRequestOtp).toHaveBeenCalledWith(
-        expect.objectContaining({ phone: '01715-883210', role: 'citizen' }),
+      expect(mockLoginWithGoogleAuth).toHaveBeenCalledWith(
+        expect.objectContaining({
+          phone: '01715-883210',
+          fullName: 'রাফি আহমেদ',
+          role: 'citizen',
+        }),
       );
-    });
-
-    const otpInput = await screen.findByLabelText(/৬ সংখ্যার OTP কোড/);
-    expect(otpInput).toHaveAttribute('autocomplete', 'one-time-code');
-    expect(otpInput).toHaveAttribute('inputmode', 'numeric');
-
-    fireEvent.click(screen.getByRole('button', { name: 'কোড বসান' }));
-    fireEvent.click(screen.getByRole('button', { name: /OTP যাচাই করে লগইন করুন/ }));
-
-    await waitFor(() => {
-      expect(mockVerifyOtp).toHaveBeenCalledWith({
-        phone: '01715-883210',
-        otp: '654321',
-      });
       expect(mockApplyAuthSession).toHaveBeenCalledWith(verified);
     });
   });
@@ -251,27 +265,15 @@ describe('Clean Savar interactive web workflows', () => {
     });
   });
 
-  it('sends role: citizen when signing in with a collector phone so otp-login does not 403', async () => {
-    mockRequestOtp.mockResolvedValueOnce({
-      phone: '01712-448910',
-      expires_in_seconds: 300,
-      message: 'OTP challenge generated.',
-      message_bn: 'OTP পাঠানো হয়েছে',
-      otp_preview: '654321',
-    });
-
+  it('displays technical pause notice for SMS OTP and requires full name and phone', async () => {
     render(<OtpAuthPanel />);
-    const phoneInput = screen.getByLabelText(/মোবাইল নম্বর/);
-    fireEvent.change(phoneInput, { target: { value: '01712448910' } });
-    fireEvent.click(screen.getByRole('button', { name: 'মোবাইল OTP পাঠান' }));
+    expect(screen.getByText(/জরুরী নোটিশ: SMS OTP সাময়িক স্থগিত/)).toBeInTheDocument();
+    expect(screen.getAllByText(/যান্ত্রিক ত্রুটি/).length).toBeGreaterThanOrEqual(1);
 
+    // Clicking Google login with empty fields triggers validation errors
+    fireEvent.click(screen.getByRole('button', { name: /Google দিয়ে সাইন-ইন করে প্রবেশ করুন/ }));
     await waitFor(() => {
-      expect(mockRequestOtp).toHaveBeenCalledWith(
-        expect.objectContaining({
-          phone: '01712-448910',
-          role: 'citizen',
-        }),
-      );
+      expect(screen.getByText(/আপনার পূর্ণ নাম লেখা আবশ্যক/)).toBeInTheDocument();
     });
   });
 

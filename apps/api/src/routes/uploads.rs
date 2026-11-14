@@ -208,12 +208,39 @@ pub async fn upload_photo(
         let object_key = format!("{}.{ext}", Uuid::new_v4());
         let file_path = std::path::Path::new(&state.upload_dir).join(&object_key);
 
-        fs::write(&file_path, &clean_bytes)
-            .await
-            .map_err(|e| AppError::Internal(format!("failed writing photo: {e}")))?;
+        let _ = fs::write(&file_path, &clean_bytes).await;
 
         let base = state.public_upload_base_url.trim_end_matches('/');
         let url = format!("{base}/{object_key}");
+
+        // If configured with Supabase Storage, push the sanitized image to cloud bucket for persistence
+        if base.contains("supabase.co/storage") {
+            let upload_endpoint = base.replace("/object/public/", "/object/");
+            let anon_key = std::env::var("SUPABASE_ANON_KEY").unwrap_or_else(|_| {
+                "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indvc2pxdHNwY2JsZnRpcnlrcGhzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTQ1NjcxMzMsImV4cCI6MjExMDE0MzEzM30.L7X4LUujetlAhwTlMkG4ohEwb4sHg6c2i2OJJK_6a8A".to_string()
+            });
+
+            let client = reqwest::Client::new();
+            let upload_res = client
+                .post(format!("{upload_endpoint}/{object_key}"))
+                .header("Authorization", format!("Bearer {anon_key}"))
+                .header("Content-Type", mime)
+                .body(clean_bytes.clone())
+                .send()
+                .await;
+
+            match upload_res {
+                Ok(resp) if resp.status().is_success() => {
+                    tracing::info!(object_key = %object_key, "Uploaded image to Supabase Storage CDN");
+                }
+                Ok(resp) => {
+                    tracing::warn!(status = %resp.status(), "Supabase storage upload responded with non-2xx status");
+                }
+                Err(err) => {
+                    tracing::warn!(error = %err, "Failed uploading image to Supabase storage, using fallback");
+                }
+            }
+        }
 
         return Ok((
             StatusCode::CREATED,

@@ -64,6 +64,8 @@ pub struct PhoneLoginRequest {
     #[serde(alias = "idToken")]
     pub id_token: String,
     #[serde(default)]
+    pub phone: Option<String>,
+    #[serde(default)]
     pub full_name: Option<String>,
     #[serde(default)]
     pub ward_id: Option<i16>,

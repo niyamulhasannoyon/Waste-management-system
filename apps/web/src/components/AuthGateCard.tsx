@@ -40,7 +40,7 @@ export function AuthGateCard({
           <div className="space-y-1.5">
             <div className="inline-flex items-center gap-2 text-sm font-semibold text-[#14532D]">
               <ShieldCheck className="h-5 w-5 text-[#15803D]" aria-hidden="true" />
-              মোবাইল OTP যাচাই প্রয়োজন
+              ব্যবহারকারী লগইন ও নিরাপত্তা যাচাই প্রয়োজন
             </div>
             <h2 id="auth-gate-title" className="text-lg font-bold text-[#0F172A]">
               {titleBn}
@@ -49,7 +49,7 @@ export function AuthGateCard({
           </div>
           <div className="flex shrink-0 flex-wrap gap-2">
             <Button type="button" onClick={() => openAuthModal(descriptionBn)}>
-              মোবাইল OTP দিয়ে লগইন করুন
+              Google দিয়ে লগইন করুন
             </Button>
             <Link
               href="/login"

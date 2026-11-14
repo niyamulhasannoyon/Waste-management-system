@@ -26,11 +26,11 @@ export default function LoginPage() {
       <div className="space-y-1">
         <div className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#15803D]">
           <ShieldCheck className="h-4 w-4" aria-hidden="true" />
-          এককালীন পাসকোড (OTP) যাচাইকরণ
+          ব্যবহারকারী যাচাইকরণ ও নিরাপদ প্রবেশ
         </div>
         <h1 className="text-2xl font-bold text-[#0F172A]">ক্লিন সাভার অ্যাকাউন্ট লগইন</h1>
         <p className="text-sm text-[#475569]">
-          মোবাইল নম্বর দিয়ে লগইন করলে আপনার পিকআপ, ময়লার অভিযোগ, বিজ্ঞপ্তি ও নির্ধারিত ড্যাশবোর্ড আনলক হবে।
+          নাম ও মোবাইল নম্বর প্রদান করে Google অ্যাকাউন্টের মাধ্যমে দ্রুত ও নিরাপদে সাইন-ইন সম্পন্ন করুন।
         </p>
       </div>
 

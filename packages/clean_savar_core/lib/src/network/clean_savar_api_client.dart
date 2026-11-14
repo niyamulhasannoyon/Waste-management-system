@@ -24,7 +24,9 @@ class CleanSavarApiClient {
   })  : baseUrl = (baseUrl ??
                 const String.fromEnvironment(
                   'API_BASE_URL',
-                  defaultValue: 'http://10.0.2.2:8080/api/v1',
+                  defaultValue: bool.fromEnvironment('dart.vm.product')
+                      ? 'https://clean-savar-api.onrender.com/api/v1'
+                      : 'http://10.0.2.2:8080/api/v1',
                 ))
             .replaceAll(RegExp(r'/$'), ''),
         _client = httpClient ?? http.Client(),
@@ -410,6 +412,7 @@ class CleanSavarApiClient {
 
   Future<OtpAuthResult> loginWithFirebaseToken({
     required String idToken,
+    String? phone,
     String? fullName,
     int? wardId,
     String? role,
@@ -420,6 +423,7 @@ class CleanSavarApiClient {
           headers: _headers(),
           body: jsonEncode({
             'id_token': idToken,
+            if (phone != null && phone.trim().isNotEmpty) 'phone': phone.trim(),
             if (fullName != null && fullName.trim().isNotEmpty)
               'full_name': fullName.trim(),
             if (wardId != null) 'ward_id': wardId,

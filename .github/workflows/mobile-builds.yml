@@ -6,7 +6,7 @@ on:
       api_base_url:
         description: "Optional backend API base URL baked into the builds"
         required: false
-        default: "http://10.0.2.2:8080/api/v1"
+        default: "https://clean-savar-api.onrender.com/api/v1"
         type: string
       enable_demo_mode:
         description: "Include offline Citizen & Collector demo preview buttons in release builds"
@@ -50,7 +50,7 @@ jobs:
       - name: Build size-optimized split APKs
         working-directory: apps/mobile
         run: |
-          API_URL="${{ inputs.api_base_url || 'http://10.0.2.2:8080/api/v1' }}"
+          API_URL="${{ inputs.api_base_url || 'https://clean-savar-api.onrender.com/api/v1' }}"
           DEMO_MODE="${{ inputs.enable_demo_mode != false && 'true' || 'false' }}"
           flutter build apk --release \
             --split-per-abi \
@@ -93,7 +93,7 @@ jobs:
       - name: Build iOS release app (unsigned)
         working-directory: apps/mobile
         run: |
-          API_URL="${{ inputs.api_base_url || 'http://10.0.2.2:8080/api/v1' }}"
+          API_URL="${{ inputs.api_base_url || 'https://clean-savar-api.onrender.com/api/v1' }}"
           DEMO_MODE="${{ inputs.enable_demo_mode != false && 'true' || 'false' }}"
           flutter build ios --release \
             --no-codesign \
