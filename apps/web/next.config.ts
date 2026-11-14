@@ -6,6 +6,7 @@ export default function nextConfig(phase: string): NextConfig {
   const remotePatterns: NonNullable<NextConfig['images']>['remotePatterns'] = [
     { protocol: 'http', hostname: 'localhost' },
     { protocol: 'http', hostname: '127.0.0.1' },
+    { protocol: 'https', hostname: 'clean-savar-api.onrender.com' },
     { protocol: 'https', hostname: 'clean-savar.shuttle.app' },
   ];
 
@@ -55,7 +56,7 @@ export default function nextConfig(phase: string): NextConfig {
       const apiTarget = (
         process.env.INTERNAL_API_URL ||
         process.env.NEXT_PUBLIC_API_URL ||
-        'https://clean-savar.shuttle.app/api/v1'
+        'https://clean-savar-api.onrender.com/api/v1'
       ).replace(/\/$/, '');
       const uploadsBase = apiTarget.replace(/\/api\/v1\/?$/, '/uploads');
 
@@ -67,6 +68,14 @@ export default function nextConfig(phase: string): NextConfig {
         {
           source: '/uploads/:path*',
           destination: `${uploadsBase}/:path*`,
+        },
+        {
+          source: '/downloads/clean-savar.apk',
+          destination: '/clean-savar.apk',
+        },
+        {
+          source: '/downloads/clean-savar-arm64.apk',
+          destination: '/clean-savar.apk',
         },
       ];
     },

@@ -61,6 +61,8 @@ key.properties
 *.jks
 *.keystore
 *.apk
+!apps/web/public/**/*.apk
+!apps/web/public/*.apk
 *.aab
 
 # Agent skills and lockfiles

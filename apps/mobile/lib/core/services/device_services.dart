@@ -110,9 +110,11 @@ final apiClientProvider = Provider<core.CleanSavarApiClient>((ref) {
   const definedBaseUrl = String.fromEnvironment('API_BASE_URL');
   final resolvedUrl = definedBaseUrl.isNotEmpty
       ? definedBaseUrl
-      : (kIsWeb
-          ? 'http://localhost:8080/api/v1'
-          : 'http://10.0.2.2:8080/api/v1');
+      : (kReleaseMode
+          ? 'https://clean-savar-api.onrender.com/api/v1'
+          : (kIsWeb
+              ? 'http://localhost:8080/api/v1'
+              : 'http://10.0.2.2:8080/api/v1'));
   return core.CleanSavarApiClient(baseUrl: resolvedUrl);
 });
 

@@ -46,24 +46,7 @@ android {
 
     splits {
         abi {
-            isEnable = true
-            reset()
-            include("armeabi-v7a", "arm64-v8a")
-            isUniversalApk = false
-        }
-    }
-
-    tasks.configureEach {
-        if (name == "assembleRelease") {
-            doLast {
-                val flutterApkDir = project.layout.buildDirectory.dir("outputs/flutter-apk").get().asFile
-                val x86Apk = File(flutterApkDir, "app-x86_64-release.apk")
-                if (!x86Apk.exists()) {
-                    // When desktop x86_64 is excluded from release splits, ensure Flutter CLI's
-                    // default targetArchs existence check is satisfied so builds without --target-platform succeed.
-                    x86Apk.createNewFile()
-                }
-            }
+            isEnable = false
         }
     }
 

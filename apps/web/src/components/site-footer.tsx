@@ -37,6 +37,11 @@ export function SiteFooter() {
               </Link>
             </li>
             <li>
+              <Link href="/download" className="hover:text-[#15803D] hover:underline">
+                মোবাইল অ্যাপ ডাউনলোড (APK)
+              </Link>
+            </li>
+            <li>
               <Link href="/login" className="hover:text-[#15803D] hover:underline">
                 মোবাইল OTP লগইন
               </Link>

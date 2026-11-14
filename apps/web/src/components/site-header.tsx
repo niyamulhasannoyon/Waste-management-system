@@ -7,6 +7,7 @@ import {
   AlertTriangle,
   Bell,
   Check,
+  Download,
   Leaf,
   LogIn,
   LogOut,
@@ -190,6 +191,15 @@ export function SiteHeader() {
               )}
             </div>
 
+            <Link
+              href="/download"
+              aria-label="ক্লিন সাভার মোবাইল অ্যাপ ডাউনলোড করুন"
+              className="hidden items-center gap-1.5 rounded-md border border-[#BBF7D0] bg-[#F0FDF4] px-2.5 py-1.5 text-xs font-semibold text-[#15803D] transition-colors hover:bg-[#DCFCE7] md:inline-flex"
+            >
+              <Download className="h-3.5 w-3.5" aria-hidden="true" />
+              <span>অ্যাপ ডাউনলোড</span>
+            </Link>
+
             <button
               type="button"
               onClick={openDrawer}
@@ -290,6 +300,17 @@ export function SiteHeader() {
                 })}
               </ul>
             </nav>
+
+            <div className="px-3 pb-3">
+              <Link
+                href="/download"
+                onClick={closeDrawer}
+                className="flex min-h-10 items-center justify-center gap-2 rounded-md border border-[#BBF7D0] bg-[#F0FDF4] px-3 py-2 text-xs font-semibold text-[#15803D] hover:bg-[#DCFCE7]"
+              >
+                <Download className="h-4 w-4" aria-hidden="true" />
+                <span>অ্যান্ড্রয়েড অ্যাপ ডাউনলোড (APK)</span>
+              </Link>
+            </div>
           </div>
 
           <div className="border-t border-[#E2E8F0] bg-[#F8FAFC] p-4">

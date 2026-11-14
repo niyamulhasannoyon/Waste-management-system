@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import {
   Camera,
   CheckCircle2,
+  Download,
   MapPin,
   Search,
   Truck,
@@ -80,6 +81,13 @@ export function HeroSection() {
               >
                 <Camera className="h-4 w-4 text-[#15803D]" aria-hidden="true" />
                 ময়লার স্তূপ রিপোর্ট করুন
+              </Link>
+              <Link
+                href="/download"
+                className="inline-flex min-h-12 items-center justify-center gap-2 rounded-md border border-[#BBF7D0] bg-[#F0FDF4] px-4 py-2.5 text-sm font-semibold text-[#15803D] shadow-xs transition-colors hover:bg-[#DCFCE7]"
+              >
+                <Download className="h-4 w-4" aria-hidden="true" />
+                মোবাইল অ্যাপ (APK)
               </Link>
             </div>
 
