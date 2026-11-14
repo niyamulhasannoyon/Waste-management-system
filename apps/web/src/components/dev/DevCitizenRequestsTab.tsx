@@ -2,20 +2,14 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import {
-  AlertCircle,
-  ArrowRight,
   CheckCircle2,
   Clock,
-  Filter,
   Flame,
   MessageSquare,
   Phone,
   Play,
-  Plus,
-  RefreshCw,
   Search,
   Send,
-  Shield,
   Trash2,
   Truck,
   User,
@@ -23,13 +17,10 @@ import {
 import {
   DevCitizenRequest,
   getDevCitizenRequests,
-  recordDevCitizenRequest,
   appendDevCitizenResponse,
-  updateDevCitizenRequestStatus,
   simulateDevCitizenRequest,
   clearDevCitizenRequests,
 } from '@/lib/dev-store';
-import { StatusBadge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { toBanglaDigits } from '@/lib/utils';
 
@@ -270,7 +261,7 @@ export function DevCitizenRequestsTab() {
         {filteredRequests.length === 0 ? (
           <div className="p-12 text-center text-xs text-slate-500 space-y-2">
             <p>কোনো নাগরিক রিকোয়েস্ট রেকর্ড পাওয়া যায়নি।</p>
-            <p>উপরের "টেস্ট পিকআপ সিমুলেট" বাটনে ক্লিক করে লাইভ স্ট্রিম পরীক্ষা করুন।</p>
+            <p>উপরের &ldquo;টেস্ট পিকআপ সিমুলেট&rdquo; বাটনে ক্লিক করে লাইভ স্ট্রিম পরীক্ষা করুন।</p>
           </div>
         ) : (
           <div className="divide-y divide-slate-800">
@@ -371,7 +362,7 @@ export function DevCitizenRequestsTab() {
                       {req.responseNotes.map((n) => (
                         <div key={n.id} className="text-xs text-slate-300 bg-blue-950/30 p-2 rounded border border-blue-900/30">
                           <span className="font-semibold text-blue-300">{n.senderName}: </span>
-                          <span>"{n.message}"</span>
+                          <span>&ldquo;{n.message}&rdquo;</span>
                           <span className="block text-[10px] text-slate-400 mt-0.5">{n.sentAt}</span>
                         </div>
                       ))}

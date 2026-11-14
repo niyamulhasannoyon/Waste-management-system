@@ -12,11 +12,8 @@ import {
   HardDrive,
   Laptop,
   Play,
-  RefreshCw,
   Search,
-  ShieldCheck,
   Smartphone,
-  Sparkles,
   Trash2,
   UserCheck,
   Users,
@@ -339,7 +336,6 @@ export function DevDownloadsTab({
                   </tr>
                 ) : (
                   filteredUserStats.map((stat, idx) => {
-                    const isGuest = stat.downloaderRole === 'guest';
                     const relativeBarPercent = Math.max(15, Math.round((stat.totalDownloads / maxUserDownloads) * 100));
 
                     return (

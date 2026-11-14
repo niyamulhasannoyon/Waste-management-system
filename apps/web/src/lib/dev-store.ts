@@ -318,7 +318,7 @@ const DEFAULT_APPROVED_ADMINS: ApprovedAdminRecord[] = [
   },
   {
     id: 'adm-003',
-    phone: '01715-883210',
+    phone: '01715-883219',
     fullName: 'নিয়ামুল হাসান (ম্যানেজমেন্ট অ্যাডমিন)',
     email: 'niyamulhasan1089@gmail.com',
     role: 'admin',
@@ -1116,8 +1116,10 @@ export function isUserApprovedAdmin(phone?: string | null, email?: string | null
   const list = getApprovedAdminRecords();
   return list.some((rec) => {
     if (rec.status !== 'approved') return false;
+    if (rec.email) {
+      return targetEmail === rec.email.toLowerCase();
+    }
     if (targetDigits && cleanDigits(rec.phone) === targetDigits) return true;
-    if (targetEmail && rec.email && rec.email.toLowerCase() === targetEmail) return true;
     return false;
   });
 }

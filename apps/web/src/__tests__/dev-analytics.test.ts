@@ -6,16 +6,12 @@ import {
   recordDevPageVisit,
   getDevTrafficSummary,
   clearDevVisitorLogs,
-  getDevDownloadEvents,
   getDevUserDownloadStats,
   recordDevDownload,
   getDevDownloadSummary,
-  clearDevDownloadLogs,
-  getDevLoginEvents,
   getDevUserLoginStats,
   recordDevLogin,
   getDevLoginSummary,
-  clearDevLoginLogs,
   resetDevConsoleToDefaults,
 } from '@/lib/dev-store';
 

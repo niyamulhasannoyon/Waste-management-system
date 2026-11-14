@@ -4,14 +4,11 @@ import React, { useState, useMemo } from 'react';
 import {
   Activity,
   Download,
-  Filter,
   Globe,
   Laptop,
   Play,
-  RefreshCw,
   Search,
   Smartphone,
-  Sparkles,
   Trash2,
   Users,
 } from 'lucide-react';
@@ -266,7 +263,7 @@ export function DevTrafficTab({
               সর্বাধিক ভিজিটকৃত পেজ (Top Visited Routes)
             </h3>
             <div className="mt-3 space-y-2">
-              {trafficSummary.topPages.map((page, idx) => {
+              {trafficSummary.topPages.map((page) => {
                 const total = trafficSummary.totalPageviews || 1;
                 const percent = Math.min(100, Math.round(((page.count * 14) / total) * 100));
                 return (

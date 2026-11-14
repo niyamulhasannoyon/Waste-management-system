@@ -2,18 +2,13 @@
 
 import React, { useState, useMemo } from 'react';
 import {
-  AlertCircle,
-  ArrowRight,
-  CheckCircle2,
   Clock,
-  Filter,
   Flame,
   MessageSquare,
   Phone,
   RefreshCw,
   Search,
   Send,
-  Shield,
   Truck,
   User,
 } from 'lucide-react';
@@ -21,7 +16,6 @@ import { DevCitizenRequest, appendDevCitizenResponse } from '@/lib/dev-store';
 import { SAVAR_CENTER } from '@/lib/savar-data';
 import { StatusBadge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { RelativeTimeBn } from '@/components/ui/relative-time';
 import { toBanglaDigits } from '@/lib/utils';
 import type { DispatchTarget } from '@/components/admin/AdminDispatchDialog';
 
@@ -359,7 +353,7 @@ export function AdminCitizenLiveFeed({
                             <span className="font-bold text-[#14532D]">{n.senderName}</span>
                             <span className="text-[10px] text-[#64748B]">{n.sentAt}</span>
                           </div>
-                          <p className="mt-0.5 text-[#334155]">"{n.message}"</p>
+                          <p className="mt-0.5 text-[#334155]">&ldquo;{n.message}&rdquo;</p>
                         </div>
                       ))}
                     </div>

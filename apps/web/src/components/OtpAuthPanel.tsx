@@ -68,7 +68,7 @@ export function OtpAuthPanel({ onSuccess, titleId, initialRole }: OtpAuthPanelPr
 
   React.useEffect(() => {
     if (!normalizedPhone) return;
-    const adminDigits = ['01711240100', '01733919156', '01712456789', '01715883210'];
+    const adminDigits = ['01711240100', '01733919156', '01712456789', '01712457889'];
     const digits = normalizedPhone.replace(/\D/g, '').replace(/^880/, '0');
     if (adminDigits.includes(digits) && selectedRole !== 'admin') {
       setSelectedRole('admin');
