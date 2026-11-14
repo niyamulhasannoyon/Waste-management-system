@@ -226,6 +226,77 @@ function DevAdminConsoleContent() {
     };
   }, []);
 
+  useEffect(() => {
+    const handleTrafficChanged = () => {
+      setVisitorLogs(getDevVisitorLogs());
+      setTrafficSummary(getDevTrafficSummary());
+    };
+    const handleDownloadsChanged = () => {
+      setDownloadEvents(getDevDownloadEvents());
+      setUserDownloadStats(getDevUserDownloadStats());
+      setDownloadSummary(getDevDownloadSummary());
+    };
+    const handleLoginsChanged = () => {
+      setLoginEvents(getDevLoginEvents());
+      setUserLoginStats(getDevUserLoginStats());
+      setLoginSummary(getDevLoginSummary());
+    };
+
+    window.addEventListener('cs:dev-traffic-changed', handleTrafficChanged);
+    window.addEventListener('cs:dev-downloads-changed', handleDownloadsChanged);
+    window.addEventListener('cs:dev-logins-changed', handleLoginsChanged);
+
+    return () => {
+      window.removeEventListener('cs:dev-traffic-changed', handleTrafficChanged);
+      window.removeEventListener('cs:dev-downloads-changed', handleDownloadsChanged);
+      window.removeEventListener('cs:dev-logins-changed', handleLoginsChanged);
+    };
+  }, []);
+
+  const handleSimulateTrafficVisit = () => {
+    const v = simulateDevTrafficVisit();
+    showToast(`সিমুলেটেড ভিজিটর যুক্ত করা হয়েছে: ${v.userName} (${v.path})`);
+  };
+
+  const handleClearTrafficLogs = () => {
+    if (confirm('আপনি কি নিশ্চিত যে সমস্ত ভিজিটর ট্রাফিক লগ মুছে ফেলতে চান?')) {
+      clearDevVisitorLogs();
+      setVisitorLogs([]);
+      setTrafficSummary(getDevTrafficSummary());
+      showToast('ভিজিটর ট্রাফিক লগ মুছে ফেলা হয়েছে!');
+    }
+  };
+
+  const handleSimulateDownload = () => {
+    const d = simulateDevDownload();
+    showToast(`টেস্ট ডাউনলোড রেকর্ড সম্পন্ন: ${d.downloaderName} (${d.fileName})`);
+  };
+
+  const handleClearDownloads = () => {
+    if (confirm('আপনি কি নিশ্চিত যে সমস্ত ডাউনলোড হিস্ট্রি ও কাউন্টার রিসেট করতে চান?')) {
+      clearDevDownloadLogs();
+      setDownloadEvents([]);
+      setUserDownloadStats([]);
+      setDownloadSummary(getDevDownloadSummary());
+      showToast('ডাউনলোড অডিট হিস্ট্রি রিসেট করা হয়েছে!');
+    }
+  };
+
+  const handleSimulateLogin = () => {
+    const l = simulateDevLogin();
+    showToast(`টেস্ট লগইন রেকর্ড সম্পন্ন: ${l.userName} (${l.location})`);
+  };
+
+  const handleClearLogins = () => {
+    if (confirm('আপনি কি নিশ্চিত যে সমস্ত লগইন অডিট রেকর্ড মুছে ফেলতে চান?')) {
+      clearDevLoginLogs();
+      setLoginEvents([]);
+      setUserLoginStats([]);
+      setLoginSummary(getDevLoginSummary());
+      showToast('লগইন অডিট রেকর্ড মুছে ফেলা হয়েছে!');
+    }
+  };
+
   const handleApproveAdmin = (phone: string, name?: string, email?: string) => {
     const updated = approveAdminUser(phone, name, email);
     setAdminApprovals([...updated]);
@@ -391,6 +462,14 @@ function DevAdminConsoleContent() {
       setVehicles(getDevVehicles());
       setMarketRates(getDevMarketRates());
       setAuditLogs(getDevAuditLogs());
+      setVisitorLogs(getDevVisitorLogs());
+      setTrafficSummary(getDevTrafficSummary());
+      setDownloadEvents(getDevDownloadEvents());
+      setUserDownloadStats(getDevUserDownloadStats());
+      setDownloadSummary(getDevDownloadSummary());
+      setLoginEvents(getDevLoginEvents());
+      setUserLoginStats(getDevUserLoginStats());
+      setLoginSummary(getDevLoginSummary());
       showToast('ডেভেলপার কনসোল সম্পূর্ণ রিসেট করা হয়েছে!');
     }
   }
@@ -868,11 +947,163 @@ function DevAdminConsoleContent() {
                   </span>
                 </div>
               </div>
+
+              {/* Flag: Traffic Tracking */}
+              <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-5 transition hover:border-slate-700">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <span className="text-xs font-mono uppercase tracking-wider text-emerald-400 font-bold">
+                      FLAG: REALTIME_TRAFFIC_TRACKING
+                    </span>
+                    <h3 className="mt-1 text-sm font-bold text-white">রিয়েল-টাইম ট্রাফিক ও ভিজিটর ট্র্যাকিং</h3>
+                    <p className="mt-1 text-xs text-slate-400">
+                      ওয়েবসাইট ও পোর্টালের সকল পেজে ভিজিটরের আইপি, ভৌগোলিক অবস্থান ও ডিভাইস অডিট সক্রিয় রাখা।
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleToggleFlag('enableTrafficTracking')}
+                    className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                      flags.enableTrafficTracking ? 'bg-emerald-500' : 'bg-slate-700'
+                    }`}
+                  >
+                    <span
+                      className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition duration-200 ease-in-out ${
+                        flags.enableTrafficTracking ? 'translate-x-5' : 'translate-x-0'
+                      }`}
+                    />
+                  </button>
+                </div>
+                <div className="mt-4 flex items-center gap-2 text-[11px] font-mono">
+                  <span
+                    className={`inline-flex rounded px-1.5 py-0.5 font-bold ${
+                      flags.enableTrafficTracking
+                        ? 'bg-emerald-500/20 text-emerald-300'
+                        : 'bg-slate-800 text-slate-400'
+                    }`}
+                  >
+                    STATUS: {flags.enableTrafficTracking ? 'ACTIVE (MONITORING)' : 'PAUSED'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Flag: Download Tracking */}
+              <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-5 transition hover:border-slate-700">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <span className="text-xs font-mono uppercase tracking-wider text-emerald-400 font-bold">
+                      FLAG: REALTIME_DOWNLOAD_TRACKING
+                    </span>
+                    <h3 className="mt-1 text-sm font-bold text-white">ডাউনলোড ট্র্যাকিং ও অডিট ইঞ্জিন</h3>
+                    <p className="mt-1 text-xs text-slate-400">
+                      কারা কারা কতবার এবং কোন লোকেশন থেকে APK ও রিপোর্ট ফাইল ডাউনলোড করছে তার রিয়েল-টাইম কাউন্টার।
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleToggleFlag('enableDownloadTracking')}
+                    className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                      flags.enableDownloadTracking ? 'bg-emerald-500' : 'bg-slate-700'
+                    }`}
+                  >
+                    <span
+                      className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition duration-200 ease-in-out ${
+                        flags.enableDownloadTracking ? 'translate-x-5' : 'translate-x-0'
+                      }`}
+                    />
+                  </button>
+                </div>
+                <div className="mt-4 flex items-center gap-2 text-[11px] font-mono">
+                  <span
+                    className={`inline-flex rounded px-1.5 py-0.5 font-bold ${
+                      flags.enableDownloadTracking
+                        ? 'bg-emerald-500/20 text-emerald-300'
+                        : 'bg-slate-800 text-slate-400'
+                    }`}
+                  >
+                    STATUS: {flags.enableDownloadTracking ? 'COUNTING ACTIVE' : 'PAUSED'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Flag: Allow Guest Downloads */}
+              <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-5 transition hover:border-slate-700">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <span className="text-xs font-mono uppercase tracking-wider text-sky-400 font-bold">
+                      FLAG: ALLOW_GUEST_DOWNLOADS
+                    </span>
+                    <h3 className="mt-1 text-sm font-bold text-white">গেস্ট ভিজিটরদের APK ডাউনলোড অনুমোদন</h3>
+                    <p className="mt-1 text-xs text-slate-400">
+                      লগইন না করা সাধারণ নাগরিকদেরও অফিসিয়াল মোবাইল অ্যাপ নামানোর অনুমতি দেওয়া হবে।
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleToggleFlag('allowGuestDownloads')}
+                    className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                      flags.allowGuestDownloads ? 'bg-sky-500' : 'bg-slate-700'
+                    }`}
+                  >
+                    <span
+                      className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition duration-200 ease-in-out ${
+                        flags.allowGuestDownloads ? 'translate-x-5' : 'translate-x-0'
+                      }`}
+                    />
+                  </button>
+                </div>
+                <div className="mt-4 flex items-center gap-2 text-[11px] font-mono">
+                  <span
+                    className={`inline-flex rounded px-1.5 py-0.5 font-bold ${
+                      flags.allowGuestDownloads
+                        ? 'bg-sky-500/20 text-sky-300'
+                        : 'bg-slate-800 text-slate-400'
+                    }`}
+                  >
+                    STATUS: {flags.allowGuestDownloads ? 'OPEN TO PUBLIC' : 'REQUIRE AUTH'}
+                  </span>
+                </div>
+              </div>
             </div>
           </div>
         )}
 
-        {/* TAB 2: MULTI-CLOUD INFRASTRUCTURE & HEALTH MONITOR */}
+        {/* TAB 2: TRAFFIC & VISITOR INTELLIGENCE */}
+        {activeTab === 'traffic' && (
+          <DevTrafficTab
+            visitorLogs={visitorLogs}
+            trafficSummary={trafficSummary}
+            onSimulateVisit={handleSimulateTrafficVisit}
+            onClearLogs={handleClearTrafficLogs}
+            showToast={showToast}
+          />
+        )}
+
+        {/* TAB 3: DOWNLOAD ANALYTICS & USER BREAKDOWN */}
+        {activeTab === 'downloads' && (
+          <DevDownloadsTab
+            downloadEvents={downloadEvents}
+            userDownloadStats={userDownloadStats}
+            downloadSummary={downloadSummary}
+            onSimulateDownload={handleSimulateDownload}
+            onClearDownloads={handleClearDownloads}
+            showToast={showToast}
+          />
+        )}
+
+        {/* TAB 4: LOGIN AUDIT & GEOLOCATION */}
+        {activeTab === 'logins' && (
+          <DevLoginsTab
+            loginEvents={loginEvents}
+            userLoginStats={userLoginStats}
+            loginSummary={loginSummary}
+            onSimulateLogin={handleSimulateLogin}
+            onClearLogins={handleClearLogins}
+            showToast={showToast}
+          />
+        )}
+
+        {/* TAB 5: MULTI-CLOUD INFRASTRUCTURE & HEALTH MONITOR */}
         {activeTab === 'telemetry' && (
           <div className="space-y-6">
             <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-5">
