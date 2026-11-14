@@ -82,7 +82,7 @@ export default function DownloadPage() {
                 className="inline-flex min-h-12 items-center justify-center gap-2.5 rounded-lg bg-[#15803D] px-6 py-3 text-sm font-bold text-white shadow-md transition-all hover:bg-[#14532D] hover:shadow-lg focus:outline-hidden focus:ring-2 focus:ring-[#15803D] focus:ring-offset-2"
               >
                 <ArrowDownToLine className="h-5 w-5" aria-hidden="true" />
-                <span>সরাসরি অফিসিয়াল APK ডাউনলোড (Universal v1.1)</span>
+                <span>সরাসরি অফিসিয়াল APK ডাউনলোড (Universal v1.2.0)</span>
               </a>
 
               <span className="text-xs text-[#64748B] sm:text-left">
