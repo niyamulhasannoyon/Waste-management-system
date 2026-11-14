@@ -1415,6 +1415,8 @@ function DevAdminConsoleContent() {
                     <th className="px-4 py-3">ব্যবহারকারীর নাম</th>
                     <th className="px-4 py-3">বর্তমান ভূমিকা (Role)</th>
                     <th className="px-4 py-3">এলাকা / ওয়ার্ড</th>
+                    <th className="px-4 py-3 text-center">লগইন সংখ্যা</th>
+                    <th className="px-4 py-3 text-center">ডাউনলোড</th>
                     <th className="px-4 py-3">সর্বশেষ সক্রিয়</th>
                     <th className="px-4 py-3 text-right">১-ক্লিক রোল পরিবর্তন</th>
                   </tr>
@@ -1451,6 +1453,31 @@ function DevAdminConsoleContent() {
                       <td className="px-4 py-3 text-slate-400">
                         {user.wardId ? `ওয়ার্ড ${toBanglaDigits(user.wardId)}` : 'সকল অঞ্চল'}
                       </td>
+
+                      {/* Login count */}
+                      <td className="px-4 py-3 text-center font-mono">
+                        {(() => {
+                          const userLog = userLoginStats.find((l) => l.userPhone === user.phone || l.userId === user.id);
+                          return (
+                            <span className="rounded bg-sky-500/10 px-2 py-0.5 text-xs text-sky-400 font-bold border border-sky-500/20">
+                              {toBanglaDigits(userLog?.totalLogins || 1)} বার
+                            </span>
+                          );
+                        })()}
+                      </td>
+
+                      {/* Download count */}
+                      <td className="px-4 py-3 text-center font-mono">
+                        {(() => {
+                          const userDl = userDownloadStats.find((d) => d.downloaderPhone === user.phone || d.downloaderId === user.id);
+                          return (
+                            <span className="rounded bg-emerald-500/10 px-2 py-0.5 text-xs text-emerald-400 font-bold border border-emerald-500/20">
+                              {toBanglaDigits(userDl?.totalDownloads || 0)} বার
+                            </span>
+                          );
+                        })()}
+                      </td>
+
                       <td className="px-4 py-3 text-slate-500 font-sans">{user.lastActive}</td>
                       <td className="px-4 py-3 text-right">
                         <select
@@ -1976,17 +2003,31 @@ function DevAdminConsoleContent() {
                       {apkConfig.downloadUrl}
                     </a>
                   </div>
+                  <div className="flex justify-between border-b border-slate-800 pb-1.5">
+                    <span className="text-slate-500">মোট ডাউনলোড সংখ্যা:</span>
+                    <span className="font-bold text-emerald-400 font-sans">
+                      {toBanglaDigits(downloadSummary.totalDownloads)} বার ({toBanglaDigits(downloadSummary.uniqueDownloaders)} জন অনন্য)
+                    </span>
+                  </div>
                 </div>
 
-                <div className="mt-5">
+                <div className="mt-5 flex flex-col sm:flex-row gap-2">
                   <a
                     href={apkConfig.downloadUrl}
                     download
-                    className="flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-xs font-semibold text-white hover:bg-emerald-500"
+                    className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-xs font-semibold text-white hover:bg-emerald-500 shadow"
                   >
                     <Download className="h-4 w-4" />
                     <span>সরাসরি APK ফাইল ডাউনলোড করুন</span>
                   </a>
+
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('downloads')}
+                    className="flex items-center justify-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-xs font-semibold text-slate-300 hover:bg-slate-700 hover:text-white"
+                  >
+                    <span>ডাউনলোড বিস্তারিত →</span>
+                  </button>
                 </div>
               </div>
 
