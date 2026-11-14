@@ -82,7 +82,7 @@ export default function DownloadPage() {
                 className="inline-flex min-h-12 items-center justify-center gap-2.5 rounded-lg bg-[#15803D] px-6 py-3 text-sm font-bold text-white shadow-md transition-all hover:bg-[#14532D] hover:shadow-lg focus:outline-hidden focus:ring-2 focus:ring-[#15803D] focus:ring-offset-2"
               >
                 <ArrowDownToLine className="h-5 w-5" aria-hidden="true" />
-                <span>সরাসরি অফিসিয়াল APK ডাউনলোড (Universal v1.0)</span>
+                <span>সরাসরি অফিসিয়াল APK ডাউনলোড (Universal v1.1)</span>
               </a>
 
               <span className="text-xs text-[#64748B] sm:text-left">
@@ -97,7 +97,7 @@ export default function DownloadPage() {
                 <Smartphone className="h-12 w-12 text-[#15803D]" aria-hidden="true" />
               </div>
               <p className="mt-4 text-base font-bold text-[#0F172A]">Clean Savar Mobile</p>
-              <p className="font-metric text-xs text-[#64748B]">v1.0.0 · Production</p>
+              <p className="font-metric text-xs text-[#64748B]">v1.1.0 · Production</p>
               <div className="mt-3 flex items-center gap-1.5 rounded-full bg-[#DCFCE7] px-3 py-1 text-xs font-semibold text-[#14532D]">
                 <ShieldCheck className="h-4 w-4" aria-hidden="true" />
                 ম্যালওয়্যার ও ভাইরাস মুক্ত

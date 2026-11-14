@@ -324,15 +324,16 @@ const DEFAULT_MARKET_RATES: DevMarketRate[] = [
 ];
 
 const DEFAULT_APK_CONFIG: DevApkReleaseConfig = {
-  versionName: '1.0.0',
-  versionCode: 1,
+  versionName: '1.1.0',
+  versionCode: 2,
   releaseDate: '2026-11-14',
-  apkSizeMb: 18.7,
+  apkSizeMb: 53.4,
   downloadUrl: '/clean-savar.apk',
   sha256DebugCert: '49:82:B4:C6:48:4D:04:C8:82:E3:41:66:18:C7:1B:EB:59:18:58:8B:AB:5A:A4:0B:0C:A0:8D:FD:55:CB:66:70',
   minSupportedVersionCode: 1,
   forceUpdateEnabled: false,
   changelogBn: [
+    'অফিসিয়াল অ্যান্ড্রয়েড ফুল-স্কেল অ্যাডাপ্টিভ আইকন (Circle & Squircle ফ্রেন্ডলি)',
     'সাভার পৌরসভার ৯টি ওয়ার্ড ও ৬টি ইউনিয়নের লাইভ ড্যাশবোর্ড',
     'নাগরিক ডোর-টু-ডোর ময়লা পিকআপ শিডিউল ও অন-ডিমান্ড বুকিং',
     'ফটো সহ সরাসরি অবৈধ ডাম্প সাইট জিও-ট্যাগ রিপোর্টিং',
