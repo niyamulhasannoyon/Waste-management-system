@@ -9,6 +9,11 @@ import {
   resolveNearestWardLocal,
 } from './savar-data';
 import { compressImageForUpload, toBanglaDigits } from './utils';
+import {
+  recordDevCitizenRequest,
+  updateDevCitizenRequestStatus,
+  appendDevCitizenResponse,
+} from './dev-store';
 import type {
   AnalyticsSummary,
   AuthSession,
@@ -636,22 +641,56 @@ export async function fetchPickups(params?: {
 }
 
 export async function createPickup(input: CreatePickupInput): Promise<PickupRequestRecord> {
-  return fetchJson<PickupRequestRecord>('/pickups', {
+  const result = await fetchJson<PickupRequestRecord>('/pickups', {
     method: 'POST',
     auth: true,
     body: JSON.stringify(input),
   });
+
+  try {
+    recordDevCitizenRequest({
+      type: 'pickup',
+      trackingCode: result.tracking_code,
+      citizenName: result.citizen_name,
+      citizenPhone: result.citizen_phone,
+      wardId: result.ward_id,
+      wardNameBn: result.ward_name_bn,
+      addressOrLandmark: result.address_line,
+      wasteTypeOrSeverity: result.waste_type,
+      details: `${result.estimated_bags} ব্যাগ, ${result.slot} স্লট`,
+      status: result.status,
+    });
+  } catch (err) {
+    console.warn('Dev citizen request sync note:', err);
+  }
+
+  return result;
 }
 
 export async function updatePickupStatus(
   id: string,
   input: { status: PickupStatus; weight_kg?: number; note_bn: string },
 ): Promise<PickupRequestRecord> {
-  return fetchJson<PickupRequestRecord>(`/pickups/${encodeURIComponent(id)}/status`, {
+  const result = await fetchJson<PickupRequestRecord>(`/pickups/${encodeURIComponent(id)}/status`, {
     method: 'PATCH',
     auth: true,
     body: JSON.stringify(input),
   });
+
+  try {
+    updateDevCitizenRequestStatus(result.tracking_code, result.status);
+    if (input.note_bn) {
+      appendDevCitizenResponse(result.tracking_code, {
+        senderName: 'সাভার পৌর কন্ট্রোল (অ্যাডমিন)',
+        senderRole: 'admin',
+        message: input.note_bn,
+      });
+    }
+  } catch (err) {
+    console.warn('Dev citizen response sync note:', err);
+  }
+
+  return result;
 }
 
 export async function uploadDumpPhoto(file: File): Promise<UploadPhotoResponse> {
@@ -712,22 +751,75 @@ export async function fetchReports(params?: {
 export async function createDumpReport(
   input: CreateDumpReportInput,
 ): Promise<CreateDumpReportResponse> {
-  return fetchJson<CreateDumpReportResponse>('/reports', {
+  const result = await fetchJson<CreateDumpReportResponse>('/reports', {
     method: 'POST',
     auth: true,
     body: JSON.stringify(input),
   });
+
+  try {
+    recordDevCitizenRequest({
+      type: 'dump_report',
+      trackingCode: result.report.tracking_code,
+      citizenName: result.report.reporter_name,
+      citizenPhone: result.report.reporter_phone,
+      wardId: result.report.ward_id,
+      wardNameBn: result.report.ward_name_bn,
+      addressOrLandmark: result.report.landmark,
+      wasteTypeOrSeverity: result.report.severity,
+      details: result.report.title_bn,
+      status: result.report.status,
+      photoUrls: result.report.photo_urls,
+    });
+  } catch (err) {
+    console.warn('Dev citizen dump report sync note:', err);
+  }
+
+  return result;
 }
 
 export async function updateReportStatus(
   id: string,
   input: { status: ReportStatus; resolved_photo_url?: string; note_bn: string },
 ): Promise<DumpReportRecord> {
-  return fetchJson<DumpReportRecord>(`/reports/${encodeURIComponent(id)}/status`, {
+  const result = await fetchJson<DumpReportRecord>(`/reports/${encodeURIComponent(id)}/status`, {
     method: 'PATCH',
     auth: true,
     body: JSON.stringify(input),
   });
+
+  try {
+    updateDevCitizenRequestStatus(result.tracking_code, result.status);
+    if (input.note_bn) {
+      appendDevCitizenResponse(result.tracking_code, {
+        senderName: 'সাভার পৌর কন্ট্রোল (অ্যাডমিন)',
+        senderRole: 'admin',
+        message: input.note_bn,
+      });
+    }
+  } catch (err) {
+    console.warn('Dev citizen report response sync note:', err);
+  }
+
+  return result;
+}
+
+export async function sendAdminResponseToCitizen(input: {
+  trackingCode: string;
+  entityType: 'pickup' | 'dump_report';
+  entityId: string;
+  senderName: string;
+  message: string;
+}): Promise<void> {
+  try {
+    appendDevCitizenResponse(input.trackingCode, {
+      senderName: input.senderName,
+      senderRole: 'admin',
+      message: input.message,
+    });
+  } catch (err) {
+    console.warn('Direct citizen response logging note:', err);
+  }
 }
 
 // ---------------------------------------------------------------------------

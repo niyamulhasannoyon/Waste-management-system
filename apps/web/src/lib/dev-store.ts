@@ -219,6 +219,33 @@ export interface DevApkReleaseConfig {
   changelogBn: string[];
 }
 
+export interface DevCitizenResponseNote {
+  id: string;
+  senderName: string;
+  senderRole: string;
+  message: string;
+  sentAt: string;
+}
+
+export interface DevCitizenRequest {
+  id: string;
+  type: 'pickup' | 'dump_report' | 'citizen_response';
+  trackingCode: string;
+  citizenName: string;
+  citizenPhone: string;
+  citizenEmail?: string;
+  wardId?: number | null;
+  wardNameBn?: string;
+  addressOrLandmark: string;
+  wasteTypeOrSeverity?: string;
+  details: string;
+  timestamp: string;
+  formattedTime: string;
+  status: string;
+  photoUrls?: string[];
+  responseNotes?: DevCitizenResponseNote[];
+}
+
 const DEFAULT_FLAGS: DevFeatureFlags = {
   enableDemoMode: true,
   strictOtp: false,
@@ -244,6 +271,8 @@ const DEFAULT_FLAGS: DevFeatureFlags = {
 export const ALLOWED_DEV_EMAILS: readonly string[] = [
   'niyamulhasanbd@gmail.com',
   'niyamulhasan1089@gmail.com',
+  'mdniyamulhasan2022@gmail.com',
+  'niyamulhasanen2023@gmail.com',
 ];
 
 export function isAllowedDevEmail(email: string | null | undefined): boolean {
@@ -278,14 +307,14 @@ const DEFAULT_APPROVED_ADMINS: ApprovedAdminRecord[] = [
   },
   {
     id: 'adm-002',
-    phone: '01700-000000',
-    fullName: 'সুপার অ্যাডমিন / ডেভেলপার',
+    phone: '01733-919156',
+    fullName: 'নিয়ামুল হাসান (সুপার ডেভেলপার ও অ্যাডমিন)',
     email: 'niyamulhasanbd@gmail.com',
     role: 'admin',
     status: 'approved',
     approvedAt: '2026-11-01 00:00',
     approvedBy: 'Developer SuperAdmin',
-    note: 'প্রধান সিস্টেম ডেভেলপার অ্যাকাউন্ট',
+    note: 'প্রধান সিস্টেম ডেভেলপার ও পৌর অ্যাডমিন অ্যাকাউন্ট',
   },
   {
     id: 'adm-003',
@@ -297,6 +326,38 @@ const DEFAULT_APPROVED_ADMINS: ApprovedAdminRecord[] = [
     approvedAt: '2026-11-01 00:00',
     approvedBy: 'Developer SuperAdmin',
     note: 'ম্যানেজমেন্ট ও টেকনিক্যাল অ্যাডমিন অ্যাকাউন্ট',
+  },
+  {
+    id: 'adm-004',
+    phone: '01712-456789',
+    fullName: 'রাফি (অপারেশনস ও ডিসপ্যাচ অ্যাডমিন)',
+    email: 'mdniyamulhasan2022@gmail.com',
+    role: 'admin',
+    status: 'approved',
+    approvedAt: '2026-11-01 00:00',
+    approvedBy: 'Developer SuperAdmin',
+    note: 'পৌরসভা অপারেশনস ও ফিল্ড ডিসপ্যাচ অ্যাডমিন',
+  },
+  {
+    id: 'adm-005',
+    phone: '01712-457889',
+    fullName: 'নিয়ামুল হাসান (সুপার অ্যাডমিন)',
+    role: 'admin',
+    status: 'approved',
+    approvedAt: '2026-11-01 00:00',
+    approvedBy: 'Developer SuperAdmin',
+    note: 'সরাসরি অনুমোদিত অ্যাডমিন অ্যাকাউন্ট',
+  },
+  {
+    id: 'adm-006',
+    phone: '01745-678768',
+    fullName: 'নিয়ামুল হাসান (ডেভেলপার অ্যাকাউন্ট)',
+    email: 'niyamulhasanen2023@gmail.com',
+    role: 'admin',
+    status: 'approved',
+    approvedAt: '2026-11-01 00:00',
+    approvedBy: 'Developer SuperAdmin',
+    note: 'অনুমোদিত গুগল ডেভেলপার অ্যাকাউন্ট',
   },
 ];
 
@@ -493,6 +554,7 @@ const DEV_STORAGE_KEYS = {
   USER_DOWNLOADS: 'cs_dev_user_downloads_v2',
   LOGINS: 'cs_dev_logins_v2',
   USER_LOGINS: 'cs_dev_user_logins_v2',
+  CITIZEN_REQUESTS: 'cs_dev_citizen_requests_v1',
 };
 
 const DEFAULT_USER_DOWNLOADS: DevUserDownloadStat[] = [
@@ -1935,5 +1997,231 @@ export function clearDevLoginLogs(): void {
     window.dispatchEvent(new CustomEvent('cs:dev-logins-changed'));
   } catch (e) {
     console.warn('Failed to clear login logs', e);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Citizen Requests & Responses Stream (Admin & Dev-Admin Live Stream)
+// ---------------------------------------------------------------------------
+
+const DEFAULT_CITIZEN_REQUESTS: DevCitizenRequest[] = [
+  {
+    id: 'req-seed-001',
+    type: 'pickup',
+    trackingCode: 'CS-PK-02041',
+    citizenName: 'রাফি আহমেদ',
+    citizenPhone: '01715-883210',
+    wardId: 3,
+    wardNameBn: 'ওয়ার্ড ৩ — আনন্দপুর ও শিমুলতলা',
+    addressOrLandmark: 'বাড়ি ৪২, রোড ৩, আনন্দপুর',
+    wasteTypeOrSeverity: 'গৃহস্থালি বর্জ্য (Household)',
+    details: '৩ বস্তা দৈনন্দিন ময়লা, সকালের স্লট',
+    timestamp: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
+    formattedTime: '১৫ মিনিট আগে',
+    status: 'assigned',
+    responseNotes: [
+      {
+        id: 'note-001',
+        senderName: 'সাভার পৌর কন্ট্রোল',
+        senderRole: 'admin',
+        message: 'কালেক্টর ভ্যান SV-CMP-01 আপনার এলাকার দিকে রওয়ানা হয়েছে।',
+        sentAt: '১০ মিনিট আগে',
+      },
+    ],
+  },
+  {
+    id: 'req-seed-002',
+    type: 'dump_report',
+    trackingCode: 'CS-DR-01088',
+    citizenName: 'মো. রফিকুল ইসলাম',
+    citizenPhone: '01712-448910',
+    wardId: 2,
+    wardNameBn: 'ওয়ার্ড ২ — বাজার ও ব্যাংক কলোনি',
+    addressOrLandmark: 'সাভার বাসস্ট্যান্ড সংলগ্ন কাঁচাবাজারের পেছনে',
+    wasteTypeOrSeverity: 'high',
+    details: 'রাস্তার পাশে বিশাল ময়লার স্তূপ থেকে তীব্র দুর্গন্ধ ছড়াচ্ছে। দ্রুত অপসারণ প্রয়োজন।',
+    timestamp: new Date(Date.now() - 45 * 60 * 1000).toISOString(),
+    formattedTime: '৪৫ মিনিট আগে',
+    status: 'reported',
+  },
+  {
+    id: 'req-seed-003',
+    type: 'pickup',
+    trackingCode: 'CS-PK-02042',
+    citizenName: 'নিয়ামুল হাসান',
+    citizenPhone: '01733-919156',
+    citizenEmail: 'niyamulhasanbd@gmail.com',
+    wardId: 1,
+    wardNameBn: 'ওয়ার্ড ১ — পৌরসভা চত্বর ও নামাবাজার',
+    addressOrLandmark: 'সাভার পৌরসভা রোড, ব্লক বি',
+    wasteTypeOrSeverity: 'রিসাইক্লিং উপযোগী (Dry Recyclable)',
+    details: 'কাগজ, পিইটি প্লাস্টিক বোতল ও কাঁচের বোতল আলাদা করা আছে।',
+    timestamp: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
+    formattedTime: '৫ মিনিট আগে',
+    status: 'pending',
+  },
+];
+
+export function getDevCitizenRequests(): DevCitizenRequest[] {
+  if (!isClient()) return DEFAULT_CITIZEN_REQUESTS;
+  try {
+    const raw = localStorage.getItem(DEV_STORAGE_KEYS.CITIZEN_REQUESTS);
+    if (!raw) return DEFAULT_CITIZEN_REQUESTS;
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) && parsed.length > 0 ? parsed : DEFAULT_CITIZEN_REQUESTS;
+  } catch {
+    return DEFAULT_CITIZEN_REQUESTS;
+  }
+}
+
+export function recordDevCitizenRequest(
+  req: Omit<DevCitizenRequest, 'id' | 'timestamp' | 'formattedTime'>,
+): DevCitizenRequest[] {
+  const list = getDevCitizenRequests();
+  const now = new Date();
+  const newReq: DevCitizenRequest = {
+    ...req,
+    id: `req-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+    timestamp: now.toISOString(),
+    formattedTime: 'এইমাত্র',
+  };
+
+  const updated = [newReq, ...list.filter((r) => r.trackingCode !== req.trackingCode)].slice(0, 100);
+
+  if (isClient()) {
+    try {
+      localStorage.setItem(DEV_STORAGE_KEYS.CITIZEN_REQUESTS, JSON.stringify(updated));
+      window.dispatchEvent(
+        new CustomEvent('cs:new-citizen-request', { detail: newReq }),
+      );
+    } catch (e) {
+      console.warn('Failed to record citizen request in dev store:', e);
+    }
+  }
+
+  recordDevAudit({
+    actor: `${req.citizenName} (${req.citizenPhone})`,
+    action: req.type === 'pickup' ? 'CITIZEN_PICKUP_SUBMITTED' : 'CITIZEN_DUMP_REPORT_SUBMITTED',
+    category: 'dispatch',
+    details: `[${req.trackingCode}] ${req.type}: ${req.addressOrLandmark} — ${req.details}`,
+  });
+
+  return updated;
+}
+
+export function appendDevCitizenResponse(
+  trackingCode: string,
+  note: { senderName: string; senderRole: string; message: string },
+): DevCitizenRequest[] {
+  const list = getDevCitizenRequests();
+  const updated = list.map((item) => {
+    if (item.trackingCode === trackingCode) {
+      const notes = item.responseNotes || [];
+      const newNote: DevCitizenResponseNote = {
+        id: `note-${Date.now().toString(36)}`,
+        senderName: note.senderName,
+        senderRole: note.senderRole,
+        message: note.message,
+        sentAt: 'এইমাত্র',
+      };
+      return {
+        ...item,
+        responseNotes: [...notes, newNote],
+      };
+    }
+    return item;
+  });
+
+  if (isClient()) {
+    try {
+      localStorage.setItem(DEV_STORAGE_KEYS.CITIZEN_REQUESTS, JSON.stringify(updated));
+      window.dispatchEvent(
+        new CustomEvent('cs:citizen-response-updated', { detail: { trackingCode, note } }),
+      );
+    } catch (e) {
+      console.warn('Failed to update citizen response in dev store:', e);
+    }
+  }
+
+  recordDevAudit({
+    actor: `${note.senderName} (${note.senderRole})`,
+    action: 'ADMIN_RESPONSE_SENT_TO_CITIZEN',
+    category: 'dispatch',
+    details: `Response to [${trackingCode}]: "${note.message}"`,
+  });
+
+  return updated;
+}
+
+export function updateDevCitizenRequestStatus(
+  trackingCode: string,
+  newStatus: string,
+): DevCitizenRequest[] {
+  const list = getDevCitizenRequests();
+  const updated = list.map((item) =>
+    item.trackingCode === trackingCode ? { ...item, status: newStatus } : item,
+  );
+
+  if (isClient()) {
+    try {
+      localStorage.setItem(DEV_STORAGE_KEYS.CITIZEN_REQUESTS, JSON.stringify(updated));
+      window.dispatchEvent(
+        new CustomEvent('cs:citizen-request-status-changed', { detail: { trackingCode, newStatus } }),
+      );
+    } catch (e) {
+      console.warn('Failed to update request status in dev store:', e);
+    }
+  }
+
+  return updated;
+}
+
+export function simulateDevCitizenRequest(
+  type: 'pickup' | 'dump_report' = 'pickup',
+): DevCitizenRequest {
+  const mockNames = ['মোসা. নাসরিন আক্তার', 'তানভীর আহমেদ', 'আশরাফুল ইসলাম', 'ফাতেমা বেগম', 'কামরুল হাসান'];
+  const mockPhones = ['01712-334455', '01819-223344', '01911-556677', '01622-778899', '01755-443322'];
+  const mockAddresses = [
+    'রোড ৪, সাভার বাজার রোড, ওয়ার্ড ২',
+    'মজিদপুর, সাভার থানা সংলগ্ন, ওয়ার্ড ৪',
+    'আশুলিয়া রোড, ব্যাংক কলোনি মোড়, ওয়ার্ড ২',
+    'পৌরসভা গলি, বাজার রোড, ওয়ার্ড ১',
+    'আনন্দপুর মেইন রোড, ওয়ার্ড ৩',
+  ];
+
+  const idx = Math.floor(Math.random() * mockNames.length);
+  const name = mockNames[idx]!;
+  const phone = mockPhones[idx]!;
+  const address = mockAddresses[idx]!;
+  const randSeq = Math.floor(1000 + Math.random() * 9000);
+  const code = type === 'pickup' ? `CS-PK-0${randSeq}` : `CS-DR-0${randSeq}`;
+
+  const req: Omit<DevCitizenRequest, 'id' | 'timestamp' | 'formattedTime'> = {
+    type,
+    trackingCode: code,
+    citizenName: name,
+    citizenPhone: phone,
+    wardId: (idx % 3) + 1,
+    wardNameBn: `সাভার ওয়ার্ড ${(idx % 3) + 1}`,
+    addressOrLandmark: address,
+    wasteTypeOrSeverity: type === 'pickup' ? 'গৃহস্থালি জৈব বর্জ্য' : 'medium',
+    details:
+      type === 'pickup'
+        ? '২টি বড় ময়লার ব্যাগ, জরুরি ভিত্তিতে আজই সংগ্রহ প্রয়োজন।'
+        : 'রাস্তার ড্রেনের মুখে বর্জ্যের স্তূপ জমে পানি আটকে আছে।',
+    status: type === 'pickup' ? 'pending' : 'reported',
+  };
+
+  const updated = recordDevCitizenRequest(req);
+  return updated[0]!;
+}
+
+export function clearDevCitizenRequests(): void {
+  if (!isClient()) return;
+  try {
+    localStorage.removeItem(DEV_STORAGE_KEYS.CITIZEN_REQUESTS);
+    window.dispatchEvent(new CustomEvent('cs:dev-citizen-requests-changed'));
+  } catch (e) {
+    console.warn('Failed to clear citizen requests', e);
   }
 }

@@ -22,6 +22,7 @@ import { normalizeBdPhone } from '@/lib/utils';
 interface OtpAuthPanelProps {
   onSuccess?: (session: AuthSession) => void;
   titleId?: string;
+  initialRole?: UserRole;
 }
 
 const SHOW_DEMO_ACCOUNTS = process.env.NEXT_PUBLIC_SHOW_DEMO_ACCOUNTS === 'true';
@@ -33,13 +34,30 @@ const ROLES: { role: UserRole; labelBn: string; descBn: string }[] = [
   { role: 'admin', labelBn: 'পৌর অ্যাডমিন', descBn: 'সাভার পৌরসভা সার্বিক প্রশাসনিক তদারকি' },
 ];
 
-export function OtpAuthPanel({ onSuccess, titleId }: OtpAuthPanelProps) {
+export function OtpAuthPanel({ onSuccess, titleId, initialRole }: OtpAuthPanelProps) {
   const { applyAuthSession, wards, isOfflinePreview, authPromptReason } = useCleanSavar();
 
   const [fullName, setFullName] = useState<string>('');
   const [phoneInput, setPhoneInput] = useState<string>('');
-  const [selectedRole, setSelectedRole] = useState<UserRole>('citizen');
+  const [selectedRole, setSelectedRole] = useState<UserRole>(initialRole || 'citizen');
   const [wardId, setWardId] = useState<number | ''>(SAVAR_WARDS_SEED[2]?.id ?? 3);
+
+  React.useEffect(() => {
+    if (initialRole) {
+      setSelectedRole(initialRole);
+    } else if (typeof window !== 'undefined') {
+      const path = window.location.pathname;
+      const search = window.location.search;
+      if (
+        path.startsWith('/admin') ||
+        path.startsWith('/dev-admin') ||
+        search.includes('role=admin') ||
+        authPromptReason?.includes('অ্যাডমিন')
+      ) {
+        setSelectedRole('admin');
+      }
+    }
+  }, [initialRole, authPromptReason]);
 
   const [nameTouched, setNameTouched] = useState<boolean>(false);
   const [phoneTouched, setPhoneTouched] = useState<boolean>(false);
@@ -47,6 +65,15 @@ export function OtpAuthPanel({ onSuccess, titleId }: OtpAuthPanelProps) {
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
   const normalizedPhone = normalizeBdPhone(phoneInput);
+
+  React.useEffect(() => {
+    if (!normalizedPhone) return;
+    const adminDigits = ['01711240100', '01733919156', '01712456789', '01715883210'];
+    const digits = normalizedPhone.replace(/\D/g, '').replace(/^880/, '0');
+    if (adminDigits.includes(digits) && selectedRole !== 'admin') {
+      setSelectedRole('admin');
+    }
+  }, [normalizedPhone, selectedRole]);
 
   const nameError =
     nameTouched && fullName.trim().length === 0

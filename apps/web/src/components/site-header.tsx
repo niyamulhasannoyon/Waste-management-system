@@ -13,6 +13,8 @@ import {
   LogOut,
   Menu,
   RefreshCw,
+  Shield,
+  ShieldCheck,
   X,
 } from 'lucide-react';
 import { StatusBadge } from '@/components/ui/badge';
@@ -21,6 +23,7 @@ import { NativeDialog } from '@/components/ui/native-dialog';
 import { RelativeTimeBn } from '@/components/ui/relative-time';
 import { useCleanSavar } from '@/context/CleanSavarContext';
 import { ROLE_LABELS_BN } from '@/lib/savar-data';
+import { isAllowedDevEmail } from '@/lib/dev-store';
 import { cn, toBanglaDigits } from '@/lib/utils';
 
 const NAV_ITEMS = [
@@ -160,27 +163,49 @@ export function SiteHeader() {
 
             <div className="hidden items-center gap-2 sm:flex">
               {user ? (
-                <div className="flex items-center gap-2 rounded-md border border-[#E2E8F0] bg-[#F8FAFC] px-2.5 py-1">
-                  <div className="flex flex-col leading-tight">
-                    <span className="max-w-[130px] truncate text-xs font-semibold text-[#0F172A]">
-                      {user.full_name}
-                    </span>
-                    <span className="text-[11px] font-medium text-[#14532D]">
-                      {ROLE_LABELS_BN[user.role]}
-                    </span>
+                <>
+                  {user.role === 'admin' ? (
+                    <Link
+                      href="/admin"
+                      className="inline-flex items-center gap-1.5 rounded-md border border-[#15803D] bg-[#F0FDF4] px-2.5 py-1 text-xs font-bold text-[#14532D] hover:bg-[#DCFCE7] transition-colors"
+                    >
+                      <ShieldCheck className="h-3.5 w-3.5 text-[#15803D]" />
+                      অ্যাডমিন প্যানেল
+                    </Link>
+                  ) : null}
+
+                  {isAllowedDevEmail(user.email) || user.role === 'admin' ? (
+                    <Link
+                      href="/dev-admin"
+                      className="inline-flex items-center gap-1.5 rounded-md border border-slate-700 bg-slate-900 px-2.5 py-1 text-xs font-bold text-white hover:bg-slate-800 transition-colors"
+                    >
+                      <Shield className="h-3.5 w-3.5 text-emerald-400" />
+                      দেব কনসোল
+                    </Link>
+                  ) : null}
+
+                  <div className="flex items-center gap-2 rounded-md border border-[#E2E8F0] bg-[#F8FAFC] px-2.5 py-1">
+                    <div className="flex flex-col leading-tight">
+                      <span className="max-w-[130px] truncate text-xs font-semibold text-[#0F172A]">
+                        {user.full_name}
+                      </span>
+                      <span className="text-[11px] font-medium text-[#14532D]">
+                        {ROLE_LABELS_BN[user.role]}
+                      </span>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => void logout()}
+                      aria-label="লগআউট করুন"
+                      className="min-h-8 px-2 text-xs text-[#475569] hover:text-[#B91C1C]"
+                    >
+                      <LogOut className="h-3.5 w-3.5" aria-hidden="true" />
+                      লগআউট
+                    </Button>
                   </div>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => void logout()}
-                    aria-label="লগআউট করুন"
-                    className="min-h-8 px-2 text-xs text-[#475569] hover:text-[#B91C1C]"
-                  >
-                    <LogOut className="h-3.5 w-3.5" aria-hidden="true" />
-                    লগআউট
-                  </Button>
-                </div>
+                </>
               ) : (
                 <Button
                   type="button"
@@ -326,6 +351,30 @@ export function SiteHeader() {
                   </div>
                   <StatusBadge tone="success">{ROLE_LABELS_BN[user.role]}</StatusBadge>
                 </div>
+
+                {user.role === 'admin' ? (
+                  <div className="flex flex-col gap-1.5 pt-1">
+                    <Link
+                      href="/admin"
+                      onClick={closeDrawer}
+                      className="flex min-h-10 items-center justify-center gap-2 rounded-md border border-[#15803D] bg-[#F0FDF4] px-3 py-2 text-xs font-bold text-[#14532D]"
+                    >
+                      <ShieldCheck className="h-4 w-4 text-[#15803D]" />
+                      পৌর অ্যাডমিন ড্যাশবোর্ডে যান
+                    </Link>
+                    {isAllowedDevEmail(user.email) || user.role === 'admin' ? (
+                      <Link
+                        href="/dev-admin"
+                        onClick={closeDrawer}
+                        className="flex min-h-10 items-center justify-center gap-2 rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-xs font-bold text-white"
+                      >
+                        <Shield className="h-4 w-4 text-emerald-400" />
+                        ডেভেলপার কনসোলে যান
+                      </Link>
+                    ) : null}
+                  </div>
+                ) : null}
+
                 <Button
                   type="button"
                   variant="secondary"

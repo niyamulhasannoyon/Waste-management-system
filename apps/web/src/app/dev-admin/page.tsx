@@ -14,6 +14,7 @@ import {
   Globe,
   KeyRound,
   Lock,
+  MessageSquare,
   Play,
   Plus,
   RefreshCw,
@@ -36,6 +37,7 @@ import { DevAuthGate } from '@/components/dev/DevAuthGate';
 import { DevTrafficTab } from '@/components/dev/DevTrafficTab';
 import { DevDownloadsTab } from '@/components/dev/DevDownloadsTab';
 import { DevLoginsTab } from '@/components/dev/DevLoginsTab';
+import { DevCitizenRequestsTab } from '@/components/dev/DevCitizenRequestsTab';
 import {
   DevFeatureFlags,
   DevUserAccount,
@@ -95,6 +97,7 @@ import { toBanglaDigits } from '@/lib/utils';
 
 type DevTabKey =
   | 'switchboard'
+  | 'citizen_requests'
   | 'traffic'
   | 'downloads'
   | 'logins'
@@ -118,6 +121,7 @@ interface TabItem {
 
 const DEV_TABS: TabItem[] = [
   { key: 'switchboard', labelBn: 'সুইচবোর্ড ও কন্ট্রোল', labelEn: 'Master Switchboard', icon: Sliders },
+  { key: 'citizen_requests', labelBn: 'নাগরিক রিকোয়েস্ট ও রেসপন্স', labelEn: 'Citizen Ingestion Feed', icon: MessageSquare, badge: 'Live Stream' },
   { key: 'traffic', labelBn: 'ভিজিটর ও ট্রাফিক', labelEn: 'Traffic & Visitors', icon: Activity, badge: 'Live' },
   { key: 'downloads', labelBn: 'ডাউনলোড ট্র্যাকার', labelEn: 'Download Analytics', icon: Download, badge: 'Hot' },
   { key: 'logins', labelBn: 'লগইন ও সেশন জিও', labelEn: 'Login Geolocation', icon: ShieldCheck },
@@ -1066,6 +1070,11 @@ function DevAdminConsoleContent() {
               </div>
             </div>
           </div>
+        )}
+
+        {/* TAB: CITIZEN REQUESTS & RESPONSES LIVE STREAM */}
+        {activeTab === 'citizen_requests' && (
+          <DevCitizenRequestsTab />
         )}
 
         {/* TAB 2: TRAFFIC & VISITOR INTELLIGENCE */}

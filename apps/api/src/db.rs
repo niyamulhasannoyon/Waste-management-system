@@ -288,6 +288,39 @@ pub async fn create_notification(
     Ok(())
 }
 
+/// Dispatches persistent in-app notification to all active municipal & dev administrators.
+pub async fn notify_admins(
+    tx: &mut Transaction<'_, Postgres>,
+    title_bn: &str,
+    body_bn: &str,
+    entity_type: &str,
+    entity_id: Uuid,
+) -> Result<(), AppError> {
+    let admin_ids: Vec<Uuid> = sqlx::query_scalar(
+        r#"SELECT id FROM users WHERE role = 'admin' AND is_verified = TRUE"#,
+    )
+    .fetch_all(&mut **tx)
+    .await?;
+
+    for admin_id in admin_ids {
+        sqlx::query(
+            r#"
+            INSERT INTO notifications (user_id, title_bn, body_bn, entity_type, entity_id)
+            VALUES ($1, $2, $3, $4, $5)
+            "#,
+        )
+        .bind(admin_id)
+        .bind(title_bn)
+        .bind(body_bn)
+        .bind(entity_type)
+        .bind(entity_id)
+        .execute(&mut **tx)
+        .await?;
+    }
+
+    Ok(())
+}
+
 /// Insert an immutable audit trail event inside either a pool or open transaction.
 #[allow(clippy::too_many_arguments)]
 pub async fn record_audit_log<'e, E>(

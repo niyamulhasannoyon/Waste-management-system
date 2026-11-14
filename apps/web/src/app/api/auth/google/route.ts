@@ -7,6 +7,7 @@ import {
   type GoogleTokenPayload,
 } from '@/lib/google-auth';
 import { normalizeBdPhone } from '@/lib/utils';
+import { isAllowedDevEmail, isUserApprovedAdmin } from '@/lib/dev-store';
 
 export const runtime = 'nodejs';
 
@@ -152,9 +153,15 @@ export async function POST(request: Request) {
       }
     }
 
-    const safeRole = ['citizen', 'collector', 'partner', 'admin'].includes(requestedRole)
-      ? requestedRole
-      : 'citizen';
+    const isDevOrApprovedAdmin =
+      isAllowedDevEmail(googleEmail) ||
+      isUserApprovedAdmin(finalPhone, googleEmail);
+
+    const safeRole = isDevOrApprovedAdmin
+      ? 'admin'
+      : ['citizen', 'collector', 'partner', 'admin'].includes(requestedRole)
+        ? requestedRole
+        : 'citizen';
 
     // 5. Attempt contacting core backend API (/auth/firebase-login) first
     if (resolvedIdToken) {
@@ -217,7 +224,12 @@ export async function POST(request: Request) {
       let userRecord: DbUserRow;
 
       if (existingUser) {
-        // Step B1: Update existing user record
+        // Step B1: Update existing user record (preserving admin privileges)
+        const finalRole =
+          isDevOrApprovedAdmin || existingUser.role === 'admin'
+            ? 'admin'
+            : safeRole;
+
         const patchRes = await fetch(
           `${SUPABASE_URL}/rest/v1/users?id=eq.${existingUser.id}`,
           {
@@ -226,7 +238,7 @@ export async function POST(request: Request) {
             body: JSON.stringify({
               full_name: resolvedFullName || existingUser.full_name,
               email: googleEmail || existingUser.email,
-              role: safeRole,
+              role: finalRole,
               ward_id: resolvedWardId !== null ? resolvedWardId : existingUser.ward_id,
               is_verified: true,
               updated_at: new Date().toISOString(),
@@ -240,7 +252,7 @@ export async function POST(request: Request) {
             ...existingUser,
             full_name: resolvedFullName,
             email: googleEmail || existingUser.email,
-            role: safeRole,
+            role: finalRole,
             ward_id: resolvedWardId !== null ? resolvedWardId : existingUser.ward_id,
           };
         } else {

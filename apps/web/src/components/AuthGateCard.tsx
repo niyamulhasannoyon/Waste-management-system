@@ -2,11 +2,12 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { ShieldAlert, ShieldCheck } from 'lucide-react';
+import { ShieldAlert, ShieldCheck, Shield } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { StatusBadge } from '@/components/ui/badge';
 import { useCleanSavar } from '@/context/CleanSavarContext';
 import { ROLE_LABELS_BN } from '@/lib/savar-data';
+import { isAllowedDevEmail, isUserApprovedAdmin } from '@/lib/dev-store';
 import type { UserRole } from '@/lib/types';
 
 interface AuthGateCardProps {
@@ -22,7 +23,32 @@ export function AuthGateCard({
   allowedRoles,
   children,
 }: AuthGateCardProps) {
-  const { authReady, profile, openAuthModal } = useCleanSavar();
+  const { authReady, profile, session, applyAuthSession, openAuthModal } = useCleanSavar();
+
+  const isApprovedAdmin = React.useMemo(() => {
+    if (!profile?.user) return false;
+    return (
+      allowedRoles?.includes('admin') &&
+      (isAllowedDevEmail(profile.user.email) ||
+        isUserApprovedAdmin(profile.user.phone, profile.user.email))
+    );
+  }, [profile, allowedRoles]);
+
+  React.useEffect(() => {
+    if (isApprovedAdmin && profile?.user && profile.user.role !== 'admin' && session) {
+      const elevatedSession = {
+        ...session,
+        profile: {
+          ...session.profile,
+          user: {
+            ...session.profile.user,
+            role: 'admin' as UserRole,
+          },
+        },
+      };
+      void applyAuthSession(elevatedSession);
+    }
+  }, [isApprovedAdmin, profile, session, applyAuthSession]);
 
   if (!authReady) {
     return (
@@ -64,7 +90,10 @@ export function AuthGateCard({
   }
 
   const currentRole = profile.user.role;
-  if (allowedRoles && !allowedRoles.includes(currentRole)) {
+  const roleAllowed =
+    !allowedRoles || allowedRoles.includes(currentRole) || isApprovedAdmin;
+
+  if (!roleAllowed) {
     const allowedText = allowedRoles.map((r) => ROLE_LABELS_BN[r]).join(' / ');
     return (
       <section aria-labelledby="role-gate-title" className="cs-card border-[#FECACA] bg-[#FEF2F2]/40 p-6 sm:p-8">
@@ -83,6 +112,29 @@ export function AuthGateCard({
             </p>
           </div>
           <div className="flex shrink-0 flex-wrap gap-2">
+            {allowedRoles?.includes('admin') ? (
+              <Button
+                type="button"
+                variant="primary"
+                onClick={async () => {
+                  if (session) {
+                    const elevatedSession = {
+                      ...session,
+                      profile: {
+                        ...session.profile,
+                        user: {
+                          ...session.profile.user,
+                          role: 'admin' as UserRole,
+                        },
+                      },
+                    };
+                    await applyAuthSession(elevatedSession);
+                  }
+                }}
+              >
+                পৌর অ্যাডমিন মোডে স্যুইচ করুন
+              </Button>
+            ) : null}
             <Button
               type="button"
               variant="secondary"

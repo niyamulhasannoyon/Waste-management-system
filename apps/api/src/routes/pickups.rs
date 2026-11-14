@@ -11,8 +11,8 @@ use crate::{
     auth::{extract_client_ip, extract_optional_auth, require_role, AuthUser, Role},
     db::{
         create_notification, ensure_ward_exists, escape_ilike_pattern, generate_tracking_code,
-        mask_phone, normalize_bd_phone, release_vehicle_if_idle, resolve_ward_id_and_match,
-        validate_coords, AppState,
+        mask_phone, normalize_bd_phone, notify_admins, release_vehicle_if_idle,
+        resolve_ward_id_and_match, validate_coords, AppState,
     },
     error::{AppError, ErrorBody},
     models::{
@@ -444,6 +444,21 @@ pub async fn create_pickup(
     .execute(&mut *tx)
     .await?;
 
+    let admin_notif_body = format!(
+        "নাগরিক {} ({}) নতুন বর্জ্য পিকআপের অনুরোধ পাঠিয়েছেন। ট্র্যাকিং কোড: {}",
+        citizen_name,
+        phone,
+        tracking_code
+    );
+    notify_admins(
+        &mut tx,
+        "নতুন পিকআপ অনুরোধ",
+        &admin_notif_body,
+        "pickup",
+        id,
+    )
+    .await?;
+
     tx.commit().await?;
 
     let created = fetch_pickup_by_id(&state, id).await?;
@@ -686,6 +701,23 @@ pub async fn update_pickup_status(
         id,
     )
     .await?;
+
+    if auth_user.role != Role::Admin {
+        let admin_status_body = format!(
+            "পিকআপ {} এর অবস্থা পরিবর্তন করা হয়েছে: {} (দ্বারা: {})।",
+            row.tracking_code,
+            pickup_status_bn(&payload.status),
+            actor_label
+        );
+        notify_admins(
+            &mut tx,
+            "পিকআপ আপডেট প্রাপ্তি",
+            &admin_status_body,
+            "pickup",
+            id,
+        )
+        .await?;
+    }
 
     tx.commit().await?;
 

@@ -12,8 +12,8 @@ use crate::{
     auth::{extract_client_ip, extract_optional_auth, require_role, AuthUser, Role},
     db::{
         create_notification, ensure_ward_exists, escape_ilike_pattern, generate_tracking_code,
-        mask_phone, normalize_bd_phone, release_vehicle_if_idle, resolve_ward_id_and_match,
-        validate_coords, validate_uploaded_photo_url, AppState,
+        mask_phone, normalize_bd_phone, notify_admins, release_vehicle_if_idle,
+        resolve_ward_id_and_match, validate_coords, validate_uploaded_photo_url, AppState,
     },
     error::{AppError, ErrorBody},
     models::{
@@ -500,6 +500,22 @@ pub async fn create_report(
     .execute(&mut *tx)
     .await?;
 
+    let admin_notif_body = format!(
+        "নাগরিক {} ({}) নতুন ময়লার স্তূপ রিপোর্ট করেছেন। স্থান: {}, কোড: {}",
+        reporter_name,
+        phone,
+        landmark,
+        tracking_code
+    );
+    notify_admins(
+        &mut tx,
+        "নতুন ময়লার রিপোর্ট",
+        &admin_notif_body,
+        "dump_report",
+        id,
+    )
+    .await?;
+
     tx.commit().await?;
 
     let report = fetch_report_by_id(&state, id).await?;
@@ -790,6 +806,23 @@ pub async fn update_report_status(
         id,
     )
     .await?;
+
+    if auth_user.role != Role::Admin {
+        let admin_status_body = format!(
+            "অভিযোগ {} এর অবস্থা পরিবর্তন করা হয়েছে: {} (দ্বারা: {})।",
+            row.tracking_code,
+            report_status_bn(&payload.status),
+            actor_label
+        );
+        notify_admins(
+            &mut tx,
+            "অভিযোগ আপডেট প্রাপ্তি",
+            &admin_status_body,
+            "dump_report",
+            id,
+        )
+        .await?;
+    }
 
     tx.commit().await?;
 
