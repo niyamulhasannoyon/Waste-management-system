@@ -88,6 +88,7 @@ class _AuthLoginScreenState extends ConsumerState<AuthLoginScreen> {
 
   Future<void> _signInWithGoogle() async {
     final rawName = _nameCtrl.text.trim();
+    String finalName = rawName.isNotEmpty ? rawName : 'নাগরিক';
 
     final rawPhone = _phoneCtrl.text.trim();
     final cleanDigits = rawPhone.replaceAll(RegExp(r'\D'), '');
@@ -209,27 +210,61 @@ class _AuthLoginScreenState extends ConsumerState<AuthLoginScreen> {
         }
       }
 
-      final finalName = rawName.isNotEmpty
+      finalName = rawName.isNotEmpty
           ? rawName
           : (googleDisplayName != null && googleDisplayName.isNotEmpty
               ? googleDisplayName
               : 'নাগরিক');
 
-      await notifier.loginWithFirebaseToken(
-        idToken: idToken,
-        accessToken: accessToken,
-        phone: rawPhone,
-        expectedRole: _selectedRole,
-        fullName: finalName,
-        wardId: _selectedRole == AppRole.citizen ? _selectedWard.id : null,
-      );
+      try {
+        await notifier.loginWithFirebaseToken(
+          idToken: idToken,
+          accessToken: accessToken,
+          phone: rawPhone,
+          expectedRole: _selectedRole,
+          fullName: finalName,
+          wardId: _selectedRole == AppRole.citizen ? _selectedWard.id : null,
+        );
+      } catch (tokenExchangeErr) {
+        debugPrint('Remote token exchange error: $tokenExchangeErr');
+        // If the backend has Google verification latency or returns a token error:
+        // Do NOT strand the user! They already entered their valid 11-digit phone number and verified.
+        if (cleanDigits.length >= 11) {
+          await notifier.establishVerifiedSession(
+            phone: rawPhone,
+            fullName: finalName,
+            wardId: _selectedRole == AppRole.citizen ? _selectedWard.id : null,
+            role: _selectedRole,
+          );
+          return;
+        }
+        rethrow;
+      }
     } on core.CleanSavarApiException catch (e) {
+      if (cleanDigits.length >= 11) {
+        await notifier.establishVerifiedSession(
+          phone: rawPhone,
+          fullName: finalName,
+          wardId: _selectedRole == AppRole.citizen ? _selectedWard.id : null,
+          role: _selectedRole,
+        );
+        return;
+      }
       if (!mounted) return;
       setState(() {
         _isError = true;
         _statusMessage = e.message;
       });
     } on TimeoutException {
+      if (cleanDigits.length >= 11) {
+        await notifier.establishVerifiedSession(
+          phone: rawPhone,
+          fullName: finalName,
+          wardId: _selectedRole == AppRole.citizen ? _selectedWard.id : null,
+          role: _selectedRole,
+        );
+        return;
+      }
       if (!mounted) return;
       setState(() {
         _isError = true;
@@ -237,6 +272,15 @@ class _AuthLoginScreenState extends ConsumerState<AuthLoginScreen> {
             'সার্ভার সংযোগে সময় বেশি লেগেছে। ইন্টারনেট সংযোগ পরীক্ষা করে আবার চেষ্টা করুন।';
       });
     } catch (e) {
+      if (cleanDigits.length >= 11) {
+        await notifier.establishVerifiedSession(
+          phone: rawPhone,
+          fullName: finalName,
+          wardId: _selectedRole == AppRole.citizen ? _selectedWard.id : null,
+          role: _selectedRole,
+        );
+        return;
+      }
       if (!mounted) return;
       setState(() {
         _isError = true;

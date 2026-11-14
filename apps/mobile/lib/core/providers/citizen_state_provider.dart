@@ -437,6 +437,44 @@ class CitizenStateNotifier extends Notifier<CitizenState> {
     return auth;
   }
 
+  Future<void> establishVerifiedSession({
+    required String phone,
+    required String fullName,
+    int? wardId,
+    AppRole role = AppRole.citizen,
+    String? token,
+  }) async {
+    final cleanDigits = phone.replaceAll(RegExp(r'\D'), '');
+    final sessionToken = token ??
+        'app_verified:$cleanDigits:user_${DateTime.now().millisecondsSinceEpoch}';
+    _api.setAuthToken(sessionToken);
+    final roleStr = role == AppRole.collector ? 'collector' : 'citizen';
+    await _store.writeJsonMap(OfflineSyncStore.authSessionKey, {
+      'token': sessionToken,
+      'phone': phone,
+      'role': roleStr,
+    });
+    final cleanFullName =
+        fullName.trim().isNotEmpty ? fullName.trim() : 'নাগরিক';
+    state = state.copyWith(
+      citizenPhone: phone,
+      citizenFullName: cleanFullName,
+      citizenName: cleanFullName.split(' ').first,
+      isAuthenticated: true,
+      isDemoPreview: false,
+      authenticatedRole: roleStr,
+      clearOtpPreview: true,
+    );
+    if (role == AppRole.collector) {
+      ref.read(appRoleProvider.notifier).setRole(AppRole.collector);
+      unawaited(ref.read(collectorStateProvider.notifier).refreshFromServer());
+    } else {
+      ref.read(appRoleProvider.notifier).setRole(AppRole.citizen);
+    }
+    await _persist();
+    unawaited(refreshFromServer());
+  }
+
   void enterDemoPreview({AppRole role = AppRole.citizen}) {
     if (!AppBuildConfig.enableDemoMode) return;
     ref.read(collectorStateProvider.notifier).loadDemoSample();

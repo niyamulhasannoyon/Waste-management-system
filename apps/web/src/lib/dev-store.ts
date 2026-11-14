@@ -462,7 +462,7 @@ const DEFAULT_MARKET_RATES: DevMarketRate[] = [
 
 const DEFAULT_APK_CONFIG: DevApkReleaseConfig = {
   versionName: '2.0.0',
-  versionCode: 5,
+  versionCode: 6,
   releaseDate: '2026-11-14',
   apkSizeMb: 26.8,
   downloadUrl: '/clean-savar.apk',
