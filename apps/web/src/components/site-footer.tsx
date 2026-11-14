@@ -1,8 +1,16 @@
+'use client';
+
 import React from 'react';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { Leaf, PhoneCall } from 'lucide-react';
 
 export function SiteFooter() {
+  const pathname = usePathname();
+
+  if (pathname?.startsWith('/dev-admin')) {
+    return null;
+  }
   return (
     <footer className="border-t border-[#E2E8F0] bg-white">
       <div className="mx-auto grid max-w-6xl gap-8 px-4 py-10 sm:grid-cols-2 sm:px-6 lg:grid-cols-4">
@@ -65,6 +73,11 @@ export function SiteFooter() {
             <li>
               <Link href="/admin" className="hover:text-[#15803D] hover:underline">
                 পৌরসভা কমান্ড ড্যাশবোর্ড
+              </Link>
+            </li>
+            <li>
+              <Link href="/dev-admin" className="font-mono text-xs text-slate-500 hover:text-emerald-700 hover:underline">
+                [Dev Console / ডেভেলপার কনসোল]
               </Link>
             </li>
           </ul>

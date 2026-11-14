@@ -92,6 +92,10 @@ export function SiteHeader() {
 
   const user = profile?.user ?? null;
 
+  if (pathname?.startsWith('/dev-admin')) {
+    return null;
+  }
+
   return (
     <>
       <header className="sticky top-0 z-40 border-b border-[#E2E8F0] bg-white/95 backdrop-blur">
