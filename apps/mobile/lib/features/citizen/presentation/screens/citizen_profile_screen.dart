@@ -279,6 +279,48 @@ class CitizenProfileScreen extends ConsumerWidget {
             ),
           ),
         ],
+        const SizedBox(height: 24),
+        Center(
+          child: Column(
+            children: [
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: const BoxDecoration(
+                      color: AppColors.primaryGreenTint,
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.eco_rounded,
+                      size: 14,
+                      color: AppColors.primaryGreen,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  const Text(
+                    'ক্লিন সাভার • সংস্করণ ২.১.০',
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              const Text(
+                'সাভার পৌরসভা ডিজিটাল বর্জ্য ব্যবস্থাপনা প্ল্যাটফর্ম',
+                style: TextStyle(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w500,
+                  color: AppColors.textMuted,
+                ),
+              ),
+            ],
+          ),
+        ),
       ],
     );
   }

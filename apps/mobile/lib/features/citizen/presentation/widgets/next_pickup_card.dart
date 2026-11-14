@@ -17,27 +17,40 @@ class NextPickupCard extends ConsumerWidget {
     return Container(
       decoration: BoxDecoration(
         color: AppColors.cardSurface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.primaryGreen, width: 1.5),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.primaryGreenBorder, width: 1.2),
+        boxShadow: AppColors.heroCardShadow,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
             decoration: const BoxDecoration(
-              color: AppColors.primaryGreenDark,
-              borderRadius: BorderRadius.vertical(top: Radius.circular(10)),
+              gradient: LinearGradient(
+                colors: [
+                  AppColors.primaryGreenDarker,
+                  AppColors.primaryGreenDark,
+                  AppColors.primaryGreen,
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.vertical(top: Radius.circular(15)),
             ),
             child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                const Padding(
-                  padding: EdgeInsets.only(top: 2),
-                  child: Icon(
+                Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.15),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
                     Icons.schedule_rounded,
                     color: Colors.white,
-                    size: 22,
+                    size: 20,
                   ),
                 ),
                 const SizedBox(width: 10),
@@ -45,10 +58,10 @@ class NextPickupCard extends ConsumerWidget {
                   child: Text(
                     'পরবর্তী ময়লা সংগ্রহ: ${citizen.nextPickupWindow}',
                     style: const TextStyle(
-                      fontSize: 16,
+                      fontSize: 15.5,
                       fontWeight: FontWeight.w700,
                       color: Colors.white,
-                      height: 1.4,
+                      height: 1.35,
                     ),
                   ),
                 ),
@@ -60,11 +73,11 @@ class NextPickupCard extends ConsumerWidget {
             child: Row(
               children: [
                 Container(
-                  width: 44,
-                  height: 44,
+                  width: 46,
+                  height: 46,
                   decoration: BoxDecoration(
                     color: AppColors.primaryGreenTint,
-                    borderRadius: BorderRadius.circular(10),
+                    borderRadius: BorderRadius.circular(12),
                     border: Border.all(
                       color: AppColors.primaryGreenBorder,
                       width: 1,
@@ -90,7 +103,7 @@ class NextPickupCard extends ConsumerWidget {
                           height: 1.35,
                         ),
                       ),
-                      const SizedBox(height: 4),
+                      const SizedBox(height: 5),
                       Wrap(
                         spacing: 8,
                         runSpacing: 4,
@@ -124,13 +137,17 @@ class NextPickupCard extends ConsumerWidget {
                   style: FilledButton.styleFrom(
                     backgroundColor: AppColors.primaryGreen,
                     foregroundColor: Colors.white,
-                    minimumSize: const Size(48, 48),
+                    elevation: 0,
+                    minimumSize: const Size(46, 44),
                     padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
+                      horizontal: 14,
                       vertical: 10,
                     ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
                   ),
-                  icon: const Icon(Icons.call, size: 18),
+                  icon: const Icon(Icons.call, size: 17),
                   label: const Text('কল'),
                 ),
               ],

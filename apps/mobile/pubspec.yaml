@@ -1,7 +1,7 @@
 name: clean_savar_mobile
 description: Clean Savar (ক্লিন সাভার) unified Citizen & Collector Flutter app for Savar Pourashava.
 publish_to: 'none'
-version: 2.0.0+6
+version: 2.1.0+7
 
 environment:
   sdk: '>=3.5.0 <4.0.0'

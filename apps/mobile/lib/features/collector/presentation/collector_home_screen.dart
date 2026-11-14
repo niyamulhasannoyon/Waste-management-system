@@ -16,27 +16,30 @@ class CollectorHomeScreen extends ConsumerWidget {
     );
 
     return Scaffold(
-      body: ListView.builder(
-        padding: const EdgeInsets.fromLTRB(16, 14, 16, 28),
-        itemCount: stops.length + 1,
-        itemBuilder: (context, index) {
-          if (index == 0) {
-            return const Padding(
-              padding: EdgeInsets.only(bottom: 12),
-              child: CollectorDutyHeader(),
-            );
-          }
+      body: SafeArea(
+        bottom: false,
+        child: ListView.builder(
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 28),
+          itemCount: stops.length + 1,
+          itemBuilder: (context, index) {
+            if (index == 0) {
+              return const Padding(
+                padding: EdgeInsets.only(bottom: 12),
+                child: CollectorDutyHeader(),
+              );
+            }
 
-          final stop = stops[index - 1];
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: RouteStopCard(
-              key: ValueKey(stop.id),
-              stop: stop,
-              orderNumber: index,
-            ),
-          );
-        },
+            final stop = stops[index - 1];
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: RouteStopCard(
+                key: ValueKey(stop.id),
+                stop: stop,
+                orderNumber: index,
+              ),
+            );
+          },
+        ),
       ),
     );
   }

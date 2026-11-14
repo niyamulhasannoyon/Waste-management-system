@@ -511,72 +511,32 @@ class _AuthLoginScreenState extends ConsumerState<AuthLoginScreen> {
 
   Widget _buildOtpPausedBanner() {
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(12),
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
         color: const Color(0xFFFFFBEB),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFFFCD34D), width: 1.2),
+        border: Border.all(color: const Color(0xFFFDE68A), width: 1),
       ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: const Row(
         children: [
-          Container(
-            padding: const EdgeInsets.all(5),
-            decoration: BoxDecoration(
-              color: const Color(0xFFFDE68A),
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: const Icon(
-              Icons.warning_amber_rounded,
-              color: Color(0xFF92400E),
-              size: 18,
-            ),
+          Icon(
+            Icons.info_outline_rounded,
+            color: Color(0xFFB45309),
+            size: 16,
           ),
-          const SizedBox(width: 10),
+          SizedBox(width: 8),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    const Text(
-                      'জরুরী নোটিশ: SMS OTP সাময়িক স্থগিত',
-                      style: TextStyle(
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w700,
-                        color: Color(0xFF92400E),
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                    Container(
-                      padding:
-                          const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFFDE68A),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: const Text(
-                        'যান্ত্রিক ত্রুটি',
-                        style: TextStyle(
-                          fontSize: 9.5,
-                          fontWeight: FontWeight.w700,
-                          color: Color(0xFF78350F),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 3),
-                const Text(
-                  'টেলিকম গেটওয়েতে সাময়িক যান্ত্রিক ত্রুটির কারণে এসএমএস OTP কোড যাচাইকরণ সাময়িকভাবে স্থগিত রাখা হয়েছে। দ্রুত ও নিরবচ্ছিন্ন সেবায় আপনার পূর্ণ নাম ও মোবাইল নম্বর পূরণ করে Google অ্যাকাউন্ট দিয়ে সাইন-ইন সম্পন্ন করুন।',
-                  style: TextStyle(
-                    fontSize: 11.5,
-                    color: Color(0xFF78350F),
-                    height: 1.35,
-                  ),
-                ),
-              ],
+            child: Text(
+              'জরুরী নোটিশ: SMS OTP সাময়িক স্থগিত — Google দিয়ে সহজে সাইন-ইন করুন',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF92400E),
+                height: 1.2,
+              ),
             ),
           ),
         ],
@@ -602,51 +562,76 @@ class _AuthLoginScreenState extends ConsumerState<AuthLoginScreen> {
                 Column(
                   children: [
                     Container(
-                      width: 64,
-                      height: 64,
+                      width: 66,
+                      height: 66,
                       decoration: BoxDecoration(
-                        color: AppColors.primaryGreenTint,
-                        borderRadius: BorderRadius.circular(18),
-                        border: Border.all(
-                          color: AppColors.primaryGreenBorder,
-                          width: 1.5,
+                        gradient: const LinearGradient(
+                          colors: [
+                            AppColors.primaryGreen,
+                            AppColors.primaryGreenDark,
+                          ],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
                         ),
+                        borderRadius: BorderRadius.circular(20),
+                        boxShadow: const [
+                          BoxShadow(
+                            color: Color(0x2E059669),
+                            blurRadius: 16,
+                            offset: Offset(0, 6),
+                          ),
+                        ],
                       ),
                       child: const Icon(
                         Icons.eco_rounded,
-                        size: 34,
-                        color: AppColors.primaryGreen,
+                        size: 36,
+                        color: Colors.white,
                       ),
                     ),
                     const SizedBox(height: 12),
                     const Text(
                       'ক্লিন সাভার',
                       style: TextStyle(
-                        fontSize: 26,
-                        fontWeight: FontWeight.w700,
+                        fontSize: 27,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -0.3,
                         color: AppColors.textPrimary,
                       ),
                     ),
-                    const SizedBox(height: 4),
-                    const Text(
-                      'সাভার পৌরসভা ডিজিটাল বর্জ্য ব্যবস্থাপনা',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 13.5,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.textSecondary,
+                    const SizedBox(height: 5),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 3.5,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppColors.primaryGreenTint,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: AppColors.primaryGreenBorder,
+                          width: 1,
+                        ),
+                      ),
+                      child: const Text(
+                        'সাভার পৌরসভা ডিজিটাল বর্জ্য ব্যবস্থাপনা',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.primaryGreenDark,
+                        ),
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 18),
 
                 // Citizen vs Collector Role Selector
                 Container(
                   padding: const EdgeInsets.all(4),
                   decoration: BoxDecoration(
                     color: AppColors.neutralSurface,
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(14),
                     border: Border.all(color: AppColors.border, width: 1),
                   ),
                   child: Row(
@@ -660,7 +645,7 @@ class _AuthLoginScreenState extends ConsumerState<AuthLoginScreen> {
                           onTap: () => _switchLoginRole(AppRole.citizen),
                         ),
                       ),
-                      const SizedBox(width: 6),
+                      const SizedBox(width: 4),
                       Expanded(
                         child: _LoginRoleTab(
                           key: const ValueKey('login_tab_collector'),
@@ -1032,32 +1017,53 @@ class _LoginRoleTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: selected ? AppColors.primaryGreen : Colors.transparent,
-      borderRadius: BorderRadius.circular(9),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(9),
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(minHeight: 46),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                icon,
-                size: 18,
-                color: selected ? Colors.white : AppColors.textSecondary,
-              ),
-              const SizedBox(width: 6),
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 13.5,
-                  fontWeight: FontWeight.w700,
-                  color: selected ? Colors.white : AppColors.textSecondary,
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 180),
+      curve: Curves.easeInOut,
+      decoration: BoxDecoration(
+        color: selected ? Colors.white : Colors.transparent,
+        borderRadius: BorderRadius.circular(10),
+        boxShadow: selected
+            ? const [
+                BoxShadow(
+                  color: Color(0x100F172A),
+                  blurRadius: 6,
+                  offset: Offset(0, 2),
                 ),
-              ),
-            ],
+              ]
+            : null,
+      ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(10),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(10),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 44),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  icon,
+                  size: 19,
+                  color: selected
+                      ? AppColors.primaryGreen
+                      : AppColors.textSecondary,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 13.5,
+                    fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
+                    color: selected
+                        ? AppColors.primaryGreenDark
+                        : AppColors.textSecondary,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),

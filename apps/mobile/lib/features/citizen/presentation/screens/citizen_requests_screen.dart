@@ -50,25 +50,33 @@ class _CitizenRequestsScreenState extends ConsumerState<CitizenRequestsScreen> {
                     child: Text(
                       'আমার রিকোয়েস্ট ও রিপোর্ট',
                       style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w700,
+                        fontSize: 21,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -0.2,
                         color: AppColors.textPrimary,
                       ),
                     ),
                   ),
-                  FilledButton.tonalIcon(
+                  FilledButton.icon(
                     onPressed: () => showRequestPickupSheet(context),
                     style: FilledButton.styleFrom(
-                      backgroundColor: AppColors.primaryGreenTint,
-                      foregroundColor: AppColors.primaryGreenDark,
+                      backgroundColor: AppColors.primaryGreen,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
                       minimumSize: const Size(44, 40),
                       padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
+                        horizontal: 14,
                         vertical: 8,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
                       ),
                     ),
                     icon: const Icon(Icons.add_rounded, size: 18),
-                    label: const Text('নতুন পিকআপ'),
+                    label: const Text(
+                      'নতুন পিকআপ',
+                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+                    ),
                   ),
                 ],
               ),
@@ -179,14 +187,22 @@ class _FilterPill extends StatelessWidget {
     return ChoiceChip(
       label: Text(label),
       selected: selected,
+      showCheckmark: false,
       selectedColor: AppColors.primaryGreenTint,
       backgroundColor: AppColors.cardSurface,
-      side: BorderSide(
-        color: selected ? AppColors.primaryGreen : AppColors.borderStrong,
+      elevation: 0,
+      pressElevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+        side: BorderSide(
+          color: selected ? AppColors.primaryGreen : AppColors.borderStrong,
+          width: selected ? 1.4 : 1,
+        ),
       ),
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
       labelStyle: TextStyle(
-        fontSize: 13.5,
-        fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
+        fontSize: 13,
+        fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
         color: selected ? AppColors.primaryGreenDark : AppColors.textSecondary,
       ),
       onSelected: (_) => onTap(),

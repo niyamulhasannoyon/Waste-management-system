@@ -26,9 +26,20 @@ class CitizenShellScreen extends ConsumerWidget {
     };
 
     return Scaffold(
-      body: body,
+      body: SafeArea(
+        bottom: false,
+        child: body,
+      ),
       bottomNavigationBar: Container(
         decoration: const BoxDecoration(
+          color: AppColors.cardSurface,
+          boxShadow: [
+            BoxShadow(
+              color: Color(0x0A0F172A),
+              blurRadius: 10,
+              offset: Offset(0, -3),
+            ),
+          ],
           border: Border(
             top: BorderSide(color: AppColors.border, width: 1),
           ),

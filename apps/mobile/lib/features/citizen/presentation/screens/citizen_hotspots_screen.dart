@@ -76,8 +76,9 @@ class _CitizenHotspotsScreenState extends ConsumerState<CitizenHotspotsScreen> {
                     child: Text(
                       'সাভার হটস্পট ম্যাপ',
                       style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w700,
+                        fontSize: 21,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -0.2,
                         color: AppColors.textPrimary,
                       ),
                     ),
@@ -85,14 +86,23 @@ class _CitizenHotspotsScreenState extends ConsumerState<CitizenHotspotsScreen> {
                   FilledButton.icon(
                     onPressed: () => showReportGarbageSheet(context),
                     style: FilledButton.styleFrom(
-                      minimumSize: const Size(44, 42),
+                      backgroundColor: AppColors.primaryGreen,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      minimumSize: const Size(44, 40),
                       padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
+                        horizontal: 14,
                         vertical: 8,
                       ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
                     ),
-                    icon: const Icon(Icons.add_a_photo_outlined, size: 17),
-                    label: const Text('রিপোর্ট দিন'),
+                    icon: const Icon(Icons.add_a_photo_rounded, size: 17),
+                    label: const Text(
+                      'রিপোর্ট দিন',
+                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+                    ),
                   ),
                 ],
               ),
@@ -453,14 +463,22 @@ class _HotspotFilterChip extends StatelessWidget {
     return ChoiceChip(
       label: Text(label),
       selected: selected,
+      showCheckmark: false,
       selectedColor: AppColors.primaryGreenTint,
       backgroundColor: AppColors.cardSurface,
-      side: BorderSide(
-        color: selected ? AppColors.primaryGreen : AppColors.borderStrong,
+      elevation: 0,
+      pressElevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+        side: BorderSide(
+          color: selected ? AppColors.primaryGreen : AppColors.borderStrong,
+          width: selected ? 1.4 : 1,
+        ),
       ),
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
       labelStyle: TextStyle(
         fontSize: 13,
-        fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
+        fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
         color: selected ? AppColors.primaryGreenDark : AppColors.textSecondary,
       ),
       onSelected: (_) => onTap(),

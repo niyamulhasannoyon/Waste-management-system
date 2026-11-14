@@ -3,7 +3,8 @@ import 'package:flutter/material.dart';
 
 import '../constants/app_colors.dart';
 
-/// Zero-shadow flat card with crisp 1px border optimized for low-end Android GPUs.
+/// Professional tactile card with micro-shadow and hairline border.
+/// Smoothly renders on low-end and high-end Android displays.
 class FlatCard extends StatelessWidget {
   const FlatCard({
     super.key,
@@ -12,7 +13,9 @@ class FlatCard extends StatelessWidget {
     this.color = AppColors.cardSurface,
     this.borderColor = AppColors.border,
     this.borderWidth = 1,
-    this.borderRadius = 12,
+    this.borderRadius = 14,
+    this.gradient,
+    this.hasShadow = true,
     this.onTap,
   });
 
@@ -22,15 +25,19 @@ class FlatCard extends StatelessWidget {
   final Color borderColor;
   final double borderWidth;
   final double borderRadius;
+  final Gradient? gradient;
+  final bool hasShadow;
   final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     final radius = BorderRadius.circular(borderRadius);
     final decoration = BoxDecoration(
-      color: color,
+      color: gradient == null ? color : null,
+      gradient: gradient,
       borderRadius: radius,
       border: Border.all(color: borderColor, width: borderWidth),
+      boxShadow: hasShadow ? AppColors.cardShadow : null,
     );
 
     if (onTap == null) {
@@ -41,18 +48,17 @@ class FlatCard extends StatelessWidget {
       );
     }
 
-    return Material(
-      color: color,
-      shape: RoundedRectangleBorder(
-        borderRadius: radius,
-        side: BorderSide(color: borderColor, width: borderWidth),
-      ),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: radius,
-        child: Padding(
-          padding: padding,
-          child: child,
+    return Container(
+      decoration: decoration,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: radius,
+          child: Padding(
+            padding: padding,
+            child: child,
+          ),
         ),
       ),
     );
