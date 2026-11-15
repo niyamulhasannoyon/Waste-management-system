@@ -45,12 +45,20 @@ pub fn api_router() -> Router<AppState> {
         )
         .route("/reports/track/:code", get(reports::track_by_code))
         .route("/reports/:id/status", patch(reports::update_report_status))
-        .route("/dispatch/vehicles", get(dispatch::list_vehicles))
+        .route(
+            "/dispatch/vehicles",
+            get(dispatch::list_vehicles).post(dispatch::create_vehicle),
+        )
+        .route(
+            "/dispatch/vehicles/:id",
+            patch(dispatch::update_vehicle).put(dispatch::update_vehicle),
+        )
         .route(
             "/dispatch/vehicles/:id/location",
             patch(dispatch::update_vehicle_location),
         )
         .route("/dispatch/assign", post(dispatch::assign_vehicle))
+        .route("/admin/message", post(dispatch::send_admin_message))
         .route("/workers/nearby", get(dispatch::nearby_workers))
         .route(
             "/collector/tasks/:id/complete",

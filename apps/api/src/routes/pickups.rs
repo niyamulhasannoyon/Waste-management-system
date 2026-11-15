@@ -44,7 +44,10 @@ const PICKUP_SELECT_BASE: &str = r#"
         ST_Y(pr.location) AS lat,
         ST_X(pr.location) AS lng,
         pr.assigned_vehicle_id,
-        cv.code AS assigned_vehicle_code,
+        COALESCE(cv.code, pr.assigned_vehicle_code) AS assigned_vehicle_code,
+        COALESCE(cv.driver_name_bn, pr.collector_name) AS collector_name,
+        COALESCE(cv.driver_phone, pr.collector_phone) AS collector_phone,
+        pr.admin_note,
         pr.notes,
         pr.completion_photo_url,
         pr.completed_at,
@@ -653,6 +656,7 @@ pub async fn update_pickup_status(
         UPDATE pickup_requests
         SET status = $2,
             weight_kg = COALESCE($3, weight_kg),
+            admin_note = CASE WHEN $4 != '' THEN $4 ELSE admin_note END,
             completed_at = CASE WHEN $2 = 'collected' THEN NOW() ELSE completed_at END,
             updated_at = NOW()
         WHERE id = $1
@@ -661,6 +665,7 @@ pub async fn update_pickup_status(
     .bind(id)
     .bind(&payload.status)
     .bind(payload.weight_kg)
+    .bind(payload.note_bn.trim())
     .execute(&mut *tx)
     .await?;
 

@@ -308,12 +308,22 @@ function TrackPageContent() {
               </dd>
             </div>
             <div>
-              <dt className="text-xs text-[#475569]">নির্ধারিত সংগ্রহ গাড়ি</dt>
-              <dd className="inline-flex items-center gap-1.5 font-metric font-semibold text-[#0F172A]">
-                <Truck className="h-4 w-4 text-[#15803D]" aria-hidden="true" />
-                {(activePickup
-                  ? activePickup.assigned_vehicle_code
-                  : activeReport?.assigned_vehicle_code) ?? 'অপেক্ষমাণ'}
+              <dt className="text-xs text-[#475569]">নির্ধারিত সংগ্রহ গাড়ি ও টিম</dt>
+              <dd className="font-metric font-semibold text-[#0F172A]">
+                <div className="inline-flex items-center gap-1.5">
+                  <Truck className="h-4 w-4 text-[#15803D]" aria-hidden="true" />
+                  {(activePickup
+                    ? activePickup.assigned_vehicle_code
+                    : activeReport?.assigned_vehicle_code) ?? 'অপেক্ষমাণ'}
+                </div>
+                {(activePickup ? activePickup.collector_name : activeReport?.collector_name) ? (
+                  <span className="block text-xs font-normal text-slate-700 mt-0.5">
+                    কালেক্টর: {activePickup ? activePickup.collector_name : activeReport?.collector_name}
+                    {(activePickup ? activePickup.collector_phone : activeReport?.collector_phone)
+                      ? ` (${activePickup ? activePickup.collector_phone : activeReport?.collector_phone})`
+                      : ''}
+                  </span>
+                ) : null}
               </dd>
             </div>
             <div>
@@ -325,6 +335,18 @@ function TrackPageContent() {
               </dd>
             </div>
           </dl>
+
+          {/* Admin Message / Dispatch Note Highlighted Box */}
+          {(activePickup?.admin_note || activeReport?.admin_note) ? (
+            <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-amber-950 shadow-xs">
+              <div className="flex items-center gap-2 font-bold text-xs text-amber-900 mb-1">
+                <span>💬 পৌর অ্যাডমিন বার্তা / নির্দেশনা নোট</span>
+              </div>
+              <p className="text-sm text-amber-950 font-medium whitespace-pre-wrap">
+                {activePickup?.admin_note || activeReport?.admin_note}
+              </p>
+            </div>
+          ) : null}
 
           {/* Uploaded Photos / Proof of Resolution */}
           {activeReport && (activeReport.photo_urls.length > 0 || activeReport.resolved_photo_url) ? (

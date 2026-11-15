@@ -92,6 +92,9 @@ class PickupRequestItem {
     required this.lat,
     required this.lng,
     this.assignedVehicleCode,
+    this.collectorName,
+    this.collectorPhone,
+    this.adminNote,
     this.synced = true,
   });
 
@@ -109,6 +112,9 @@ class PickupRequestItem {
   final double lat;
   final double lng;
   final String? assignedVehicleCode;
+  final String? collectorName;
+  final String? collectorPhone;
+  final String? adminNote;
   final bool synced;
 
   factory PickupRequestItem.fromJson(Map<String, dynamic> json) {
@@ -127,6 +133,9 @@ class PickupRequestItem {
       lat: (json['lat'] as num).toDouble(),
       lng: (json['lng'] as num).toDouble(),
       assignedVehicleCode: json['assigned_vehicle_code'] as String?,
+      collectorName: json['collector_name'] as String?,
+      collectorPhone: json['collector_phone'] as String?,
+      adminNote: json['admin_note'] as String?,
     );
   }
 }
@@ -146,6 +155,9 @@ class DumpReportItem {
     required this.lng,
     this.photoUrls = const [],
     this.assignedVehicleCode,
+    this.collectorName,
+    this.collectorPhone,
+    this.adminNote,
   });
 
   final String id;
@@ -161,6 +173,9 @@ class DumpReportItem {
   final double lng;
   final List<String> photoUrls;
   final String? assignedVehicleCode;
+  final String? collectorName;
+  final String? collectorPhone;
+  final String? adminNote;
 
   factory DumpReportItem.fromJson(Map<String, dynamic> json) {
     final photos = (json['photo_urls'] as List<dynamic>?)
@@ -181,6 +196,9 @@ class DumpReportItem {
       lng: (json['lng'] as num?)?.toDouble() ?? 90.2546,
       photoUrls: photos,
       assignedVehicleCode: json['assigned_vehicle_code'] as String?,
+      collectorName: json['collector_name'] as String?,
+      collectorPhone: json['collector_phone'] as String?,
+      adminNote: json['admin_note'] as String?,
     );
   }
 }
@@ -192,9 +210,11 @@ String statusLabelBn(String status) {
     'in_progress' => 'সংগ্রহ চলছে',
     'collected' => 'নেওয়া সম্পন্ন',
     'reported' => 'রিপোর্ট জমা',
-    'verified' => 'যাচাইকৃত',
-    'dispatched' => 'টিম রওনা হয়েছে',
-    'cleared' => 'পরিষ্কার হয়েছে',
+    'verified' => 'অনুমোদিত',
+    'dispatched' => 'গাড়ি পাঠানো হয়েছে',
+    'cleared' => 'নেওয়া সম্পন্ন',
+    'cancelled' => 'বাতিলকৃত',
+    'rejected' => 'বাতিলকৃত',
     _ => status,
   };
 }

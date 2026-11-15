@@ -93,7 +93,9 @@ class PickupRequest {
     this.scheduleType = 'one_time',
     this.preferredDay,
     this.assignedCollectorName,
+    this.assignedCollectorPhone,
     this.assignedVehicleCode,
+    this.adminNote,
     this.notes = '',
     this.synced = true,
   });
@@ -111,7 +113,9 @@ class PickupRequest {
   final String scheduleType;
   final String? preferredDay;
   final String? assignedCollectorName;
+  final String? assignedCollectorPhone;
   final String? assignedVehicleCode;
+  final String? adminNote;
   final String notes;
   final bool synced;
 
@@ -120,7 +124,9 @@ class PickupRequest {
     String? trackingCode,
     PickupStatus? status,
     String? assignedCollectorName,
+    String? assignedCollectorPhone,
     String? assignedVehicleCode,
+    String? adminNote,
     bool? synced,
   }) {
     return PickupRequest(
@@ -137,7 +143,9 @@ class PickupRequest {
       scheduleType: scheduleType,
       preferredDay: preferredDay,
       assignedCollectorName: assignedCollectorName ?? this.assignedCollectorName,
+      assignedCollectorPhone: assignedCollectorPhone ?? this.assignedCollectorPhone,
       assignedVehicleCode: assignedVehicleCode ?? this.assignedVehicleCode,
+      adminNote: adminNote ?? this.adminNote,
       notes: notes,
       synced: synced ?? this.synced,
     );
@@ -158,7 +166,9 @@ class PickupRequest {
       'status': status.apiValue,
       'createdAtLabel': createdAtLabel,
       'assignedCollectorName': assignedCollectorName,
+      'assignedCollectorPhone': assignedCollectorPhone,
       'assignedVehicleCode': assignedVehicleCode,
+      'adminNote': adminNote,
       'notes': notes,
       'synced': synced,
     };
@@ -179,7 +189,9 @@ class PickupRequest {
       status: PickupStatus.fromApiValue(json['status'] as String),
       createdAtLabel: json['createdAtLabel'] as String,
       assignedCollectorName: json['assignedCollectorName'] as String?,
+      assignedCollectorPhone: json['assignedCollectorPhone'] as String?,
       assignedVehicleCode: json['assignedVehicleCode'] as String?,
+      adminNote: json['adminNote'] as String?,
       notes: (json['notes'] as String?) ?? '',
       synced: (json['synced'] as bool?) ?? true,
     );
@@ -198,6 +210,9 @@ class PickupRequest {
       status: PickupStatus.fromApiValue(item.status),
       createdAtLabel: 'সার্ভার থেকে সিঙ্ককৃত',
       assignedVehicleCode: item.assignedVehicleCode,
+      assignedCollectorName: item.collectorName,
+      assignedCollectorPhone: item.collectorPhone,
+      adminNote: item.adminNote,
       synced: item.synced,
     );
   }

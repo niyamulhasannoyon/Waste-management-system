@@ -54,6 +54,10 @@ class HotspotReport {
     this.photoMetaLabel,
     this.photoPath,
     this.photoUrls = const [],
+    this.assignedVehicleCode,
+    this.collectorName,
+    this.collectorPhone,
+    this.adminNote,
     this.synced = true,
   });
 
@@ -72,6 +76,10 @@ class HotspotReport {
   final String? photoMetaLabel;
   final String? photoPath;
   final List<String> photoUrls;
+  final String? assignedVehicleCode;
+  final String? collectorName;
+  final String? collectorPhone;
+  final String? adminNote;
   final bool synced;
 
   String get primaryTitleBn {
@@ -125,6 +133,10 @@ class HotspotReport {
       'photoMetaLabel': photoMetaLabel,
       'photoPath': photoPath,
       'photoUrls': photoUrls,
+      'assignedVehicleCode': assignedVehicleCode,
+      'collectorName': collectorName,
+      'collectorPhone': collectorPhone,
+      'adminNote': adminNote,
       'synced': synced,
     };
   }
@@ -154,6 +166,10 @@ class HotspotReport {
       photoMetaLabel: json['photoMetaLabel'] as String?,
       photoPath: json['photoPath'] as String?,
       photoUrls: urls,
+      assignedVehicleCode: json['assignedVehicleCode'] as String?,
+      collectorName: json['collectorName'] as String?,
+      collectorPhone: json['collectorPhone'] as String?,
+      adminNote: json['adminNote'] as String?,
       synced: (json['synced'] as bool?) ?? true,
     );
   }
@@ -174,6 +190,10 @@ class HotspotReport {
       hasPhoto: item.photoUrls.isNotEmpty,
       photoMetaLabel: item.photoUrls.isNotEmpty ? 'সার্ভার ছবি সংযুক্ত' : null,
       photoUrls: item.photoUrls,
+      assignedVehicleCode: item.assignedVehicleCode,
+      collectorName: item.collectorName,
+      collectorPhone: item.collectorPhone,
+      adminNote: item.adminNote,
       synced: true,
     );
   }

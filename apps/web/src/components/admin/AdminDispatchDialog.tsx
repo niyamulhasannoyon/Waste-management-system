@@ -5,7 +5,16 @@ import { Loader2, Truck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { FormField } from '@/components/ui/form-field';
 import { NativeDialog } from '@/components/ui/native-dialog';
-import { ApiError, assignVehicleToTask, fetchNearbyWorkers } from '@/lib/api-client';
+import {
+  ApiError,
+  assignVehicleToTask,
+  fetchNearbyWorkers,
+  fetchVehicles,
+} from '@/lib/api-client';
+import {
+  appendDevCitizenResponse,
+  updateDevCitizenRequestStatus,
+} from '@/lib/dev-store';
 import { VEHICLE_TYPE_LABELS } from '@/lib/savar-data';
 import type { CollectorVehicleRecord } from '@/lib/types';
 import { formatDistanceLabel } from '@/lib/utils';
@@ -47,9 +56,32 @@ export function AdminDispatchDialog({
     async function loadNearby() {
       setLoadingCandidates(true);
       try {
-        const list = await fetchNearbyWorkers(target!.lat, target!.lng);
+        const [nearbyList, allVehicles] = await Promise.all([
+          fetchNearbyWorkers(target!.lat, target!.lng).catch(() => []),
+          fetchVehicles().catch(() => fallbackVehicles),
+        ]);
         if (active) {
-          const usable = list.length > 0 ? list : fallbackVehicles;
+          // Combine nearby workers and all active database vehicles
+          const combinedMap = new Map<string, CollectorVehicleRecord>();
+          for (const v of nearbyList) {
+            combinedMap.set(v.id, v);
+          }
+          for (const v of allVehicles) {
+            if (!combinedMap.has(v.id)) {
+              combinedMap.set(v.id, v);
+            }
+          }
+          for (const v of fallbackVehicles) {
+            if (!combinedMap.has(v.id)) {
+              combinedMap.set(v.id, v);
+            }
+          }
+          const usable = Array.from(combinedMap.values()).sort((a, b) => {
+            const aAvail = a.status === 'available' || a.status === 'active' ? 0 : 1;
+            const bAvail = b.status === 'available' || b.status === 'active' ? 0 : 1;
+            if (aAvail !== bAvail) return aAvail - bAvail;
+            return (a.distance_meters ?? 999999) - (b.distance_meters ?? 999999);
+          });
           setCandidates(usable);
           setSelectedVehicleId(usable[0]?.id ?? '');
         }
@@ -77,9 +109,26 @@ export function AdminDispatchDialog({
       const res = await assignVehicleToTask({
         entity_type: target.entityType,
         entity_id: target.entityId,
+        tracking_code: target.trackingCode,
         vehicle_id: selectedVehicleId || undefined,
         note_bn: noteBn.trim() || 'গাড়ি নির্ধারিত হয়েছে',
       });
+
+      // Synchronize local dev-store immediately
+      try {
+        updateDevCitizenRequestStatus(
+          target.trackingCode,
+          target.entityType === 'pickup' ? 'assigned' : 'dispatched',
+        );
+        appendDevCitizenResponse(target.trackingCode, {
+          senderName: 'সাভার পৌর ডিসপ্যাচ ও কন্ট্রোল',
+          senderRole: 'admin',
+          message: noteBn.trim() || 'গাড়ি নির্ধারিত হয়েছে',
+        });
+      } catch {
+        // Safe fallback
+      }
+
       onDispatched(
         `${target.trackingCode} এর জন্য গাড়ি ${res.assigned_vehicle_code ?? ''} নির্ধারিত হয়েছে।`,
       );
@@ -111,7 +160,7 @@ export function AdminDispatchDialog({
           id="dispatch-vehicle-select"
           label="নিকটবর্তী সংগ্রহ গাড়ি নির্বাচন করুন"
           required
-          hint="PostGIS দূরত্ব অনুযায়ী নিকটতম গাড়িগুলো প্রথমে দেখাচ্ছে"
+          hint="ওয়ার্ড ও দূরত্ব অনুযায়ী নিকটতম গাড়িগুলো প্রথমে দেখাচ্ছে"
         >
           {(a11y) =>
             loadingCandidates ? (

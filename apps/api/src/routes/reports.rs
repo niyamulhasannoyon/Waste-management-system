@@ -44,7 +44,10 @@ const REPORT_SELECT_BASE: &str = r#"
         dr.photo_urls,
         dr.resolved_photo_url,
         dr.assigned_vehicle_id,
-        cv.code AS assigned_vehicle_code,
+        COALESCE(cv.code, dr.assigned_vehicle_code) AS assigned_vehicle_code,
+        COALESCE(cv.driver_name_bn, dr.collector_name) AS collector_name,
+        COALESCE(cv.driver_phone, dr.collector_phone) AS collector_phone,
+        dr.admin_note,
         dr.duplicate_of,
         dr.duplicate_count,
         dr.cleared_at,
@@ -715,6 +718,7 @@ pub async fn update_report_status(
         UPDATE dump_reports
         SET status = $2,
             resolved_photo_url = COALESCE($3, resolved_photo_url),
+            admin_note = CASE WHEN $4 != '' THEN $4 ELSE admin_note END,
             cleared_at = CASE WHEN $2 = 'cleared' THEN NOW() ELSE cleared_at END,
             updated_at = NOW()
         WHERE id = $1
@@ -723,6 +727,7 @@ pub async fn update_report_status(
     .bind(id)
     .bind(&payload.status)
     .bind(&resolved_photo_url)
+    .bind(payload.note_bn.trim())
     .execute(&mut *tx)
     .await?;
 

@@ -6,10 +6,12 @@ import {
   Bell,
   CheckCircle2,
   Download,
+  Edit3,
   ExternalLink,
+  PlusCircle,
+  Power,
   RefreshCw,
   Search,
-  Shield,
   ShieldAlert,
   ShieldCheck,
   Truck,
@@ -27,6 +29,7 @@ import {
 } from '@/lib/dev-store';
 import { AuthGateCard } from '@/components/AuthGateCard';
 import { AdminCitizenLiveFeed } from '@/components/admin/AdminCitizenLiveFeed';
+import { AdminCollectorManagementModal } from '@/components/admin/AdminCollectorManagementModal';
 import {
   AdminDispatchDialog,
   type DispatchTarget,
@@ -44,6 +47,7 @@ import {
   fetchRecyclableLots,
   fetchReports,
   fetchVehicles,
+  updateCollectorVehicle,
   updatePickupStatus,
   updateReportStatus,
 } from '@/lib/api-client';
@@ -130,6 +134,8 @@ function AdminCommandInner() {
   const [statusNotice, setStatusNotice] = useState<string | null>(null);
   const [dispatchTarget, setDispatchTarget] = useState<DispatchTarget | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [isCollectorModalOpen, setIsCollectorModalOpen] = useState<boolean>(false);
+  const [editingVehicle, setEditingVehicle] = useState<CollectorVehicleRecord | null>(null);
 
   // Live Stream, Auto-Sync & Sound Alerts
   const [citizenRequests, setCitizenRequests] = useState<DevCitizenRequest[]>([]);
@@ -146,8 +152,10 @@ function AdminCommandInner() {
     setCitizenRequests(getDevCitizenRequests());
   }, []);
 
-  const loadAdminData = useCallback(async () => {
-    setIsLoading(true);
+  const loadAdminData = useCallback(async (silent = false) => {
+    if (!silent) {
+      setIsLoading(true);
+    }
     setErrorMsg(null);
     try {
       const [sum, pList, rList, vList, lList] = await Promise.all([
@@ -164,11 +172,15 @@ function AdminCommandInner() {
       setLots(lList);
       loadRequests();
     } catch (err) {
-      setErrorMsg(
-        err instanceof ApiError ? err.messageBn : 'অ্যাডমিন ড্যাশবোর্ড ডেটা লোড করা যায়নি।',
-      );
+      if (!silent) {
+        setErrorMsg(
+          err instanceof ApiError ? err.messageBn : 'অ্যাডমিন ড্যাশবোর্ড ডেটা লোড করা যায়নি।',
+        );
+      }
     } finally {
-      setIsLoading(false);
+      if (!silent) {
+        setIsLoading(false);
+      }
     }
   }, [loadRequests]);
 
@@ -184,7 +196,7 @@ function AdminCommandInner() {
     const handleNewCitizenRequest = (e: Event) => {
       const detail = (e as CustomEvent<DevCitizenRequest>).detail;
       loadRequests();
-      void loadAdminData();
+      void loadAdminData(true);
       void refreshPublicData();
 
       if (soundEnabled) {
@@ -219,15 +231,30 @@ function AdminCommandInner() {
     };
   }, [soundEnabled, loadRequests, loadAdminData, refreshPublicData, announce]);
 
-  // 15-second background auto-sync interval
+  // 15-second background auto-sync interval (silent refresh, paused during user interactions)
   useEffect(() => {
     if (!autoSync) return;
     const interval = window.setInterval(() => {
-      void loadAdminData();
+      // Pause auto-sync if any dialog or modal is open, or an input/textarea/select is focused
+      const isInputActive =
+        typeof document !== 'undefined' &&
+        document.activeElement &&
+        ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName);
+      const isDialogOpen =
+        dispatchTarget !== null ||
+        isCollectorModalOpen ||
+        editingVehicle !== null ||
+        (typeof document !== 'undefined' && Boolean(document.querySelector('dialog[open]')));
+
+      if (isInputActive || isDialogOpen) {
+        return;
+      }
+
+      void loadAdminData(true);
       loadRequests();
     }, 15000);
     return () => window.clearInterval(interval);
-  }, [autoSync, loadAdminData, loadRequests]);
+  }, [autoSync, dispatchTarget, isCollectorModalOpen, editingVehicle, loadAdminData, loadRequests]);
 
   const filteredPickups = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -263,7 +290,7 @@ function AdminCommandInner() {
         note_bn: status === 'collected' ? 'অ্যাডমিন যাচাইক্রমে সংগ্রহ সম্পন্ন' : 'অ্যাডমিন কর্তৃক বাতিল',
       });
       announce('পিকআপের অবস্থা হালনাগাদ হয়েছে।');
-      await Promise.all([loadAdminData(), refreshPublicData()]);
+      await Promise.all([loadAdminData(true), refreshPublicData()]);
     } catch (err) {
       setErrorMsg(err instanceof ApiError ? err.messageBn : 'অবস্থা হালনাগাদ করা যায়নি।');
     } finally {
@@ -287,9 +314,24 @@ function AdminCommandInner() {
               : 'অভিযোগটি অগ্রহণযোগ্য হিসেবে চিহ্নিত',
       });
       announce('অভিযোগের অবস্থা হালনাগাদ হয়েছে।');
-      await Promise.all([loadAdminData(), refreshPublicData()]);
+      await Promise.all([loadAdminData(true), refreshPublicData()]);
     } catch (err) {
       setErrorMsg(err instanceof ApiError ? err.messageBn : 'অবস্থা হালনাগাদ করা যায়নি।');
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function handleToggleVehicleStatus(vehicle: CollectorVehicleRecord) {
+    const nextStatus =
+      vehicle.status === 'offline' ? 'available' : vehicle.status === 'busy' ? 'available' : 'busy';
+    setBusyId(vehicle.id);
+    try {
+      await updateCollectorVehicle(vehicle.id, { status: nextStatus });
+      announce(`কালেক্টর গাড়ির অবস্থা হালনাগাদ হয়েছে।`);
+      await loadAdminData(true);
+    } catch (err) {
+      setErrorMsg(err instanceof ApiError ? err.messageBn : 'গাড়ির স্ট্যাটাস পরিবর্তন করা যায়নি।');
     } finally {
       setBusyId(null);
     }
@@ -351,7 +393,7 @@ function AdminCommandInner() {
               রিয়েল-টাইম পৌর অপারেশনস কমান্ড
             </span>
             <span className="rounded-full bg-emerald-100 border border-emerald-300 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-800">
-              PostGIS লাইভ স্ট্যাটাস
+              সার্ভার লাইভ স্ট্যাটাস
             </span>
             <span className="text-slate-400">·</span>
             <span className="text-xs text-slate-600">
@@ -389,14 +431,18 @@ function AdminCommandInner() {
               {soundEnabled ? 'সাউন্ড অ্যালার্ট' : 'সাউন্ড বন্ধ'}
             </button>
 
-            {/* Direct Link to Developer Console */}
-            <Link
-              href="/dev-admin"
-              className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-slate-900 px-3 py-1 text-xs font-semibold text-white hover:bg-slate-800 transition-colors shadow-xs"
+            {/* Add New Collector Button */}
+            <button
+              type="button"
+              onClick={() => {
+                setEditingVehicle(null);
+                setIsCollectorModalOpen(true);
+              }}
+              className="inline-flex items-center gap-1.5 rounded-md border border-emerald-600 bg-emerald-700 px-3 py-1 text-xs font-semibold text-white hover:bg-emerald-800 transition-colors shadow-xs"
             >
-              <Shield className="h-3.5 w-3.5 text-emerald-400" />
-              ডেভেলপার কনসোল ↗
-            </Link>
+              <PlusCircle className="h-3.5 w-3.5" />
+              + নতুন কালেক্টর যোগ করুন
+            </button>
 
             {/* Link to Citizen Portal */}
             <Link
@@ -846,53 +892,111 @@ function AdminCommandInner() {
 
           {tab === 'vehicles' ? (
             <section className="cs-card overflow-hidden">
-              <div className="border-b border-[#E2E8F0] px-5 py-3.5">
-                <h2 className="text-base font-bold text-[#0F172A]">
-                  সক্রিয় গাড়ি ও চালক ({toBanglaDigits(vehicles.length)})
-                </h2>
+              <div className="flex flex-col gap-3 border-b border-[#E2E8F0] px-5 py-3.5 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <h2 className="text-base font-bold text-[#0F172A]">
+                    ওয়ার্ড কালেক্টর ও পরিচ্ছন্নতা গাড়ি ব্যবস্থাপনা ({toBanglaDigits(vehicles.length)})
+                  </h2>
+                  <p className="text-xs text-[#475569] mt-0.5">
+                    ওয়ার্ডভিত্তিক কালেক্টর টিম, গাড়ির ধরন ও রিয়েল-টাইম কাজের অবস্থা
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="primary"
+                  className="gap-1.5"
+                  onClick={() => {
+                    setEditingVehicle(null);
+                    setIsCollectorModalOpen(true);
+                  }}
+                >
+                  <PlusCircle className="h-4 w-4" />
+                  নতুন কালেক্টর যোগ করুন
+                </Button>
               </div>
-              <div className="cs-table-wrapper">
-                <table className="cs-table">
-                  <caption className="sr-only">সংগ্রহ গাড়ির তালিকা</caption>
-                  <thead>
-                    <tr>
-                      <th scope="col">গাড়ি কোড</th>
-                      <th scope="col">চালক</th>
-                      <th scope="col">এলাকা</th>
-                      <th scope="col">অবস্থা</th>
-                      <th scope="col">শেষ পিং</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {vehicles.map((v) => {
-                      const meta = VEHICLE_STATUS_META[v.status];
-                      return (
-                        <tr key={v.id}>
-                          <td data-label="গাড়ি কোড">
-                            <span className="font-metric font-bold">{v.code}</span>
-                            <span className="block text-xs text-[#475569]">
-                              {VEHICLE_TYPE_LABELS[v.vehicle_type]}
-                            </span>
-                          </td>
-                          <td data-label="চালক">
-                            <span className="font-semibold">{v.driver_name_bn}</span>
-                            <span className="block font-metric text-xs text-[#475569]">
-                              {v.driver_phone}
-                            </span>
-                          </td>
-                          <td data-label="এলাকা">{v.ward_name_bn}</td>
-                          <td data-label="অবস্থা">
-                            <StatusBadge tone={meta.tone}>{meta.label}</StatusBadge>
-                          </td>
-                          <td data-label="শেষ পিং">
-                            <RelativeTimeBn isoDate={v.last_ping_at} />
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+              {vehicles.length === 0 ? (
+                <div className="p-8 text-center text-sm text-[#475569]">
+                  কোনো কালেক্টর বা গাড়ি পাওয়া যায়নি। নতুন কালেক্টর যোগ করতে উপরের বাটনে ক্লিক করুন।
+                </div>
+              ) : (
+                <div className="cs-table-wrapper">
+                  <table className="cs-table">
+                    <caption className="sr-only">সংগ্রহ গাড়ির তালিকা</caption>
+                    <thead>
+                      <tr>
+                        <th scope="col">গাড়ি কোড</th>
+                        <th scope="col">কালেক্টর ও যোগাযোগ</th>
+                        <th scope="col">এলাকা / ওয়ার্ড</th>
+                        <th scope="col">অবস্থা</th>
+                        <th scope="col">পদক্ষেপ</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {vehicles.map((v) => {
+                        const meta = VEHICLE_STATUS_META[v.status] || {
+                          label: v.status,
+                          tone: 'neutral',
+                        };
+                        return (
+                          <tr key={v.id}>
+                            <td data-label="গাড়ি কোড">
+                              <span className="font-metric font-bold">{v.code}</span>
+                              <span className="block text-xs text-[#475569]">
+                                {VEHICLE_TYPE_LABELS[v.vehicle_type] || v.vehicle_type}
+                              </span>
+                            </td>
+                            <td data-label="কালেক্টর ও যোগাযোগ">
+                              <span className="font-semibold">{v.driver_name_bn}</span>
+                              <span className="block font-metric text-xs text-[#475569]">
+                                {v.driver_phone}
+                              </span>
+                            </td>
+                            <td data-label="এলাকা / ওয়ার্ড">
+                              <span>{v.ward_name_bn || `ওয়ার্ড ${toBanglaDigits(v.ward_id)}`}</span>
+                            </td>
+                            <td data-label="অবস্থা">
+                              <StatusBadge tone={meta.tone}>{meta.label}</StatusBadge>
+                            </td>
+                            <td data-label="পদক্ষেপ">
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="secondary"
+                                  className="h-7 text-xs px-2 gap-1"
+                                  onClick={() => {
+                                    setEditingVehicle(v);
+                                    setIsCollectorModalOpen(true);
+                                  }}
+                                >
+                                  <Edit3 className="h-3 w-3" />
+                                  সম্পাদনা
+                                </Button>
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant={v.status === 'offline' ? 'tint' : 'secondary'}
+                                  className="h-7 text-xs px-2 gap-1"
+                                  disabled={busyId === v.id}
+                                  onClick={() => void handleToggleVehicleStatus(v)}
+                                >
+                                  <Power className="h-3 w-3" />
+                                  {v.status === 'offline'
+                                    ? 'সক্রিয় করুন'
+                                    : v.status === 'busy'
+                                      ? 'ফ্রি করুন'
+                                      : 'অফলাইন'}
+                                </Button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </section>
           ) : null}
 
@@ -965,7 +1069,23 @@ function AdminCommandInner() {
         onDispatched={(msg) => {
           setStatusNotice(msg);
           announce(msg);
-          void Promise.all([loadAdminData(), refreshPublicData()]);
+          void Promise.all([loadAdminData(true), refreshPublicData()]);
+        }}
+      />
+
+      <AdminCollectorManagementModal
+        open={isCollectorModalOpen}
+        editingVehicle={editingVehicle}
+        wards={wards}
+        onClose={() => {
+          setIsCollectorModalOpen(false);
+          setEditingVehicle(null);
+        }}
+        onSaved={async () => {
+          setIsCollectorModalOpen(false);
+          setEditingVehicle(null);
+          await loadAdminData(true);
+          announce('কালেক্টর তালিকা সফলভাবে সংরক্ষিত হয়েছে।');
         }}
       />
     </div>
@@ -1114,7 +1234,7 @@ export default function AdminPage() {
           পৌর অ্যাডমিন ও ডিসপ্যাচ ড্যাশবোর্ড
         </h1>
         <p className="max-w-2xl text-sm text-[#475569]">
-          PostGIS ম্যাপ, রিয়েল-টাইম সংগ্রহ অনুরোধ, হটস্পট যাচাই, গাড়ি ডিসপ্যাচ ও নিরাপদ CSV রিপোর্ট।
+          লাইভ জিপিএস ম্যাপ, রিয়েল-টাইম বর্জ্য সংগ্রহ অনুরোধ, হটস্পট যাচাই ও গাড়ি ডিসপ্যাচ ড্যাশবোর্ড।
         </p>
       </div>
 

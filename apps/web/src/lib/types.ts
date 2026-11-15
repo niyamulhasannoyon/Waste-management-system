@@ -24,8 +24,8 @@ export type PickupStatus = 'pending' | 'assigned' | 'in_progress' | 'collected' 
 export type ReportSeverity = 'medium' | 'high' | 'critical';
 export type ReportStatus = 'reported' | 'verified' | 'dispatched' | 'cleared' | 'rejected';
 
-export type VehicleType = 'rickshaw_van' | 'mini_truck' | 'compactor';
-export type VehicleStatus = 'available' | 'en_route' | 'busy' | 'offline';
+export type VehicleType = 'rickshaw_van' | 'cng_dumper' | 'mini_truck' | 'compactor' | 'other';
+export type VehicleStatus = 'available' | 'active' | 'en_route' | 'busy' | 'offline';
 
 export type MaterialType = 'plastic' | 'paper_cardboard' | 'metal_ewaste' | 'glass';
 export type LotStatus = 'open' | 'claimed' | 'collected';
@@ -145,6 +145,9 @@ export interface PickupRequestRecord {
   lng: number;
   assigned_vehicle_id: string | null;
   assigned_vehicle_code: string | null;
+  collector_name?: string | null;
+  collector_phone?: string | null;
+  admin_note?: string | null;
   notes: string;
   completion_photo_url?: string | null;
   completed_at?: string | null;
@@ -203,6 +206,9 @@ export interface DumpReportRecord {
   resolved_photo_url: string | null;
   assigned_vehicle_id: string | null;
   assigned_vehicle_code: string | null;
+  collector_name?: string | null;
+  collector_phone?: string | null;
+  admin_note?: string | null;
   duplicate_of?: string | null;
   duplicate_count?: number;
   cleared_at: string | null;
@@ -315,6 +321,7 @@ export interface UpdateVehicleLocationInput {
 export interface DispatchAssignInput {
   entity_type: 'pickup' | 'dump_report';
   entity_id: string;
+  tracking_code?: string;
   vehicle_id?: string;
   note_bn: string;
 }
@@ -324,8 +331,36 @@ export interface DispatchAssignResponse {
   entity_id: string;
   assigned_vehicle_id?: string | null;
   assigned_vehicle_code?: string | null;
+  collector_name?: string | null;
+  collector_phone?: string | null;
+  admin_note?: string | null;
   new_status: string;
   status?: string;
+}
+
+export interface CreateCollectorVehicleInput {
+  code: string;
+  vehicle_type: VehicleType;
+  driver_name_bn: string;
+  driver_phone: string;
+  ward_id: number;
+  status?: VehicleStatus;
+}
+
+export interface UpdateCollectorVehicleInput {
+  code?: string;
+  vehicle_type?: VehicleType;
+  driver_name_bn?: string;
+  driver_phone?: string;
+  ward_id?: number;
+  status?: VehicleStatus;
+}
+
+export interface AdminMessageInput {
+  entity_type: 'pickup' | 'dump_report';
+  entity_id?: string;
+  tracking_code?: string;
+  message_bn: string;
 }
 
 export interface CompleteCollectorTaskInput {

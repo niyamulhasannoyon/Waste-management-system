@@ -99,10 +99,7 @@ export function SiteFooter() {
 
       <div className="border-t border-[#E2E8F0] bg-[#F8FAFC]">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-2 px-4 py-4 text-xs text-[#475569] sm:px-6">
-          <p>© ২০২৬ ক্লিন সাভার (Clean Savar) — সাভার পৌরসভা ও নাগরিক উদ্যোগ</p>
-          <p lang="en" className="font-metric">
-            PostgreSQL/PostGIS · Rust/Axum · Next.js · MIT License
-          </p>
+          <p>© ২০২৬ ক্লিন সাভার (Clean Savar) — সাভার পৌরসভা বর্জ্য ব্যবস্থাপনা ও নাগরিক সেবা প্ল্যাটফর্ম</p>
         </div>
       </div>
     </footer>

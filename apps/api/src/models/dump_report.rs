@@ -25,6 +25,9 @@ pub struct DumpReportRecord {
     pub resolved_photo_url: Option<String>,
     pub assigned_vehicle_id: Option<Uuid>,
     pub assigned_vehicle_code: Option<String>,
+    pub collector_name: Option<String>,
+    pub collector_phone: Option<String>,
+    pub admin_note: Option<String>,
     pub duplicate_of: Option<Uuid>,
     pub duplicate_count: i32,
     pub cleared_at: Option<DateTime<Utc>>,
@@ -122,8 +125,10 @@ pub struct CollectorVehicleRecord {
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct DispatchAssignRequest {
     pub entity_type: String,
-    pub entity_id: Uuid,
-    pub vehicle_id: Option<Uuid>,
+    pub entity_id: String,
+    #[serde(default)]
+    pub tracking_code: Option<String>,
+    pub vehicle_id: Option<String>,
     #[serde(default)]
     pub note_bn: String,
 }
@@ -131,10 +136,46 @@ pub struct DispatchAssignRequest {
 #[derive(Debug, Serialize, ToSchema)]
 pub struct DispatchAssignResponse {
     pub entity_type: String,
-    pub entity_id: Uuid,
-    pub assigned_vehicle_id: Uuid,
+    pub entity_id: String,
+    pub assigned_vehicle_id: Option<Uuid>,
     pub assigned_vehicle_code: String,
+    pub collector_name: Option<String>,
+    pub collector_phone: Option<String>,
+    pub admin_note: Option<String>,
     pub new_status: String,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct CreateCollectorVehicleRequest {
+    pub code: String,
+    pub vehicle_type: String,
+    pub driver_name_bn: String,
+    pub driver_phone: String,
+    pub ward_id: i16,
+    #[serde(default = "default_vehicle_status")]
+    pub status: String,
+}
+
+fn default_vehicle_status() -> String {
+    "available".to_string()
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct UpdateCollectorVehicleRequest {
+    pub code: Option<String>,
+    pub vehicle_type: Option<String>,
+    pub driver_name_bn: Option<String>,
+    pub driver_phone: Option<String>,
+    pub ward_id: Option<i16>,
+    pub status: Option<String>,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct AdminMessageRequest {
+    pub entity_type: String,
+    pub entity_id: Option<String>,
+    pub tracking_code: Option<String>,
+    pub message_bn: String,
 }
 
 #[derive(Debug, Deserialize, ToSchema)]

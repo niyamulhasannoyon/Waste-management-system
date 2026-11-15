@@ -26,6 +26,14 @@ class _CitizenRequestsScreenState extends ConsumerState<CitizenRequestsScreen> {
   _RequestFilter _filter = _RequestFilter.all;
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(citizenStateProvider.notifier).refreshFromServer();
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     final citizen = ref.watch(citizenStateProvider);
 
@@ -115,47 +123,59 @@ class _CitizenRequestsScreenState extends ConsumerState<CitizenRequestsScreen> {
         ),
         Expanded(
           child: items.isEmpty
-              ? Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(
-                          Icons.inbox_outlined,
-                          size: 42,
-                          color: AppColors.textMuted,
+              ? RefreshIndicator(
+                  onRefresh: () =>
+                      ref.read(citizenStateProvider.notifier).refreshFromServer(),
+                  child: ListView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.all(32),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(
+                              Icons.inbox_outlined,
+                              size: 42,
+                              color: AppColors.textMuted,
+                            ),
+                            const SizedBox(height: 10),
+                            const Text(
+                              'কোনো রিকোয়েস্ট পাওয়া যায়নি',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.textPrimary,
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            FilledButton(
+                              onPressed: () => showReportGarbageSheet(context),
+                              child: const Text('রাস্তার ময়লা রিপোর্ট করুন'),
+                            ),
+                          ],
                         ),
-                        const SizedBox(height: 10),
-                        const Text(
-                          'কোনো রিকোয়েস্ট পাওয়া যায়নি',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.textPrimary,
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        FilledButton(
-                          onPressed: () => showReportGarbageSheet(context),
-                          child: const Text('রাস্তার ময়লা রিপোর্ট করুন'),
-                        ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
                 )
-              : ListView.builder(
-                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
-                  itemCount: items.length,
-                  itemBuilder: (context, index) {
-                    final item = items[index];
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 10),
-                      child: item.pickup != null
-                          ? _PickupItemCard(pickup: item.pickup!)
-                          : _ReportItemCard(report: item.report!),
-                    );
-                  },
+              : RefreshIndicator(
+                  onRefresh: () =>
+                      ref.read(citizenStateProvider.notifier).refreshFromServer(),
+                  child: ListView.builder(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
+                    itemCount: items.length,
+                    itemBuilder: (context, index) {
+                      final item = items[index];
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: item.pickup != null
+                            ? _PickupItemCard(pickup: item.pickup!)
+                            : _ReportItemCard(report: item.report!),
+                      );
+                    },
+                  ),
                 ),
         ),
       ],
@@ -217,11 +237,17 @@ class _PickupItemCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tone = switch (pickup.status) {
-      PickupStatus.pending => BadgeTone.amber,
-      PickupStatus.assigned || PickupStatus.inProgress => BadgeTone.blue,
-      PickupStatus.collected => BadgeTone.green,
+    final (statusLabel, tone) = switch (pickup.status) {
+      PickupStatus.pending => ('অপেক্ষমাণ', BadgeTone.amber),
+      PickupStatus.assigned => ('গাড়ি পাঠানো হয়েছে', BadgeTone.blue),
+      PickupStatus.inProgress => ('সংগ্রহ চলমান', BadgeTone.blue),
+      PickupStatus.collected => ('নেওয়া সম্পন্ন', BadgeTone.green),
     };
+
+    final hasCollectorInfo =
+        pickup.assignedVehicleCode != null || pickup.assignedCollectorName != null;
+    final hasAdminNote =
+        pickup.adminNote != null && pickup.adminNote!.trim().isNotEmpty;
 
     return FlatCard(
       child: Column(
@@ -235,7 +261,7 @@ class _PickupItemCard extends StatelessWidget {
                 icon: Icons.delete_sweep_outlined,
               ),
               const Spacer(),
-              StatusBadge(label: pickup.status.labelBn, tone: tone),
+              StatusBadge(label: statusLabel, tone: tone),
             ],
           ),
           const SizedBox(height: 10),
@@ -277,17 +303,94 @@ class _PickupItemCard extends StatelessWidget {
                   ),
                 ),
               ),
-              if (pickup.assignedVehicleCode != null)
-                Text(
-                  'ভ্যান: ${pickup.assignedVehicleCode}',
-                  style: const TextStyle(
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.primaryGreenDark,
-                  ),
-                ),
             ],
           ),
+          if (hasCollectorInfo) ...[
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF0FDF4),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: const Color(0xFFBBF7D0)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.local_shipping_rounded,
+                    size: 16,
+                    color: Color(0xFF15803D),
+                  ),
+                  const SizedBox(width: 7),
+                  Expanded(
+                    child: Text(
+                      [
+                        if (pickup.assignedVehicleCode != null)
+                          'গাড়ি: ${pickup.assignedVehicleCode}',
+                        if (pickup.assignedCollectorName != null)
+                          'কালেক্টর: ${pickup.assignedCollectorName}',
+                        if (pickup.assignedCollectorPhone != null)
+                          '(${pickup.assignedCollectorPhone})',
+                      ].join(' • '),
+                      style: const TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF14532D),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+          if (hasAdminNote) ...[
+            const SizedBox(height: 8),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFEF3C7),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: const Color(0xFFFCD34D), width: 1.2),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(
+                    Icons.mark_chat_unread_outlined,
+                    size: 16,
+                    color: Color(0xFFB45309),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'পৌর অ্যাডমিন বার্তা / নির্দেশনা নোট:',
+                          style: TextStyle(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w800,
+                            color: Color(0xFF92400E),
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          pickup.adminNote!.trim(),
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF78350F),
+                            height: 1.35,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -301,11 +404,17 @@ class _ReportItemCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tone = switch (report.status) {
-      HotspotStatus.reported => BadgeTone.amber,
-      HotspotStatus.verified || HotspotStatus.dispatched => BadgeTone.blue,
-      HotspotStatus.cleared => BadgeTone.green,
+    final (statusLabel, tone) = switch (report.status) {
+      HotspotStatus.reported => ('অপেক্ষমাণ', BadgeTone.amber),
+      HotspotStatus.verified => ('অনুমোদিত', BadgeTone.blue),
+      HotspotStatus.dispatched => ('গাড়ি পাঠানো হয়েছে', BadgeTone.blue),
+      HotspotStatus.cleared => ('নেওয়া সম্পন্ন', BadgeTone.green),
     };
+
+    final hasCollectorInfo =
+        report.assignedVehicleCode != null || report.collectorName != null;
+    final hasAdminNote =
+        report.adminNote != null && report.adminNote!.trim().isNotEmpty;
 
     return FlatCard(
       child: Column(
@@ -319,7 +428,7 @@ class _ReportItemCard extends StatelessWidget {
                 icon: Icons.camera_alt_outlined,
               ),
               const Spacer(),
-              StatusBadge(label: report.status.labelBn, tone: tone),
+              StatusBadge(label: statusLabel, tone: tone),
             ],
           ),
           const SizedBox(height: 10),
@@ -370,6 +479,92 @@ class _ReportItemCard extends StatelessWidget {
               ),
             ],
           ),
+          if (hasCollectorInfo) ...[
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF0FDF4),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: const Color(0xFFBBF7D0)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.local_shipping_rounded,
+                    size: 16,
+                    color: Color(0xFF15803D),
+                  ),
+                  const SizedBox(width: 7),
+                  Expanded(
+                    child: Text(
+                      [
+                        if (report.assignedVehicleCode != null)
+                          'গাড়ি: ${report.assignedVehicleCode}',
+                        if (report.collectorName != null)
+                          'কালেক্টর: ${report.collectorName}',
+                        if (report.collectorPhone != null)
+                          '(${report.collectorPhone})',
+                      ].join(' • '),
+                      style: const TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF14532D),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+          if (hasAdminNote) ...[
+            const SizedBox(height: 8),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFEF3C7),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: const Color(0xFFFCD34D), width: 1.2),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(
+                    Icons.mark_chat_unread_outlined,
+                    size: 16,
+                    color: Color(0xFFB45309),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'পৌর অ্যাডমিন বার্তা / নির্দেশনা নোট:',
+                          style: TextStyle(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w800,
+                            color: Color(0xFF92400E),
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          report.adminNote!.trim(),
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF78350F),
+                            height: 1.35,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ],
       ),
     );

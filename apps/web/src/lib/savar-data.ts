@@ -593,18 +593,21 @@ export const REPORT_STATUS_META: Record<
 
 export const VEHICLE_TYPE_LABELS: Record<VehicleType, string> = {
   rickshaw_van: 'রিকশা ভ্যান',
+  cng_dumper: 'সিএনজি ডাম্পার',
   mini_truck: 'মিনি ট্রাক',
   compactor: 'কম্প্যাক্টর ট্রাক',
+  other: 'অন্যান্য পরিচ্ছন্নতা গাড়ি',
 };
 
 export const VEHICLE_STATUS_META: Record<
   VehicleStatus,
   { label: string; tone: 'success' | 'info' | 'warning' | 'neutral' }
 > = {
-  available: { label: 'প্রস্তুত', tone: 'success' },
+  available: { label: 'সক্রিয় / প্রস্তুত', tone: 'success' },
+  active: { label: 'সক্রিয়', tone: 'success' },
   en_route: { label: 'পথে রয়েছে', tone: 'info' },
   busy: { label: 'কাজে ব্যস্ত', tone: 'warning' },
-  offline: { label: 'বিরতিতে', tone: 'neutral' },
+  offline: { label: 'অফলাইন / বিরতিতে', tone: 'neutral' },
 };
 
 export const MATERIAL_LABELS: Record<MaterialType, string> = {

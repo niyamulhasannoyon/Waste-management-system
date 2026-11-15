@@ -259,18 +259,100 @@ class CitizenStateNotifier extends Notifier<CitizenState> {
       final unsyncedPickups = state.pickups.where((p) => !p.synced).toList();
       final unsyncedHotspots = state.hotspots.where((h) => !h.synced).toList();
 
-      final mergedPickups = serverPickups.isNotEmpty
-          ? [
-              ...unsyncedPickups,
-              ...serverPickups,
-            ]
-          : state.pickups;
-      final mergedHotspots = serverReports.isNotEmpty
-          ? [
-              ...unsyncedHotspots,
-              ...serverReports,
-            ]
-          : state.hotspots;
+      final updatedPickups = <PickupRequest>[];
+      if (serverPickups.isNotEmpty) {
+        final serverMap = <String, PickupRequest>{};
+        for (final p in serverPickups) {
+          serverMap[p.trackingCode] = p;
+          serverMap[p.id] = p;
+        }
+        for (final p in state.pickups) {
+          if (!p.synced) {
+            updatedPickups.add(p);
+          } else if (serverMap.containsKey(p.trackingCode)) {
+            updatedPickups.add(serverMap[p.trackingCode]!);
+            serverMap.remove(p.trackingCode);
+            serverMap.remove(p.id);
+          } else if (serverMap.containsKey(p.id)) {
+            updatedPickups.add(serverMap[p.id]!);
+            serverMap.remove(p.id);
+          } else {
+            updatedPickups.add(p);
+          }
+        }
+        for (final remaining in serverPickups) {
+          if (serverMap.containsKey(remaining.trackingCode) || serverMap.containsKey(remaining.id)) {
+            updatedPickups.add(remaining);
+            serverMap.remove(remaining.trackingCode);
+            serverMap.remove(remaining.id);
+          }
+        }
+      } else {
+        for (final p in state.pickups) {
+          if (p.trackingCode.startsWith('CS-PK-')) {
+            try {
+              final trackRes = await _api.trackByQuery(p.trackingCode);
+              if (trackRes != null && trackRes['pickup'] != null) {
+                final item = core.PickupRequestItem.fromJson(trackRes['pickup'] as Map<String, dynamic>);
+                updatedPickups.add(PickupRequest.fromCore(item));
+                continue;
+              }
+            } catch (_) {}
+          }
+          updatedPickups.add(p);
+        }
+      }
+
+      final updatedHotspots = <HotspotReport>[];
+      if (serverReports.isNotEmpty) {
+        final serverMap = <String, HotspotReport>{};
+        for (final r in serverReports) {
+          serverMap[r.trackingCode] = r;
+          serverMap[r.id] = r;
+        }
+        for (final h in state.hotspots) {
+          if (!h.synced) {
+            updatedHotspots.add(h);
+          } else if (serverMap.containsKey(h.trackingCode)) {
+            updatedHotspots.add(serverMap[h.trackingCode]!);
+            serverMap.remove(h.trackingCode);
+            serverMap.remove(h.id);
+          } else if (serverMap.containsKey(h.id)) {
+            updatedHotspots.add(serverMap[h.id]!);
+            serverMap.remove(h.id);
+          } else {
+            updatedHotspots.add(h);
+          }
+        }
+        for (final remaining in serverReports) {
+          if (serverMap.containsKey(remaining.trackingCode) || serverMap.containsKey(remaining.id)) {
+            updatedHotspots.add(remaining);
+            serverMap.remove(remaining.trackingCode);
+            serverMap.remove(remaining.id);
+          }
+        }
+      } else {
+        for (final h in state.hotspots) {
+          if (h.trackingCode.startsWith('CS-DR-')) {
+            try {
+              final trackRes = await _api.trackByQuery(h.trackingCode);
+              if (trackRes != null && trackRes['report'] != null) {
+                final item = core.DumpReportItem.fromJson(trackRes['report'] as Map<String, dynamic>);
+                updatedHotspots.add(HotspotReport.fromCore(item));
+                continue;
+              }
+            } catch (_) {}
+          }
+          updatedHotspots.add(h);
+        }
+      }
+
+      final mergedPickups = updatedPickups.isNotEmpty
+          ? updatedPickups
+          : (unsyncedPickups.isNotEmpty ? unsyncedPickups : state.pickups);
+      final mergedHotspots = updatedHotspots.isNotEmpty
+          ? updatedHotspots
+          : (unsyncedHotspots.isNotEmpty ? unsyncedHotspots : state.hotspots);
 
       var updatedNotifs = state.notifications;
       if (flush.conflictMessages.isNotEmpty) {

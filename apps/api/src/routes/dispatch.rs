@@ -14,7 +14,8 @@ use crate::{
     },
     error::{AppError, ErrorBody},
     models::dump_report::{
-        CollectorVehicleRecord, DispatchAssignRequest, DispatchAssignResponse,
+        AdminMessageRequest, CollectorVehicleRecord, CreateCollectorVehicleRequest,
+        DispatchAssignRequest, DispatchAssignResponse, UpdateCollectorVehicleRequest,
         UpdateVehicleLocationRequest,
     },
 };
@@ -347,6 +348,7 @@ pub async fn assign_vehicle(
 
     #[derive(sqlx::FromRow)]
     struct TargetRow {
+        id: Uuid,
         tracking_code: String,
         status: String,
         user_id: Option<Uuid>,
@@ -355,25 +357,57 @@ pub async fn assign_vehicle(
         lat: f64,
     }
 
+    let parsed_uuid = Uuid::parse_str(&payload.entity_id).ok();
+    let tracking_code_query = payload
+        .tracking_code
+        .as_deref()
+        .unwrap_or(payload.entity_id.as_str());
+
     let target = if payload.entity_type == "pickup" {
         sqlx::query_as::<_, TargetRow>(
-            "SELECT tracking_code, status, user_id, assigned_vehicle_id AS previous_vehicle_id, ST_X(location) AS lng, ST_Y(location) AS lat FROM pickup_requests WHERE id = $1 FOR UPDATE",
+            r#"
+            SELECT
+                id, tracking_code, status, user_id,
+                assigned_vehicle_id AS previous_vehicle_id,
+                ST_X(location) AS lng, ST_Y(location) AS lat
+            FROM pickup_requests
+            WHERE ($1::uuid IS NOT NULL AND id = $1)
+               OR tracking_code = $2
+               OR tracking_code = $3
+            LIMIT 1
+            FOR UPDATE
+            "#,
         )
-        .bind(payload.entity_id)
+        .bind(parsed_uuid)
+        .bind(tracking_code_query)
+        .bind(&payload.entity_id)
         .fetch_optional(&mut *tx)
         .await?
     } else {
         sqlx::query_as::<_, TargetRow>(
-            "SELECT tracking_code, status, user_id, assigned_vehicle_id AS previous_vehicle_id, ST_X(location) AS lng, ST_Y(location) AS lat FROM dump_reports WHERE id = $1 FOR UPDATE",
+            r#"
+            SELECT
+                id, tracking_code, status, user_id,
+                assigned_vehicle_id AS previous_vehicle_id,
+                ST_X(location) AS lng, ST_Y(location) AS lat
+            FROM dump_reports
+            WHERE ($1::uuid IS NOT NULL AND id = $1)
+               OR tracking_code = $2
+               OR tracking_code = $3
+            LIMIT 1
+            FOR UPDATE
+            "#,
         )
-        .bind(payload.entity_id)
+        .bind(parsed_uuid)
+        .bind(tracking_code_query)
+        .bind(&payload.entity_id)
         .fetch_optional(&mut *tx)
         .await?
     }
     .ok_or_else(|| AppError::not_found("Target item not found.", "অনুরোধটি খুঁজে পাওয়া যায়নি।"))?;
 
     let is_assignable = if payload.entity_type == "pickup" {
-        matches!(target.status.as_str(), "pending" | "assigned")
+        matches!(target.status.as_str(), "pending" | "assigned" | "in_progress")
     } else {
         matches!(
             target.status.as_str(),
@@ -392,55 +426,70 @@ pub async fn assign_vehicle(
     struct SelectedVehicle {
         id: Uuid,
         code: String,
+        driver_name_bn: String,
+        driver_phone: String,
         status: String,
         user_id: Option<Uuid>,
     }
 
-    let vehicle = if let Some(vehicle_id) = payload.vehicle_id {
-        let candidate = sqlx::query_as::<_, SelectedVehicle>(
-            "SELECT id, code, status, user_id FROM collector_vehicles WHERE id = $1 FOR UPDATE",
-        )
-        .bind(vehicle_id)
-        .fetch_optional(&mut *tx)
-        .await?
-        .ok_or_else(|| {
-            AppError::not_found("Selected vehicle not found.", "নির্বাচিত গাড়িটি পাওয়া যায়নি।")
-        })?;
-
-        if matches!(candidate.status.as_str(), "offline" | "busy") {
-            return Err(AppError::conflict(
-                "Selected vehicle is offline or busy.",
-                "নির্বাচিত গাড়িটি বর্তমানে অফলাইন অথবা অন্য জরুরি কাজে ব্যস্ত রয়েছে।",
-            ));
-        }
-        Some(candidate)
-    } else {
+    let vehicle_candidate = if let Some(ref v_id_or_code) = payload.vehicle_id {
+        let v_uuid = Uuid::parse_str(v_id_or_code).ok();
         sqlx::query_as::<_, SelectedVehicle>(
             r#"
-            SELECT id, code, status, user_id
+            SELECT id, code, driver_name_bn, driver_phone, status, user_id
             FROM collector_vehicles
-            WHERE status IN ('available', 'en_route')
-            ORDER BY
-                CASE WHEN status = 'available' THEN 0 ELSE 1 END ASC,
-                ST_Distance(
-                    current_location::geography,
-                    ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography
-                ) ASC
+            WHERE ($1::uuid IS NOT NULL AND id = $1) OR code = $2
             LIMIT 1
-            FOR UPDATE SKIP LOCKED
+            FOR UPDATE
             "#,
         )
-        .bind(target.lng)
-        .bind(target.lat)
+        .bind(v_uuid)
+        .bind(v_id_or_code)
         .fetch_optional(&mut *tx)
         .await?
-    }
-    .ok_or_else(|| {
-        AppError::not_found(
-            "No active collector vehicle found nearby.",
-            "নিকটবর্তী কোনো সক্রিয় গাড়ি পাওয়া যায়নি।",
-        )
-    })?;
+    } else {
+        None
+    };
+
+    let vehicle = match vehicle_candidate {
+        Some(v) => {
+            if matches!(v.status.as_str(), "offline") {
+                return Err(AppError::conflict(
+                    "Selected vehicle is offline.",
+                    "নির্বাচিত গাড়িটি বর্তমানে অফলাইনে রয়েছে।",
+                ));
+            }
+            v
+        }
+        None => {
+            // Find nearest active vehicle or first available in the municipality
+            sqlx::query_as::<_, SelectedVehicle>(
+                r#"
+                SELECT id, code, driver_name_bn, driver_phone, status, user_id
+                FROM collector_vehicles
+                WHERE status IN ('available', 'active', 'en_route')
+                ORDER BY
+                    CASE WHEN status IN ('available', 'active') THEN 0 ELSE 1 END ASC,
+                    ST_Distance(
+                        current_location::geography,
+                        ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography
+                    ) ASC
+                LIMIT 1
+                FOR UPDATE SKIP LOCKED
+                "#,
+            )
+            .bind(target.lng)
+            .bind(target.lat)
+            .fetch_optional(&mut *tx)
+            .await?
+            .ok_or_else(|| {
+                AppError::not_found(
+                    "No active collector vehicle found.",
+                    "সক্রিয় কোনো সংগ্রহ গাড়ি পাওয়া যায়নি।",
+                )
+            })?
+        }
+    };
 
     let new_status = if payload.entity_type == "pickup" {
         "assigned"
@@ -448,12 +497,32 @@ pub async fn assign_vehicle(
         "dispatched"
     };
 
+    let note_to_save = if payload.note_bn.trim().is_empty() {
+        format!("সাভার পৌর কন্ট্রোল থেকে গাড়ি {} নির্ধারিত হয়েছে", vehicle.code)
+    } else {
+        payload.note_bn.trim().to_string()
+    };
+
     if payload.entity_type == "pickup" {
         sqlx::query(
-            "UPDATE pickup_requests SET assigned_vehicle_id = $2, status = $3, updated_at = NOW() WHERE id = $1",
+            r#"
+            UPDATE pickup_requests
+            SET assigned_vehicle_id = $2,
+                assigned_vehicle_code = $3,
+                collector_name = $4,
+                collector_phone = $5,
+                admin_note = $6,
+                status = $7,
+                updated_at = NOW()
+            WHERE id = $1
+            "#,
         )
-        .bind(payload.entity_id)
+        .bind(target.id)
         .bind(vehicle.id)
+        .bind(&vehicle.code)
+        .bind(&vehicle.driver_name_bn)
+        .bind(&vehicle.driver_phone)
+        .bind(&note_to_save)
         .bind(new_status)
         .execute(&mut *tx)
         .await?;
@@ -467,20 +536,34 @@ pub async fn assign_vehicle(
             VALUES ('pickup', $1, $1, $2, $3, $4, $5, $6)
             "#,
         )
-        .bind(payload.entity_id)
+        .bind(target.id)
         .bind(&target.status)
         .bind(new_status)
         .bind(admin.user_id)
         .bind(admin.display_label())
-        .bind(dispatch_note(&payload.note_bn, &vehicle.code))
+        .bind(dispatch_note(&note_to_save, &vehicle.code))
         .execute(&mut *tx)
         .await?;
     } else {
         sqlx::query(
-            "UPDATE dump_reports SET assigned_vehicle_id = $2, status = $3, updated_at = NOW() WHERE id = $1",
+            r#"
+            UPDATE dump_reports
+            SET assigned_vehicle_id = $2,
+                assigned_vehicle_code = $3,
+                collector_name = $4,
+                collector_phone = $5,
+                admin_note = $6,
+                status = $7,
+                updated_at = NOW()
+            WHERE id = $1
+            "#,
         )
-        .bind(payload.entity_id)
+        .bind(target.id)
         .bind(vehicle.id)
+        .bind(&vehicle.code)
+        .bind(&vehicle.driver_name_bn)
+        .bind(&vehicle.driver_phone)
+        .bind(&note_to_save)
         .bind(new_status)
         .execute(&mut *tx)
         .await?;
@@ -494,19 +577,19 @@ pub async fn assign_vehicle(
             VALUES ('dump_report', $1, $1, $2, $3, $4, $5, $6)
             "#,
         )
-        .bind(payload.entity_id)
+        .bind(target.id)
         .bind(&target.status)
         .bind(new_status)
         .bind(admin.user_id)
         .bind(admin.display_label())
-        .bind(dispatch_note(&payload.note_bn, &vehicle.code))
+        .bind(dispatch_note(&note_to_save, &vehicle.code))
         .execute(&mut *tx)
         .await?;
     }
 
     // Set newly assigned vehicle en_route, and release old vehicle if replaced.
     sqlx::query(
-        "UPDATE collector_vehicles SET status = 'en_route', updated_at = NOW() WHERE id = $1 AND status = 'available'",
+        "UPDATE collector_vehicles SET status = 'en_route', updated_at = NOW() WHERE id = $1 AND status IN ('available', 'active')",
     )
     .bind(vehicle.id)
     .execute(&mut *tx)
@@ -526,7 +609,7 @@ pub async fn assign_vehicle(
         "টিম ও গাড়ি নির্ধারিত হয়েছে",
         &citizen_body,
         &payload.entity_type,
-        payload.entity_id,
+        target.id,
     )
     .await?;
 
@@ -540,7 +623,7 @@ pub async fn assign_vehicle(
         "নতুন সংগ্রহ টাস্ক",
         &driver_body,
         &payload.entity_type,
-        payload.entity_id,
+        target.id,
     )
     .await?;
 
@@ -550,7 +633,7 @@ pub async fn assign_vehicle(
         Some(admin.role.as_str()),
         "dispatch_assigned",
         Some(&payload.entity_type),
-        Some(payload.entity_id),
+        Some(target.id),
         Some(&ip),
         serde_json::json!({
             "vehicle_id": vehicle.id,
@@ -565,11 +648,345 @@ pub async fn assign_vehicle(
 
     Ok(Json(DispatchAssignResponse {
         entity_type: payload.entity_type,
-        entity_id: payload.entity_id,
-        assigned_vehicle_id: vehicle.id,
+        entity_id: target.id.to_string(),
+        assigned_vehicle_id: Some(vehicle.id),
         assigned_vehicle_code: vehicle.code,
+        collector_name: Some(vehicle.driver_name_bn),
+        collector_phone: Some(vehicle.driver_phone),
+        admin_note: Some(note_to_save),
         new_status: new_status.to_string(),
     }))
+}
+
+/// `POST /api/v1/dispatch/vehicles` (Admin only)
+/// Create a new Ward Collector and Vehicle record.
+pub async fn create_vehicle(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(payload): Json<CreateCollectorVehicleRequest>,
+) -> Result<Json<CollectorVehicleRecord>, AppError> {
+    let admin = require_role(&state, &headers, &[Role::Admin]).await?;
+    let ip = extract_client_ip(&headers);
+
+    let code = payload.code.trim().to_uppercase();
+    if code.is_empty() {
+        return Err(AppError::validation("Vehicle code is required.", "গাড়ির কোড আবশ্যক।"));
+    }
+    let driver_name = payload.driver_name_bn.trim();
+    if driver_name.is_empty() {
+        return Err(AppError::validation("Driver name is required.", "কালেক্টরের নাম আবশ্যক।"));
+    }
+    let phone = payload.driver_phone.trim();
+    if phone.is_empty() {
+        return Err(AppError::validation("Phone number is required.", "মোবাইল নম্বর আবশ্যক।"));
+    }
+
+    #[derive(sqlx::FromRow)]
+    struct WardCentroid {
+        centroid_lat: f64,
+        centroid_lng: f64,
+        name_bn: String,
+    }
+    let ward = sqlx::query_as::<_, WardCentroid>(
+        "SELECT centroid_lat, centroid_lng, name_bn FROM wards WHERE id = $1",
+    )
+    .bind(payload.ward_id)
+    .fetch_optional(&state.pool)
+    .await?
+    .ok_or_else(|| AppError::not_found("Ward not found.", "ওয়ার্ডটি পাওয়া যায়নি।"))?;
+
+    let v_status = if payload.status == "active" { "available" } else { payload.status.as_str() };
+
+    let created = sqlx::query_as::<_, CollectorVehicleRecord>(
+        r#"
+        INSERT INTO collector_vehicles (
+            code, vehicle_type, driver_name_bn, driver_phone, ward_id,
+            current_location, status, last_ping_at, created_at, updated_at
+        )
+        VALUES (
+            $1, $2, $3, $4, $5,
+            ST_SetSRID(ST_MakePoint($7, $6), 4326),
+            $8, NOW(), NOW(), NOW()
+        )
+        RETURNING
+            id, user_id, code, vehicle_type, driver_name_bn, driver_phone, ward_id,
+            $9::TEXT AS ward_name_bn,
+            ST_Y(current_location) AS lat,
+            ST_X(current_location) AS lng,
+            status,
+            NULL::DOUBLE PRECISION AS distance_meters,
+            last_ping_at
+        "#,
+    )
+    .bind(&code)
+    .bind(&payload.vehicle_type)
+    .bind(driver_name)
+    .bind(phone)
+    .bind(payload.ward_id)
+    .bind(ward.centroid_lat)
+    .bind(ward.centroid_lng)
+    .bind(v_status)
+    .bind(&ward.name_bn)
+    .fetch_one(&state.pool)
+    .await?;
+
+    record_audit_log(
+        &state.pool,
+        Some(admin.user_id),
+        Some(admin.role.as_str()),
+        "collector_vehicle_created",
+        Some("collector_vehicle"),
+        Some(created.id),
+        Some(&ip),
+        serde_json::json!({
+            "code": code,
+            "driver_name": driver_name,
+            "driver_phone": phone,
+            "ward_id": payload.ward_id,
+        }),
+    )
+    .await?;
+
+    Ok(Json(created))
+}
+
+/// `PATCH /api/v1/dispatch/vehicles/:id` (Admin only)
+/// Update a Ward Collector and Vehicle record.
+pub async fn update_vehicle(
+    State(state): State<AppState>,
+    Path(id): Path<Uuid>,
+    headers: HeaderMap,
+    Json(payload): Json<UpdateCollectorVehicleRequest>,
+) -> Result<Json<CollectorVehicleRecord>, AppError> {
+    let admin = require_role(&state, &headers, &[Role::Admin]).await?;
+    let ip = extract_client_ip(&headers);
+
+    let v_status = payload.status.as_ref().map(|s| {
+        if s == "active" { "available" } else { s.as_str() }
+    });
+
+    let updated = sqlx::query_as::<_, CollectorVehicleRecord>(
+        r#"
+        UPDATE collector_vehicles cv
+        SET code = COALESCE($2, cv.code),
+            vehicle_type = COALESCE($3, cv.vehicle_type),
+            driver_name_bn = COALESCE($4, cv.driver_name_bn),
+            driver_phone = COALESCE($5, cv.driver_phone),
+            ward_id = COALESCE($6, cv.ward_id),
+            status = COALESCE($7, cv.status),
+            updated_at = NOW()
+        FROM wards w
+        WHERE cv.id = $1 AND w.id = COALESCE($6, cv.ward_id)
+        RETURNING
+            cv.id, cv.user_id, cv.code, cv.vehicle_type, cv.driver_name_bn, cv.driver_phone,
+            cv.ward_id, w.name_bn AS ward_name_bn,
+            ST_Y(cv.current_location) AS lat, ST_X(cv.current_location) AS lng,
+            cv.status, NULL::DOUBLE PRECISION AS distance_meters, cv.last_ping_at
+        "#,
+    )
+    .bind(id)
+    .bind(payload.code.as_ref().map(|s| s.trim().to_uppercase()))
+    .bind(payload.vehicle_type)
+    .bind(payload.driver_name_bn.as_ref().map(|s| s.trim()))
+    .bind(payload.driver_phone.as_ref().map(|s| s.trim()))
+    .bind(payload.ward_id)
+    .bind(v_status)
+    .fetch_optional(&state.pool)
+    .await?
+    .ok_or_else(|| AppError::not_found("Vehicle not found.", "গাড়িটি খুঁজে পাওয়া যায়নি।"))?;
+
+    record_audit_log(
+        &state.pool,
+        Some(admin.user_id),
+        Some(admin.role.as_str()),
+        "collector_vehicle_updated",
+        Some("collector_vehicle"),
+        Some(id),
+        Some(&ip),
+        serde_json::json!({
+            "code": updated.code,
+            "status": updated.status,
+        }),
+    )
+    .await?;
+
+    Ok(Json(updated))
+}
+
+/// `POST /api/v1/admin/message` (Admin only)
+/// Persist an official admin message or response to a citizen pickup or dump report.
+pub async fn send_admin_message(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(payload): Json<AdminMessageRequest>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    let admin = require_role(&state, &headers, &[Role::Admin]).await?;
+    let ip = extract_client_ip(&headers);
+
+    let msg = payload.message_bn.trim();
+    if msg.is_empty() {
+        return Err(AppError::validation("Message cannot be empty.", "বার্তার বিবরণ দিন।"));
+    }
+
+    let parsed_uuid = payload.entity_id.as_deref().and_then(|s| Uuid::parse_str(s).ok());
+    let code_candidate = payload.tracking_code.as_deref().or(payload.entity_id.as_deref()).unwrap_or("");
+
+    let mut tx = state.pool.begin().await?;
+
+    if payload.entity_type == "pickup" {
+        #[derive(sqlx::FromRow)]
+        struct TargetPickup {
+            id: Uuid,
+            tracking_code: String,
+            user_id: Option<Uuid>,
+            status: String,
+        }
+
+        let target = sqlx::query_as::<_, TargetPickup>(
+            r#"
+            SELECT id, tracking_code, user_id, status
+            FROM pickup_requests
+            WHERE ($1::uuid IS NOT NULL AND id = $1) OR tracking_code = $2
+            LIMIT 1
+            FOR UPDATE
+            "#
+        )
+        .bind(parsed_uuid)
+        .bind(code_candidate)
+        .fetch_optional(&mut *tx)
+        .await?
+        .ok_or_else(|| AppError::not_found("Pickup not found.", "পিকআপ অনুরোধটি পাওয়া যায়নি।"))?;
+
+        sqlx::query(
+            "UPDATE pickup_requests SET admin_note = $2, updated_at = NOW() WHERE id = $1"
+        )
+        .bind(target.id)
+        .bind(msg)
+        .execute(&mut *tx)
+        .await?;
+
+        sqlx::query(
+            r#"
+            INSERT INTO status_events (
+                entity_type, entity_id, pickup_id, from_status, to_status,
+                actor_user_id, actor_label, note_bn
+            )
+            VALUES ('pickup', $1, $1, $2, $2, $3, $4, $5)
+            "#
+        )
+        .bind(target.id)
+        .bind(&target.status)
+        .bind(admin.user_id)
+        .bind(admin.display_label())
+        .bind(msg)
+        .execute(&mut *tx)
+        .await?;
+
+        create_notification(
+            &mut tx,
+            target.user_id,
+            "পৌরসভা থেকে বার্তা",
+            msg,
+            "pickup",
+            target.id,
+        )
+        .await?;
+
+        record_audit_log(
+            &mut *tx,
+            Some(admin.user_id),
+            Some(admin.role.as_str()),
+            "admin_message_sent",
+            Some("pickup"),
+            Some(target.id),
+            Some(&ip),
+            serde_json::json!({
+                "tracking_code": target.tracking_code,
+                "message": msg,
+            }),
+        )
+        .await?;
+    } else {
+        #[derive(sqlx::FromRow)]
+        struct TargetReport {
+            id: Uuid,
+            tracking_code: String,
+            user_id: Option<Uuid>,
+            status: String,
+        }
+
+        let target = sqlx::query_as::<_, TargetReport>(
+            r#"
+            SELECT id, tracking_code, user_id, status
+            FROM dump_reports
+            WHERE ($1::uuid IS NOT NULL AND id = $1) OR tracking_code = $2
+            LIMIT 1
+            FOR UPDATE
+            "#
+        )
+        .bind(parsed_uuid)
+        .bind(code_candidate)
+        .fetch_optional(&mut *tx)
+        .await?
+        .ok_or_else(|| AppError::not_found("Report not found.", "অভিযোগটি পাওয়া যায়নি।"))?;
+
+        sqlx::query(
+            "UPDATE dump_reports SET admin_note = $2, updated_at = NOW() WHERE id = $1"
+        )
+        .bind(target.id)
+        .bind(msg)
+        .execute(&mut *tx)
+        .await?;
+
+        sqlx::query(
+            r#"
+            INSERT INTO status_events (
+                entity_type, entity_id, dump_report_id, from_status, to_status,
+                actor_user_id, actor_label, note_bn
+            )
+            VALUES ('dump_report', $1, $1, $2, $2, $3, $4, $5)
+            "#
+        )
+        .bind(target.id)
+        .bind(&target.status)
+        .bind(admin.user_id)
+        .bind(admin.display_label())
+        .bind(msg)
+        .execute(&mut *tx)
+        .await?;
+
+        create_notification(
+            &mut tx,
+            target.user_id,
+            "পৌরসভা থেকে বার্তা",
+            msg,
+            "dump_report",
+            target.id,
+        )
+        .await?;
+
+        record_audit_log(
+            &mut *tx,
+            Some(admin.user_id),
+            Some(admin.role.as_str()),
+            "admin_message_sent",
+            Some("dump_report"),
+            Some(target.id),
+            Some(&ip),
+            serde_json::json!({
+                "tracking_code": target.tracking_code,
+                "message": msg,
+            }),
+        )
+        .await?;
+    }
+
+    tx.commit().await?;
+
+    Ok(Json(serde_json::json!({
+        "success": true,
+        "message_bn": "বার্তা সফলভাবে নাগরিককে পাঠানো হয়েছে।"
+    })))
 }
 
 fn dispatch_note(raw: &str, vehicle_code: &str) -> String {

@@ -17,10 +17,12 @@ import {
 import type {
   AnalyticsSummary,
   AuthSession,
+  AdminMessageInput,
   AuthenticatedProfile,
   CollectorVehicleRecord,
   CompleteCollectorTaskInput,
   CompleteTaskResponse,
+  CreateCollectorVehicleInput,
   CreateDumpReportInput,
   CreateDumpReportResponse,
   CreatePickupInput,
@@ -43,6 +45,7 @@ import type {
   SyncCollectorOperation,
   SyncCollectorResponse,
   TrackedResult,
+  UpdateCollectorVehicleInput,
   UpdateVehicleLocationInput,
   UploadPhotoResponse,
   UserRole,
@@ -210,6 +213,7 @@ async function fetchJson<T>(
       : `${base}${path}`;
   try {
     res = await fetch(url, {
+      cache: rest.cache ?? 'no-store',
       ...rest,
       signal: controller.signal,
       headers,
@@ -871,6 +875,37 @@ export async function assignVehicleToTask(
   input: DispatchAssignInput,
 ): Promise<DispatchAssignResponse> {
   return fetchJson<DispatchAssignResponse>('/dispatch/assign', {
+    method: 'POST',
+    auth: true,
+    body: JSON.stringify(input),
+  });
+}
+
+export async function createCollectorVehicle(
+  input: CreateCollectorVehicleInput,
+): Promise<CollectorVehicleRecord> {
+  return fetchJson<CollectorVehicleRecord>('/dispatch/vehicles', {
+    method: 'POST',
+    auth: true,
+    body: JSON.stringify(input),
+  });
+}
+
+export async function updateCollectorVehicle(
+  id: string,
+  input: UpdateCollectorVehicleInput,
+): Promise<CollectorVehicleRecord> {
+  return fetchJson<CollectorVehicleRecord>(`/dispatch/vehicles/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    auth: true,
+    body: JSON.stringify(input),
+  });
+}
+
+export async function sendAdminMessage(
+  input: AdminMessageInput,
+): Promise<{ success: boolean; message_bn: string }> {
+  return fetchJson<{ success: boolean; message_bn: string }>('/admin/message', {
     method: 'POST',
     auth: true,
     body: JSON.stringify(input),

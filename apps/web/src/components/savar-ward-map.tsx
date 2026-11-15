@@ -48,7 +48,7 @@ export function SavarWardMap({
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div>
           <h2 id="savar-spatial-map-heading" className="text-base font-bold text-[#0F172A]">
-            সাভার পৌরসভা ওয়ার্ড ম্যাপ (PostGIS কোঅর্ডিনেট)
+            সাভার পৌরসভা ওয়ার্ড ম্যাপ (লাইভ জিপিএস কোঅর্ডিনেট)
           </h2>
           <p className="text-xs text-[#475569]">
             যেকোনো ওয়ার্ড বা ইউনিয়নে ক্লিক করে সেই এলাকার পিকআপ ও ময়লার রিপোর্ট আলাদা করুন

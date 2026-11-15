@@ -2,6 +2,7 @@
 
 import React, { useState, useMemo } from 'react';
 import {
+  CheckCircle2,
   Clock,
   Flame,
   MessageSquare,
@@ -12,12 +13,21 @@ import {
   Truck,
   User,
 } from 'lucide-react';
-import { DevCitizenRequest, appendDevCitizenResponse } from '@/lib/dev-store';
+import {
+  DevCitizenRequest,
+  appendDevCitizenResponse,
+  updateDevCitizenRequestStatus,
+} from '@/lib/dev-store';
 import { SAVAR_CENTER } from '@/lib/savar-data';
 import { StatusBadge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { toBanglaDigits } from '@/lib/utils';
 import type { DispatchTarget } from '@/components/admin/AdminDispatchDialog';
+import {
+  sendAdminMessage,
+  updatePickupStatus,
+  updateReportStatus,
+} from '@/lib/api-client';
 
 interface AdminCitizenLiveFeedProps {
   requests: DevCitizenRequest[];
@@ -64,16 +74,28 @@ export function AdminCitizenLiveFeed({
     return { total, pickups, reports, pending, responded };
   }, [requests]);
 
-  const handleSendResponse = (e: React.FormEvent) => {
+  const handleSendResponse = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!responseModalTarget || !replyMessage.trim()) return;
 
     setIsSending(true);
+    const msg = replyMessage.trim();
     try {
+      // 1. Persist to real PostgreSQL DB via Admin Message API
+      await sendAdminMessage({
+        entity_type: responseModalTarget.type === 'pickup' ? 'pickup' : 'dump_report',
+        entity_id: responseModalTarget.id,
+        tracking_code: responseModalTarget.trackingCode,
+        message_bn: msg,
+      }).catch((err) => {
+        console.warn('Realtime message API fallback:', err);
+      });
+
+      // 2. Also persist in dev store for local instant display
       appendDevCitizenResponse(responseModalTarget.trackingCode, {
         senderName: 'সাভার পৌরসভা অপারেশনস ও কন্ট্রোল',
         senderRole: 'admin',
-        message: replyMessage.trim(),
+        message: msg,
       });
 
       onStatusNotice(`নাগরিক [${responseModalTarget.citizenName}]-কে অফিশিয়াল বার্তা পাঠানো সম্পন্ন হয়েছে।`);
@@ -87,6 +109,49 @@ export function AdminCitizenLiveFeed({
     }
   };
 
+  const handleQuickApprove = async (item: DevCitizenRequest) => {
+    try {
+      if (item.type === 'pickup') {
+        await updatePickupStatus(item.id, {
+          status: 'assigned',
+          note_bn: 'পৌর প্রশাসন কর্তৃক পিকআপ অনুরোধ অনুমোদিত হয়েছে',
+        }).catch(async () => {
+          await updatePickupStatus(item.trackingCode, {
+            status: 'assigned',
+            note_bn: 'পৌর প্রশাসন কর্তৃক পিকআপ অনুরোধ অনুমোদিত হয়েছে',
+          });
+        });
+        updateDevCitizenRequestStatus(item.trackingCode, 'assigned');
+        appendDevCitizenResponse(item.trackingCode, {
+          senderName: 'সাভার পৌর প্রশাসন',
+          senderRole: 'admin',
+          message: 'আপনার পিকআপ অনুরোধ অনুমোদিত হয়েছে। শীঘ্রই গাড়ি নির্ধারিত হচ্ছে।',
+        });
+        onStatusNotice(`পিকআপ [${item.trackingCode}] অনুমোদিত হয়েছে।`);
+      } else {
+        await updateReportStatus(item.id, {
+          status: 'verified',
+          note_bn: 'পৌর প্রশাসন কর্তৃক ময়লা অভিযোগ যাচাই ও অনুমোদিত হয়েছে',
+        }).catch(async () => {
+          await updateReportStatus(item.trackingCode, {
+            status: 'verified',
+            note_bn: 'পৌর প্রশাসন কর্তৃক ময়লা অভিযোগ যাচাই ও অনুমোদিত হয়েছে',
+          });
+        });
+        updateDevCitizenRequestStatus(item.trackingCode, 'verified');
+        appendDevCitizenResponse(item.trackingCode, {
+          senderName: 'সাভার পৌর প্রশাসন',
+          senderRole: 'admin',
+          message: 'আপনার অভিযোগ যাচাইক্রমে অনুমোদিত হয়েছে। পরিচ্ছন্নতা টিম প্রস্তুত হচ্ছে।',
+        });
+        onStatusNotice(`অভিযোগ [${item.trackingCode}] অনুমোদিত হয়েছে।`);
+      }
+      onRefresh();
+    } catch {
+      onStatusNotice(`অনুমোদন সম্পন্ন করা যায়নি।`);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* KPI Cards */}
@@ -96,7 +161,7 @@ export function AdminCitizenLiveFeed({
           <p className="mt-1 font-metric text-xl font-bold text-[#0F172A]">
             {toBanglaDigits(stats.total)}
           </p>
-          <p className="text-[11px] text-[#15803D] font-medium">লাইভ পোস্টজিআইএস ফিড</p>
+          <p className="text-[11px] text-[#15803D] font-medium">লাইভ জিপিএস ফিড</p>
         </div>
         <div className="cs-card p-3.5 border-l-4 border-l-emerald-500">
           <p className="text-xs font-semibold text-[#475569]">বর্জ্য পিকআপ কিউ</p>
@@ -259,6 +324,19 @@ export function AdminCitizenLiveFeed({
                     >
                       {item.status}
                     </StatusBadge>
+
+                    {item.status === 'pending' || item.status === 'reported' ? (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="tint"
+                        onClick={() => void handleQuickApprove(item)}
+                        className="gap-1 min-h-8 text-xs font-semibold"
+                      >
+                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-700" />
+                        অনুমোদন করুন
+                      </Button>
+                    ) : null}
 
                     {item.type === 'dump_report' || item.type === 'pickup' ? (
                       <Button
