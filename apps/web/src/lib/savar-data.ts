@@ -13,6 +13,7 @@ import type {
   ReportSeverity,
   ReportStatus,
   ScheduleType,
+  UserRole,
   VehicleStatus,
   VehicleType,
   WardSummary,
@@ -709,15 +710,19 @@ export const SAVAR_CENTER = {
   lng: 90.2667,
 } as const;
 
-export const ROLE_LABELS_BN: Record<'citizen' | 'collector' | 'partner' | 'admin', string> = {
+export const ROLE_LABELS_BN: Record<UserRole, string> = {
   citizen: 'নাগরিক',
   collector: 'সংগ্রহকারী',
+  cleaner: 'পরিচ্ছন্নতাকর্মী',
   partner: 'রিসাইক্লিং পার্টনার',
   admin: 'পৌর অ্যাডমিন',
+  pouro_admin: 'পৌর অ্যাডমিন',
+  developer: 'ডেভেলপার',
+  super_admin: 'সুপার অ্যাডমিন',
 };
 
 export const DEMO_OTP_ACCOUNTS: {
-  role: 'citizen' | 'collector' | 'partner' | 'admin';
+  role: UserRole;
   labelBn: string;
   phone: string;
   nameBn: string;

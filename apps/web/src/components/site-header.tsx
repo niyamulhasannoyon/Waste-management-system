@@ -23,18 +23,13 @@ import { NativeDialog } from '@/components/ui/native-dialog';
 import { RelativeTimeBn } from '@/components/ui/relative-time';
 import { useCleanSavar } from '@/context/CleanSavarContext';
 import { ROLE_LABELS_BN } from '@/lib/savar-data';
-import { isAllowedDevEmail } from '@/lib/dev-store';
+import {
+  getNavItemsForUser,
+  shouldShowAdminPanelButton,
+  shouldShowDevConsoleButton,
+  shouldShowDownloadButton,
+} from '@/lib/rbac';
 import { cn, toBanglaDigits } from '@/lib/utils';
-
-const NAV_ITEMS = [
-  { href: '/', label: 'হোম' },
-  { href: '/pickup', label: 'পিকআপ' },
-  { href: '/report', label: 'ছবি দিন' },
-  { href: '/track', label: 'ট্র্যাক' },
-  { href: '/collector', label: 'কালেক্টর' },
-  { href: '/partner', label: 'পার্টনার' },
-  { href: '/admin', label: 'অ্যাডমিন' },
-] as const;
 
 export function SiteHeader() {
   const pathname = usePathname();
@@ -93,6 +88,10 @@ export function SiteHeader() {
   }
 
   const user = profile?.user ?? null;
+  const navItems = getNavItemsForUser(user);
+  const showAdminPanel = shouldShowAdminPanelButton(user);
+  const showDevConsole = shouldShowDevConsoleButton(user);
+  const showDownloadBtn = shouldShowDownloadButton(user);
 
   if (pathname?.startsWith('/dev-admin')) {
     return null;
@@ -120,7 +119,7 @@ export function SiteHeader() {
           </Link>
 
           <nav aria-label="প্রধান নেভিগেশন" className="hidden items-center gap-1 lg:flex">
-            {NAV_ITEMS.map((item) => {
+            {navItems.map((item) => {
               const active =
                 item.href === '/' ? pathname === '/' : pathname.startsWith(item.href);
               return (
@@ -164,7 +163,7 @@ export function SiteHeader() {
             <div className="hidden items-center gap-2 sm:flex">
               {user ? (
                 <>
-                  {user.role === 'admin' ? (
+                  {showAdminPanel ? (
                     <Link
                       href="/admin"
                       className="inline-flex items-center gap-1.5 rounded-md border border-[#15803D] bg-[#F0FDF4] px-2.5 py-1 text-xs font-bold text-[#14532D] hover:bg-[#DCFCE7] transition-colors"
@@ -174,7 +173,7 @@ export function SiteHeader() {
                     </Link>
                   ) : null}
 
-                  {isAllowedDevEmail(user.email) || user.role === 'admin' ? (
+                  {showDevConsole ? (
                     <Link
                       href="/dev-admin"
                       className="inline-flex items-center gap-1.5 rounded-md border border-slate-700 bg-slate-900 px-2.5 py-1 text-xs font-bold text-white hover:bg-slate-800 transition-colors"
@@ -219,14 +218,16 @@ export function SiteHeader() {
               )}
             </div>
 
-            <Link
-              href="/download"
-              aria-label="ক্লিন সাভার মোবাইল অ্যাপ ডাউনলোড করুন"
-              className="hidden items-center gap-1.5 rounded-md border border-[#BBF7D0] bg-[#F0FDF4] px-2.5 py-1.5 text-xs font-semibold text-[#15803D] transition-colors hover:bg-[#DCFCE7] md:inline-flex"
-            >
-              <Download className="h-3.5 w-3.5" aria-hidden="true" />
-              <span>অ্যাপ ডাউনলোড</span>
-            </Link>
+            {showDownloadBtn ? (
+              <Link
+                href="/download"
+                aria-label="ক্লিন সাভার মোবাইল অ্যাপ ডাউনলোড করুন"
+                className="hidden items-center gap-1.5 rounded-md border border-[#BBF7D0] bg-[#F0FDF4] px-2.5 py-1.5 text-xs font-semibold text-[#15803D] transition-colors hover:bg-[#DCFCE7] md:inline-flex"
+              >
+                <Download className="h-3.5 w-3.5" aria-hidden="true" />
+                <span>অ্যাপ ডাউনলোড</span>
+              </Link>
+            ) : null}
 
             <button
               type="button"
@@ -302,7 +303,7 @@ export function SiteHeader() {
 
             <nav aria-label="মোবাইল নেভিগেশন" className="p-3">
               <ul className="space-y-1">
-                {NAV_ITEMS.map((item) => {
+                {navItems.map((item) => {
                   const active =
                     item.href === '/' ? pathname === '/' : pathname.startsWith(item.href);
                   return (
@@ -329,16 +330,18 @@ export function SiteHeader() {
               </ul>
             </nav>
 
-            <div className="px-3 pb-3">
-              <Link
-                href="/download"
-                onClick={closeDrawer}
-                className="flex min-h-10 items-center justify-center gap-2 rounded-md border border-[#BBF7D0] bg-[#F0FDF4] px-3 py-2 text-xs font-semibold text-[#15803D] hover:bg-[#DCFCE7]"
-              >
-                <Download className="h-4 w-4" aria-hidden="true" />
-                <span>অ্যান্ড্রয়েড অ্যাপ ডাউনলোড (APK)</span>
-              </Link>
-            </div>
+            {showDownloadBtn ? (
+              <div className="px-3 pb-3">
+                <Link
+                  href="/download"
+                  onClick={closeDrawer}
+                  className="flex min-h-10 items-center justify-center gap-2 rounded-md border border-[#BBF7D0] bg-[#F0FDF4] px-3 py-2 text-xs font-semibold text-[#15803D] hover:bg-[#DCFCE7]"
+                >
+                  <Download className="h-4 w-4" aria-hidden="true" />
+                  <span>অ্যান্ড্রয়েড অ্যাপ ডাউনলোড (APK)</span>
+                </Link>
+              </div>
+            ) : null}
           </div>
 
           <div className="border-t border-[#E2E8F0] bg-[#F8FAFC] p-4">
@@ -352,17 +355,19 @@ export function SiteHeader() {
                   <StatusBadge tone="success">{ROLE_LABELS_BN[user.role]}</StatusBadge>
                 </div>
 
-                {user.role === 'admin' ? (
+                {showAdminPanel || showDevConsole ? (
                   <div className="flex flex-col gap-1.5 pt-1">
-                    <Link
-                      href="/admin"
-                      onClick={closeDrawer}
-                      className="flex min-h-10 items-center justify-center gap-2 rounded-md border border-[#15803D] bg-[#F0FDF4] px-3 py-2 text-xs font-bold text-[#14532D]"
-                    >
-                      <ShieldCheck className="h-4 w-4 text-[#15803D]" />
-                      পৌর অ্যাডমিন ড্যাশবোর্ডে যান
-                    </Link>
-                    {isAllowedDevEmail(user.email) || user.role === 'admin' ? (
+                    {showAdminPanel ? (
+                      <Link
+                        href="/admin"
+                        onClick={closeDrawer}
+                        className="flex min-h-10 items-center justify-center gap-2 rounded-md border border-[#15803D] bg-[#F0FDF4] px-3 py-2 text-xs font-bold text-[#14532D]"
+                      >
+                        <ShieldCheck className="h-4 w-4 text-[#15803D]" />
+                        পৌর অ্যাডমিন ড্যাশবোর্ডে যান
+                      </Link>
+                    ) : null}
+                    {showDevConsole ? (
                       <Link
                         href="/dev-admin"
                         onClick={closeDrawer}

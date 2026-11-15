@@ -1,4 +1,12 @@
-export type UserRole = 'citizen' | 'collector' | 'partner' | 'admin';
+export type UserRole =
+  | 'citizen'
+  | 'collector'
+  | 'cleaner'
+  | 'partner'
+  | 'admin'
+  | 'pouro_admin'
+  | 'developer'
+  | 'super_admin';
 
 export type WasteType = 'household' | 'organic' | 'recyclable' | 'bulky';
 export type PickupSlot = 'morning' | 'afternoon' | 'evening';

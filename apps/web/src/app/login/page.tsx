@@ -10,12 +10,18 @@ import { Button } from '@/components/ui/button';
 import { useCleanSavar } from '@/context/CleanSavarContext';
 import { ROLE_LABELS_BN } from '@/lib/savar-data';
 import { isAllowedDevEmail, isUserApprovedAdmin } from '@/lib/dev-store';
+import { getUserCanonicalRole, isDeveloperUser } from '@/lib/rbac';
+import type { UserRole } from '@/lib/types';
 
-const ROLE_DEFAULT_ROUTE: Record<'citizen' | 'collector' | 'partner' | 'admin', { href: string; label: string }> = {
+const ROLE_DEFAULT_ROUTE: Record<UserRole, { href: string; label: string }> = {
   citizen: { href: '/pickup', label: 'পিকআপ পোর্টালে যান' },
   collector: { href: '/collector', label: 'কালেক্টর ওয়ার্কস্পেসে যান' },
+  cleaner: { href: '/collector', label: 'কালেক্টর ওয়ার্কস্পেসে যান' },
   partner: { href: '/partner', label: 'পার্টনার মার্কেটপ্লেসে যান' },
   admin: { href: '/admin', label: 'অ্যাডমিন কমান্ড ড্যাশবোর্ডে যান' },
+  pouro_admin: { href: '/admin', label: 'অ্যাডমিন কমান্ড ড্যাশবোর্ডে যান' },
+  developer: { href: '/dev-admin', label: 'ডেভেলপার কনসোলে যান' },
+  super_admin: { href: '/dev-admin', label: 'ডেভেলপার কনসোলে যান' },
 };
 
 export default function LoginPage() {
@@ -70,7 +76,7 @@ export default function LoginPage() {
               </Link>
             ) : null}
 
-            {isAllowedDevEmail(profile.user.email) || profile.user.role === 'admin' ? (
+            {isDeveloperUser(profile.user) ? (
               <Link
                 href="/dev-admin"
                 className="inline-flex min-h-11 items-center gap-2 rounded-md border border-slate-700 bg-slate-900 px-4 text-sm font-bold text-white hover:bg-slate-800"
@@ -91,14 +97,17 @@ export default function LoginPage() {
           <OtpAuthPanel
             titleId="page-otp"
             onSuccess={(session) => {
-              const isAdmin =
-                session.profile.user.role === 'admin' ||
-                isAllowedDevEmail(session.profile.user.email) ||
-                isUserApprovedAdmin(session.profile.user.phone, session.profile.user.email);
-              if (isAdmin) {
+              const canonical = getUserCanonicalRole(session.profile.user);
+              if (canonical === 'pouro_admin') {
                 router.push('/admin');
+              } else if (canonical === 'developer') {
+                router.push('/dev-admin');
+              } else if (canonical === 'collector') {
+                router.push('/collector');
+              } else if (canonical === 'partner') {
+                router.push('/partner');
               } else {
-                router.push(ROLE_DEFAULT_ROUTE[session.profile.user.role].href);
+                router.push(ROLE_DEFAULT_ROUTE[session.profile.user.role]?.href || '/pickup');
               }
             }}
           />

@@ -4,13 +4,17 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
+  AlertTriangle,
   Camera,
   CheckCircle2,
   Download,
   MapPin,
-  Search,
-  Truck,
+  PackageCheck,
   Recycle,
+  Search,
+  Shield,
+  ShieldCheck,
+  Truck,
 } from 'lucide-react';
 import { SavarWardMap } from '@/components/savar-ward-map';
 import { StatusBadge } from '@/components/ui/badge';
@@ -18,14 +22,24 @@ import { Button } from '@/components/ui/button';
 import { RelativeTimeBn } from '@/components/ui/relative-time';
 import { useCleanSavar } from '@/context/CleanSavarContext';
 import { REPORT_STATUS_META } from '@/lib/savar-data';
+import { getUserCanonicalRole } from '@/lib/rbac';
 import { toBanglaDigits } from '@/lib/utils';
 
 export function HeroSection() {
   const router = useRouter();
-  const { wards, publicAnalytics, publicHotspots, isLoadingPublic, publicError, refreshPublicData } =
-    useCleanSavar();
+  const {
+    profile,
+    wards,
+    publicAnalytics,
+    publicHotspots,
+    isLoadingPublic,
+    publicError,
+    refreshPublicData,
+  } = useCleanSavar();
   const [selectedWardId, setSelectedWardId] = useState<number | null>(null);
   const [quickCode, setQuickCode] = useState<string>('');
+
+  const canonical = getUserCanonicalRole(profile?.user);
 
   const filteredHotspots = selectedWardId
     ? publicHotspots.filter((h) => h.ward_id === selectedWardId)
@@ -41,6 +55,22 @@ export function HeroSection() {
     router.push(`/track?code=${encodeURIComponent(cleaned)}`);
   }
 
+  // Hotspot feed action link dynamically customized per role
+  const hotspotFeedLink = (() => {
+    switch (canonical) {
+      case 'pouro_admin':
+        return { href: '/admin', label: 'অ্যাডমিন ডিসপ্যাচ ও তদারকি →' };
+      case 'collector':
+        return { href: '/collector', label: 'আমার হটস্পট টাস্ক দেখুন →' };
+      case 'partner':
+        return { href: '/partner', label: 'রিসাইক্লিং হাব দেখুন →' };
+      case 'developer':
+      case 'citizen':
+      default:
+        return { href: '/report', label: 'নতুন রিপোর্ট করুন →' };
+    }
+  })();
+
   return (
     <section
       aria-labelledby="hero-heading"
@@ -51,7 +81,15 @@ export function HeroSection() {
           <div className="min-w-0 space-y-5 lg:col-span-6">
             <div className="inline-flex items-center gap-2 rounded-full border border-[#BBF7D0] bg-white px-3 py-1 text-xs font-semibold text-[#14532D]">
               <span className="h-2 w-2 rounded-full bg-[#15803D]" aria-hidden="true" />
-              সাভার পৌরসভা ও ৬ ইউনিয়ন · পোস্টজিআইএস ভিত্তিক বর্জ্য সমন্বয়
+              {canonical === 'pouro_admin'
+                ? 'সাভার পৌরসভা অ্যাডমিন মোড · সার্বিক তদারকি ও ফ্লিট কন্ট্রোল'
+                : canonical === 'collector'
+                  ? 'কালেক্টর অপারেশনস মোড · দৈনিক পিকআপ ও হটস্পট পরিচ্ছন্নতা'
+                  : canonical === 'partner'
+                    ? 'রিসাইক্লিং পার্টনার মোড · সার্কুলার অর্থনীতি ও লট হাব'
+                    : canonical === 'developer'
+                      ? 'ডেভেলপার সুপার অ্যাডমিন মোড · সিস্টেম ইঞ্জিনিয়ারিং ও টেস্ট'
+                      : 'সাভার পৌরসভা ও ৬ ইউনিয়ন · পোস্টজিআইএস ভিত্তিক বর্জ্য সমন্বয়'}
             </div>
 
             <h1
@@ -66,30 +104,107 @@ export function HeroSection() {
               বাড়ির দৈনন্দিন ময়লার ভ্যান বুক করুন, রাস্তার পাশের খোলা ময়লার ছবি জিপিএসসহ পাঠান এবং ট্র্যাকিং কোড দিয়ে প্রতিটি ধাপের অবস্থা সরাসরি দেখুন।
             </p>
 
-            {/* Primary CTAs */}
-            <div className="flex flex-wrap gap-3">
-              <Link
-                href="/pickup"
-                className="inline-flex min-h-12 items-center justify-center gap-2 rounded-md bg-[#15803D] px-5 py-2.5 text-sm font-semibold text-white shadow-xs transition-colors hover:bg-[#14532D]"
-              >
-                <Truck className="h-4 w-4" aria-hidden="true" />
-                পিকআপ অনুরোধ করুন
-              </Link>
-              <Link
-                href="/report"
-                className="inline-flex min-h-12 items-center justify-center gap-2 rounded-md border border-[#CBD5E1] bg-white px-5 py-2.5 text-sm font-semibold text-[#0F172A] shadow-xs transition-colors hover:bg-[#F8FAFC]"
-              >
-                <Camera className="h-4 w-4 text-[#15803D]" aria-hidden="true" />
-                ময়লার স্তূপ রিপোর্ট করুন
-              </Link>
-              <Link
-                href="/download"
-                className="inline-flex min-h-12 items-center justify-center gap-2 rounded-md border border-[#BBF7D0] bg-[#F0FDF4] px-4 py-2.5 text-sm font-semibold text-[#15803D] shadow-xs transition-colors hover:bg-[#DCFCE7]"
-              >
-                <Download className="h-4 w-4" aria-hidden="true" />
-                মোবাইল অ্যাপ (APK)
-              </Link>
-            </div>
+            {/* Role-Aware Primary CTAs */}
+            {canonical === 'pouro_admin' ? (
+              <div className="flex flex-wrap gap-3">
+                <Link
+                  href="/admin"
+                  className="inline-flex min-h-12 items-center justify-center gap-2 rounded-md bg-[#15803D] px-5 py-2.5 text-sm font-semibold text-white shadow-xs transition-colors hover:bg-[#14532D]"
+                >
+                  <ShieldCheck className="h-4 w-4" aria-hidden="true" />
+                  ওভারভিউ ও ফ্লিট কন্ট্রোল
+                </Link>
+                <Link
+                  href="/admin"
+                  className="inline-flex min-h-12 items-center justify-center gap-2 rounded-md border border-[#CBD5E1] bg-white px-5 py-2.5 text-sm font-semibold text-[#0F172A] shadow-xs transition-colors hover:bg-[#F8FAFC]"
+                >
+                  <AlertTriangle className="h-4 w-4 text-[#15803D]" aria-hidden="true" />
+                  পেন্ডিং রিপোর্ট দেখুন
+                </Link>
+              </div>
+            ) : canonical === 'collector' ? (
+              <div className="flex flex-wrap gap-3">
+                <Link
+                  href="/collector"
+                  className="inline-flex min-h-12 items-center justify-center gap-2 rounded-md bg-[#15803D] px-5 py-2.5 text-sm font-semibold text-white shadow-xs transition-colors hover:bg-[#14532D]"
+                >
+                  <Truck className="h-4 w-4" aria-hidden="true" />
+                  আমার নির্ধারিত টাস্ক ও জিপিএস
+                </Link>
+                <Link
+                  href="/collector"
+                  className="inline-flex min-h-12 items-center justify-center gap-2 rounded-md border border-[#CBD5E1] bg-white px-5 py-2.5 text-sm font-semibold text-[#0F172A] shadow-xs transition-colors hover:bg-[#F8FAFC]"
+                >
+                  <MapPin className="h-4 w-4 text-[#15803D]" aria-hidden="true" />
+                  গাড়ির অবস্থান আপডেট
+                </Link>
+              </div>
+            ) : canonical === 'partner' ? (
+              <div className="flex flex-wrap gap-3">
+                <Link
+                  href="/partner"
+                  className="inline-flex min-h-12 items-center justify-center gap-2 rounded-md bg-[#15803D] px-5 py-2.5 text-sm font-semibold text-white shadow-xs transition-colors hover:bg-[#14532D]"
+                >
+                  <Recycle className="h-4 w-4" aria-hidden="true" />
+                  রিসাইক্লিং লট মার্কেটপ্লেস
+                </Link>
+                <Link
+                  href="/partner"
+                  className="inline-flex min-h-12 items-center justify-center gap-2 rounded-md border border-[#CBD5E1] bg-white px-5 py-2.5 text-sm font-semibold text-[#0F172A] shadow-xs transition-colors hover:bg-[#F8FAFC]"
+                >
+                  <PackageCheck className="h-4 w-4 text-[#15803D]" aria-hidden="true" />
+                  লট সংগ্রহ ও প্রসেসিং
+                </Link>
+              </div>
+            ) : canonical === 'developer' ? (
+              <div className="flex flex-wrap gap-3">
+                <Link
+                  href="/dev-admin"
+                  className="inline-flex min-h-12 items-center justify-center gap-2 rounded-md border border-slate-700 bg-slate-900 px-5 py-2.5 text-sm font-semibold text-emerald-400 shadow-xs transition-colors hover:bg-slate-800"
+                >
+                  <Shield className="h-4 w-4" aria-hidden="true" />
+                  দেব কনসোল
+                </Link>
+                <Link
+                  href="/admin"
+                  className="inline-flex min-h-12 items-center justify-center gap-2 rounded-md bg-[#15803D] px-5 py-2.5 text-sm font-semibold text-white shadow-xs transition-colors hover:bg-[#14532D]"
+                >
+                  <ShieldCheck className="h-4 w-4" aria-hidden="true" />
+                  পৌর অ্যাডমিন প্যানেল
+                </Link>
+                <Link
+                  href="/pickup"
+                  className="inline-flex min-h-12 items-center justify-center gap-2 rounded-md border border-[#CBD5E1] bg-white px-4 py-2.5 text-sm font-semibold text-[#0F172A] shadow-xs transition-colors hover:bg-[#F8FAFC]"
+                >
+                  <Truck className="h-4 w-4 text-[#15803D]" aria-hidden="true" />
+                  নাগরিক পিকআপ টেস্ট
+                </Link>
+              </div>
+            ) : (
+              <div className="flex flex-wrap gap-3">
+                <Link
+                  href="/pickup"
+                  className="inline-flex min-h-12 items-center justify-center gap-2 rounded-md bg-[#15803D] px-5 py-2.5 text-sm font-semibold text-white shadow-xs transition-colors hover:bg-[#14532D]"
+                >
+                  <Truck className="h-4 w-4" aria-hidden="true" />
+                  পিকআপ অনুরোধ করুন
+                </Link>
+                <Link
+                  href="/report"
+                  className="inline-flex min-h-12 items-center justify-center gap-2 rounded-md border border-[#CBD5E1] bg-white px-5 py-2.5 text-sm font-semibold text-[#0F172A] shadow-xs transition-colors hover:bg-[#F8FAFC]"
+                >
+                  <Camera className="h-4 w-4 text-[#15803D]" aria-hidden="true" />
+                  ময়লার স্তূপ রিপোর্ট করুন
+                </Link>
+                <Link
+                  href="/download"
+                  className="inline-flex min-h-12 items-center justify-center gap-2 rounded-md border border-[#BBF7D0] bg-[#F0FDF4] px-4 py-2.5 text-sm font-semibold text-[#15803D] shadow-xs transition-colors hover:bg-[#DCFCE7]"
+                >
+                  <Download className="h-4 w-4" aria-hidden="true" />
+                  মোবাইল অ্যাপ (APK)
+                </Link>
+              </div>
+            )}
 
             {/* Quick Tracking Lookup */}
             <form
@@ -199,10 +314,10 @@ export function HeroSection() {
                   সাম্প্রতিক সক্রিয় হটস্পট ({toBanglaDigits(filteredHotspots.length)}টি)
                 </h2>
                 <Link
-                  href="/report"
+                  href={hotspotFeedLink.href}
                   className="text-xs font-semibold text-[#15803D] hover:underline"
                 >
-                  নতুন রিপোর্ট করুন →
+                  {hotspotFeedLink.label}
                 </Link>
               </div>
               {filteredHotspots.length === 0 ? (

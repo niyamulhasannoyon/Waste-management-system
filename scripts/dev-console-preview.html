@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="bn" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Clean Savar Developer Console — Feature Flags</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Hind Siliguri"', '"Inter"', 'system-ui', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'monospace'],
+          },
+          colors: {
+            brand: {
+              50: '#ecfdf5',
+              400: '#34d399',
+              500: '#10b981',
+              600: '#059669',
+              900: '#064e3b',
+              950: '#022c22',
+            },
+            console: {
+              bg: '#070a13',
+              sidebar: '#0b101d',
+              surface: '#0f172a',
+              card: '#11192e',
+              border: '#1e293b',
+              borderLight: '#334155',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    body {
+      background-color: #030712;
+      font-family: 'Hind Siliguri', 'Inter', system-ui, sans-serif;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+    .custom-scroll::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    .custom-scroll::-webkit-scrollbar-track {
+      background: #0b101d;
+    }
+    .custom-scroll::-webkit-scrollbar-thumb {
+      background: #1e293b;
+      border-radius: 9999px;
+    }
+    .glow-emerald {
+      box-shadow: 0 0 20px -3px rgba(16, 185, 129, 0.35);
+    }
+    .glow-amber {
+      box-shadow: 0 0 25px -3px rgba(245, 158, 11, 0.25);
+    }
+  </style>
+</head>
+<body class="p-4 bg-slate-950 flex items-center justify-center min-h-screen text-slate-100">
+
+  <!-- Desktop Browser Window Frame Mockup -->
+  <div class="w-[1720px] max-w-full rounded-2xl overflow-hidden border border-slate-800 shadow-[0_25px_70px_rgba(0,0,0,0.85)] bg-[#070A13] ring-1 ring-white/10 flex flex-col">
+    
+    <!-- Browser Top Bar (Chrome / macOS Dark Window Chrome) -->
+    <div class="bg-[#0b0f19] px-4 py-2.5 border-b border-slate-800/90 flex items-center justify-between select-none">
+      <!-- Window Controls (Red, Yellow, Green) & Tab -->
+      <div class="flex items-center gap-3">
+        <div class="flex items-center gap-2 mr-2">
+          <div class="w-3.5 h-3.5 rounded-full bg-[#ef4444] border border-[#dc2626]/80 shadow-sm"></div>
+          <div class="w-3.5 h-3.5 rounded-full bg-[#f59e0b] border border-[#d97706]/80 shadow-sm"></div>
+          <div class="w-3.5 h-3.5 rounded-full bg-[#10b981] border border-[#059669]/80 shadow-sm"></div>
+        </div>
+
+        <!-- Active Tab -->
+        <div class="flex items-center gap-2 bg-[#070a13] px-3.5 py-1.5 rounded-t-lg border-t border-x border-slate-800 text-xs font-medium text-slate-200 shadow-sm">
+          <div class="w-4 h-4 rounded bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-mono text-[10px] font-bold">
+            &gt;_
+          </div>
+          <span class="truncate max-w-[240px]">Clean Savar Developer Console</span>
+          <svg class="w-3.5 h-3.5 text-slate-500 hover:text-slate-300 ml-1 cursor-pointer" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+        </div>
+
+        <!-- New Tab Button -->
+        <button class="text-slate-500 hover:text-slate-300 p-1">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+        </button>
+      </div>
+
+      <!-- Address / URL Bar -->
+      <div class="flex-1 max-w-2xl mx-4">
+        <div class="bg-[#111726] border border-slate-700/60 rounded-lg px-3 py-1 flex items-center gap-2 text-xs text-slate-300 shadow-inner">
+          <svg class="w-3.5 h-3.5 text-emerald-400 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 1a4.5 4.5 0 00-4.5 4.5V9H5a2 2 0 00-2 2v6a2 2 0 002 2h10a2 2 0 002-2v-6a2 2 0 00-2-2h-.5V5.5A4.5 4.5 0 0010 1zm3 8V5.5a3 3 0 10-6 0V9h6z" clip-rule="evenodd"/></svg>
+          <span class="text-emerald-400 font-mono">https://</span>
+          <span class="font-mono text-slate-200">cleansavar.gov.bd</span>
+          <span class="font-mono text-slate-400">/dev-admin/switchboard</span>
+          <div class="ml-auto flex items-center gap-2">
+            <span class="text-[10px] font-mono uppercase bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 px-1.5 py-0.5 rounded">SSL Secure</span>
+            <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+          </div>
+        </div>
+      </div>
+
+      <!-- Browser Right Action Icons -->
+      <div class="flex items-center gap-2.5 text-slate-400">
+        <div class="w-6 h-6 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center justify-center text-[11px] font-mono font-bold">
+          CS
+        </div>
+        <svg class="w-4 h-4 hover:text-slate-200 cursor-pointer" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z"/></svg>
+      </div>
+    </div>
+
+    <!-- Web Application Body (Sidebar + Content) -->
+    <div class="flex flex-1 min-h-[920px]">
+      
+      <!-- LEFT SIDEBAR -->
+      <aside class="w-72 bg-[#090e1a] border-r border-slate-800/90 flex flex-col justify-between shrink-0 select-none">
+        <div>
+          <!-- Sidebar Branding -->
+          <div class="p-5 border-b border-slate-800/80">
+            <!-- SuperAdmin Badge -->
+            <div class="inline-flex items-center gap-1.5 bg-emerald-500/10 border border-emerald-500/30 px-2.5 py-1 rounded-md text-[11px] font-mono font-bold uppercase tracking-wider text-emerald-400 mb-3.5">
+              <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+              SUPERADMIN • v2.1.0-dev
+            </div>
+
+            <!-- Logo & Brand Name -->
+            <div class="flex items-center gap-3">
+              <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500/20 to-teal-500/10 border border-emerald-500/40 flex items-center justify-center text-emerald-400 font-mono font-extrabold text-base glow-emerald shadow-lg">
+                [&nbsp;&gt;_&nbsp;]
+              </div>
+              <div>
+                <h1 class="font-extrabold text-white text-base leading-tight tracking-tight">
+                  Clean Savar
+                </h1>
+                <p class="text-xs text-slate-400 font-medium">Developer Console</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Vertical Navigation Links -->
+          <div class="px-3 py-5 space-y-1.5">
+            <div class="px-3 pb-2 text-[11px] font-mono uppercase tracking-wider text-slate-500 font-semibold">
+              কোর মডিউল ও কন্ট্রোল
+            </div>
+
+            <!-- Active: সুইচবোর্ড ও কন্ট্রোল -->
+            <a href="#" class="relative flex items-center gap-3 px-3.5 py-2.5 rounded-xl bg-emerald-500/15 text-emerald-300 font-semibold text-sm border border-emerald-500/30 shadow-sm transition-all group">
+              <!-- Active side bar indicator -->
+              <span class="absolute left-0 top-1/2 -translate-y-1/2 w-1.5 h-6 bg-emerald-400 rounded-r-full shadow-[0_0_10px_#10b981]"></span>
+              <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/>
+              </svg>
+              <span>সুইচবোর্ড ও কন্ট্রোল</span>
+              <span class="ml-auto text-[10px] font-mono bg-emerald-400/20 text-emerald-300 px-1.5 py-0.5 rounded">Active</span>
+            </a>
+
+            <!-- নাগরিক রিকোয়েস্ট -->
+            <a href="#" class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 font-medium text-sm transition-all group">
+              <svg class="w-4 h-4 text-slate-400 group-hover:text-slate-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
+              </svg>
+              <span>নাগরিক রিকোয়েস্ট</span>
+              <span class="ml-auto text-[10px] font-mono bg-sky-500/10 text-sky-400 border border-sky-500/20 px-1.5 py-0.2 rounded">Live Feed</span>
+            </a>
+
+            <!-- ভিজিটর ও ট্রাফিক -->
+            <a href="#" class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 font-medium text-sm transition-all group">
+              <svg class="w-4 h-4 text-slate-400 group-hover:text-slate-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/>
+              </svg>
+              <span>ভিজিটর ও ট্রাফিক</span>
+              <span class="ml-auto text-[10px] font-mono bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-1.5 py-0.2 rounded">Real-time</span>
+            </a>
+
+            <!-- ডাউনলোড ট্র্যাকার -->
+            <a href="#" class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 font-medium text-sm transition-all group">
+              <svg class="w-4 h-4 text-slate-400 group-hover:text-slate-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+              </svg>
+              <span>ডাউনলোড ট্র্যাকার</span>
+              <span class="ml-auto text-[10px] font-mono bg-amber-500/10 text-amber-400 border border-amber-500/20 px-1.5 py-0.2 rounded">APK v2.1</span>
+            </a>
+
+            <!-- লগইন ইতিহাস -->
+            <a href="#" class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 font-medium text-sm transition-all group">
+              <svg class="w-4 h-4 text-slate-400 group-hover:text-slate-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+              </svg>
+              <span>লগইন ইতিহাস</span>
+              <span class="ml-auto text-[10px] font-mono bg-purple-500/10 text-purple-400 border border-purple-500/20 px-1.5 py-0.2 rounded">Geo Audit</span>
+            </a>
+          </div>
+        </div>
+
+        <!-- Sidebar Bottom Footer -->
+        <div class="p-4 border-t border-slate-800/80 bg-[#070a13]">
+          <div class="rounded-xl border border-slate-800 bg-slate-900/70 p-3 space-y-2">
+            <div class="flex items-center justify-between text-[11px] font-mono text-slate-400">
+              <span>DEPLOYED REGION:</span>
+              <span class="text-emerald-400 font-bold">asia-south1 (Dhaka)</span>
+            </div>
+            <div class="flex items-center justify-between text-[11px] font-mono text-slate-400">
+              <span>SAVAR WARDS:</span>
+              <span class="text-slate-200">১-৯ সক্রিয় ওয়ার্ড</span>
+            </div>
+            <div class="pt-2 border-t border-slate-800/80 flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <div class="w-2 h-2 rounded-full bg-emerald-400"></div>
+                <span class="text-xs text-slate-300 font-medium font-mono">dev-root@internal</span>
+              </div>
+              <span class="text-[10px] font-mono bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded">HMAC-256</span>
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      <!-- MAIN CONTENT AREA -->
+      <div class="flex-1 flex flex-col min-w-0 bg-[#070a13]">
+        
+        <!-- TOP HEADER -->
+        <header class="h-16 border-b border-slate-800/90 bg-[#090e1a]/95 backdrop-blur px-6 flex items-center justify-between gap-4 shrink-0">
+          
+          <!-- Left: Google Cloud Session Badge -->
+          <div class="flex items-center gap-3">
+            <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-slate-700/80 bg-slate-900/90 shadow-sm text-xs font-medium text-slate-200">
+              <!-- Google Cloud SVG Icon -->
+              <svg class="w-4 h-4" viewBox="0 0 24 24">
+                <path fill="#4285F4" d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM19 18H6c-2.21 0-4-1.79-4-4 0-2.05 1.53-3.76 3.56-3.97l1.07-.11.5-.95C8.08 7.14 9.94 6 12 6c2.62 0 4.88 1.86 5.39 4.43l.3 1.5 1.53.11c1.56.1 2.78 1.41 2.78 2.96 0 1.65-1.35 3-3 3z"/>
+              </svg>
+              <span>Google Cloud সেশন সক্রিয়</span>
+              <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+            </div>
+          </div>
+
+          <!-- Center-Right: System Telemetry Status Chips -->
+          <div class="flex items-center gap-3">
+            <!-- API Telemetry Chip -->
+            <div class="flex items-center gap-2 rounded-lg border border-slate-800 bg-[#0e1526] px-3.5 py-1.5 text-xs font-mono text-slate-300 shadow-sm">
+              <span class="relative flex h-2 w-2">
+                <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75"></span>
+                <span class="relative inline-flex h-2 w-2 rounded-full bg-emerald-500"></span>
+              </span>
+              <span class="text-slate-400">API:</span>
+              <span class="font-bold text-emerald-400">12618ms</span>
+            </div>
+
+            <!-- DB Telemetry Chip -->
+            <div class="flex items-center gap-2 rounded-lg border border-slate-800 bg-[#0e1526] px-3.5 py-1.5 text-xs font-mono text-slate-300 shadow-sm">
+              <svg class="w-3.5 h-3.5 text-sky-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"/></svg>
+              <span class="text-slate-400">DB:</span>
+              <span class="font-bold text-sky-400">Supabase PostGIS</span>
+            </div>
+
+            <!-- Auth Telemetry Chip -->
+            <div class="flex items-center gap-2 rounded-lg border border-slate-800 bg-[#0e1526] px-3.5 py-1.5 text-xs font-mono text-slate-300 shadow-sm">
+              <svg class="w-3.5 h-3.5 text-amber-400" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14.5v-9l6 4.5-6 4.5z"/></svg>
+              <span class="text-slate-400">Auth:</span>
+              <span class="font-bold text-amber-400">Firebase + HMAC</span>
+            </div>
+          </div>
+
+          <!-- Far Right: Action Buttons -->
+          <div class="flex items-center gap-2.5">
+            <button class="inline-flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-800/90 hover:bg-slate-700/90 px-3.5 py-2 text-xs font-semibold text-slate-100 transition shadow-sm">
+              <span>পৌর অ্যাডমিন ভিউ</span>
+              <span class="text-emerald-400 font-bold">➔</span>
+            </button>
+
+            <button class="inline-flex items-center gap-1.5 rounded-lg border border-rose-500/30 bg-rose-500/10 hover:bg-rose-500/20 px-3 py-2 text-xs font-semibold text-rose-300 transition">
+              <svg class="w-3.5 h-3.5 text-rose-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
+              <span>লগআউট / পরিবর্তন</span>
+            </button>
+          </div>
+        </header>
+
+        <!-- MAIN SCROLLABLE DASHBOARD -->
+        <main class="flex-1 p-8 space-y-6 overflow-y-auto custom-scroll">
+          
+          <!-- Title & Control Bar Row -->
+          <div class="rounded-2xl border border-slate-800/90 bg-[#0d1424] p-6 shadow-xl flex flex-wrap items-center justify-between gap-6">
+            <div>
+              <div class="flex items-center gap-3">
+                <div class="w-9 h-9 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/></svg>
+                </div>
+                <div>
+                  <h2 class="text-xl font-bold text-white tracking-tight">
+                    সিস্টেম ফিচার ফ্ল্যাগ সুইচবোর্ড (Runtime Feature Flags)
+                  </h2>
+                  <p class="text-xs text-slate-400 mt-0.5">
+                    এই সুইচগুলোর পরিবর্তন তাৎক্ষণিকভাবে সিস্টেমের ওয়েব ও মোবাইল অ্যাপ্লিকেশনের আচরণ নিয়ন্ত্রণ করে।
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Search, Filter & Default Button -->
+            <div class="flex items-center gap-3 flex-wrap">
+              <!-- Search Bar -->
+              <div class="relative w-64">
+                <svg class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                <input type="text" placeholder="ফ্ল্যাগ খুঁজুন..." class="w-full bg-[#080d19] border border-slate-700/80 rounded-xl pl-9 pr-3 py-2 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-emerald-500/60" value="">
+              </div>
+
+              <!-- Filter Selector -->
+              <div class="flex items-center gap-1 bg-[#080d19] border border-slate-700/80 rounded-xl p-1 text-xs">
+                <button class="px-2.5 py-1 rounded-lg bg-emerald-500/20 text-emerald-300 font-semibold">সব (৮)</button>
+                <button class="px-2.5 py-1 rounded-lg text-slate-400 hover:text-slate-200">সক্রিয় (৫)</button>
+                <button class="px-2.5 py-1 rounded-lg text-slate-400 hover:text-slate-200">স্থগিত (১)</button>
+              </div>
+
+              <!-- Reset to Defaults Button -->
+              <button class="flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-800/90 hover:bg-slate-700 px-4 py-2 text-xs font-semibold text-slate-200 shadow-sm transition">
+                <svg class="w-3.5 h-3.5 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                <span>সব ফ্ল্যাগ ডিফল্ট করুন</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- MAIN WARN BANNER: OTP_VERIFICATION_PAUSED -->
+          <div class="rounded-2xl border-2 border-amber-500/60 bg-gradient-to-r from-amber-950/40 via-amber-950/20 to-slate-900/60 p-6 shadow-2xl relative overflow-hidden glow-amber">
+            <!-- Subtle Amber Background Indicator Flare -->
+            <div class="absolute -right-16 -top-16 w-64 h-64 bg-amber-500/10 rounded-full blur-3xl pointer-events-none"></div>
+
+            <div class="flex items-start justify-between gap-6 relative z-10">
+              <div class="flex items-start gap-4">
+                <!-- Amber Alert Icon -->
+                <div class="w-12 h-12 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 shrink-0 shadow-lg">
+                  <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                  </svg>
+                </div>
+
+                <div class="space-y-1.5">
+                  <div class="flex items-center gap-3">
+                    <span class="text-xs font-mono uppercase font-bold tracking-wider text-amber-400">
+                      FLAG: OTP_VERIFICATION_PAUSED (যান্ত্রিক ত্রুটির কারণে OTP স্থগিত)
+                    </span>
+                    <span class="inline-flex items-center gap-1 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2 py-0.5 text-[11px] font-mono font-bold">
+                      <span class="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"></span>
+                      STATUS: PAUSED (স্থগিত - Google Sign-in Enforced)
+                    </span>
+                  </div>
+
+                  <h3 class="text-base font-bold text-white flex items-center gap-2">
+                    SMS OTP যাচাইকরণ স্থগিত &amp; নাম + মোবাইল + Google সাইন-ইন সক্রিয়
+                  </h3>
+
+                  <p class="text-xs text-slate-300 leading-relaxed max-w-4xl">
+                    টেলিকম এসএমএস গেটওয়ে যান্ত্রিক সমস্যার কারণে পাবলিক OTP চ্যালেঞ্জ সাময়িক স্থগিত রয়েছে। ব্যবহারকারীরা নাম এবং ১১ সংখ্যার মোবাইল নম্বর প্রদান করে Google সাইন-ইনের মাধ্যমে লগইন করতে পারবেন।
+                  </p>
+                </div>
+              </div>
+
+              <!-- Active Orange / Amber Toggle Switch -->
+              <div class="flex flex-col items-end gap-2 shrink-0">
+                <div class="w-14 h-8 bg-amber-500 rounded-full p-1 cursor-pointer transition-colors duration-200 ease-in-out shadow-[0_0_15px_rgba(245,158,11,0.5)] flex items-center justify-end">
+                  <div class="w-6 h-6 bg-white rounded-full shadow-md transform transition-transform duration-200"></div>
+                </div>
+                <span class="text-[11px] font-mono font-semibold text-amber-400">ACTIVE OVERRIDE</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 3-COLUMN GRID: OTHER FEATURE FLAGS -->
+          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+            
+            <!-- CARD 1: ENABLE_DEMO_MODE -->
+            <div class="rounded-2xl border border-slate-800 bg-[#0d1424] hover:border-slate-700/80 p-5 shadow-lg transition-all flex flex-col justify-between">
+              <div>
+                <div class="flex items-start justify-between gap-3">
+                  <div>
+                    <span class="text-[11px] font-mono uppercase font-bold tracking-wider text-slate-400">
+                      FLAG: ENABLE_DEMO_MODE
+                    </span>
+                    <h3 class="text-sm font-bold text-white mt-1">
+                      অফলাইন ডেমো প্রিভিউ (Citizen &amp; Staff Demo)
+                    </h3>
+                  </div>
+
+                  <!-- Green Toggle (Active ON) -->
+                  <div class="w-12 h-6 bg-emerald-500 rounded-full p-0.5 cursor-pointer shadow-[0_0_10px_rgba(16,185,129,0.4)] flex items-center justify-end shrink-0">
+                    <div class="w-5 h-5 bg-white rounded-full shadow"></div>
+                  </div>
+                </div>
+
+                <p class="text-xs text-slate-400 mt-2.5 leading-relaxed">
+                  লগইন স্ক্রিনে 'নাগরিক ডেমো' ও 'কর্মী ডেমো' বাটন দৃশ্যমান রাখবে যাতে সার্ভারহীন অবস্থায় সহজে টেস্ট করা যায়।
+                </p>
+              </div>
+
+              <div class="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between">
+                <span class="inline-flex items-center gap-1 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 text-[10px] font-mono font-bold">
+                  <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                  STATUS: ENABLED
+                </span>
+                <span class="text-[10px] font-mono text-slate-500">RUNTIME LIVE</span>
+              </div>
+            </div>
+
+            <!-- CARD 2: STRICT_OTP_ENFORCEMENT -->
+            <div class="rounded-2xl border border-slate-800 bg-[#0d1424] hover:border-slate-700/80 p-5 shadow-lg transition-all flex flex-col justify-between">
+              <div>
+                <div class="flex items-start justify-between gap-3">
+                  <div>
+                    <span class="text-[11px] font-mono uppercase font-bold tracking-wider text-slate-400">
+                      FLAG: STRICT_OTP_ENFORCEMENT
+                    </span>
+                    <h3 class="text-sm font-bold text-white mt-1">
+                      কঠোর লাইভ OTP যাচাই (Strict Verification)
+                    </h3>
+                  </div>
+
+                  <!-- Off / Bypass Toggle (Inactive / Grey) -->
+                  <div class="w-12 h-6 bg-slate-700 rounded-full p-0.5 cursor-pointer flex items-center justify-start shrink-0">
+                    <div class="w-5 h-5 bg-slate-300 rounded-full shadow"></div>
+                  </div>
+                </div>
+
+                <p class="text-xs text-slate-400 mt-2.5 leading-relaxed">
+                  প্রতিটি নাগরিক রিকোয়েস্টে হার্ডওয়্যার HMAC সাইন ও টেলিকম SMS গেটওয়ে ভেরিফিকেশন বাধ্যতামূলক রাখা।
+                </p>
+              </div>
+
+              <div class="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between">
+                <span class="inline-flex items-center gap-1 rounded bg-sky-500/15 text-sky-400 border border-sky-500/30 px-2 py-0.5 text-[10px] font-mono font-bold">
+                  <span class="w-1.5 h-1.5 rounded-full bg-sky-400"></span>
+                  STATUS: DEV BYPASS
+                </span>
+                <span class="text-[10px] font-mono text-slate-500">HOTFIX ACTIVE</span>
+              </div>
+            </div>
+
+            <!-- CARD 3: MAINTENANCE_MODE -->
+            <div class="rounded-2xl border border-slate-800 bg-[#0d1424] hover:border-slate-700/80 p-5 shadow-lg transition-all flex flex-col justify-between">
+              <div>
+                <div class="flex items-start justify-between gap-3">
+                  <div>
+                    <span class="text-[11px] font-mono uppercase font-bold tracking-wider text-slate-400">
+                      FLAG: MAINTENANCE_MODE
+                    </span>
+                    <h3 class="text-sm font-bold text-white mt-1">
+                      সিস্টেম রক্ষণাবেক্ষণ মোড (System Lockdown)
+                    </h3>
+                  </div>
+
+                  <!-- Off Toggle -->
+                  <div class="w-12 h-6 bg-slate-800 rounded-full p-0.5 cursor-pointer border border-slate-700 flex items-center justify-start shrink-0">
+                    <div class="w-5 h-5 bg-slate-400 rounded-full shadow"></div>
+                  </div>
+                </div>
+
+                <p class="text-xs text-slate-400 mt-2.5 leading-relaxed">
+                  জরুরি ডাটাবেস মাইগ্রেশন বা সার্ভার মেইনটেন্যান্স চলাকালীন সাধারণ নাগরিকদের জন্য রক্ষণাবেক্ষণ স্ক্রিন প্রদর্শন করবে।
+                </p>
+              </div>
+
+              <div class="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between">
+                <span class="inline-flex items-center gap-1 rounded bg-slate-800 text-slate-400 border border-slate-700 px-2 py-0.5 text-[10px] font-mono font-bold">
+                  <span class="w-1.5 h-1.5 rounded-full bg-slate-500"></span>
+                  STATUS: DISABLED
+                </span>
+                <span class="text-[10px] font-mono text-slate-500">STANDBY</span>
+              </div>
+            </div>
+
+            <!-- CARD 4: SIMULATE_GPS_MOVEMENT -->
+            <div class="rounded-2xl border border-slate-800 bg-[#0d1424] hover:border-slate-700/80 p-5 shadow-lg transition-all flex flex-col justify-between">
+              <div>
+                <div class="flex items-start justify-between gap-3">
+                  <div>
+                    <span class="text-[11px] font-mono uppercase font-bold tracking-wider text-slate-400">
+                      FLAG: SIMULATE_GPS_MOVEMENT
+                    </span>
+                    <h3 class="text-sm font-bold text-white mt-1">
+                      লাইভ বর্জ্য ট্রাক GPS ট্র্যাকিং সিমুলেশন
+                    </h3>
+                  </div>
+
+                  <!-- Green Toggle (Active ON) -->
+                  <div class="w-12 h-6 bg-emerald-500 rounded-full p-0.5 cursor-pointer shadow-[0_0_10px_rgba(16,185,129,0.4)] flex items-center justify-end shrink-0">
+                    <div class="w-5 h-5 bg-white rounded-full shadow"></div>
+                  </div>
+                </div>
+
+                <p class="text-xs text-slate-400 mt-2.5 leading-relaxed">
+                  সাভার পৌরসভার ৯টি ওয়ার্ডের ডাম্প ট্রাক ও পিকআপ ভ্যানের রিয়েল-টাইম গতিবিধি ম্যাপে ৪ সেকেন্ড ব্যবধানে আপডেট করে।
+                </p>
+              </div>
+
+              <div class="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between">
+                <span class="inline-flex items-center gap-1 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 text-[10px] font-mono font-bold">
+                  <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                  STATUS: ENABLED
+                </span>
+                <span class="text-[10px] font-mono text-slate-500">4s TICK RATE</span>
+              </div>
+            </div>
+
+            <!-- CARD 5: GEO_FENCE_ENFORCEMENT -->
+            <div class="rounded-2xl border border-slate-800 bg-[#0d1424] hover:border-slate-700/80 p-5 shadow-lg transition-all flex flex-col justify-between">
+              <div>
+                <div class="flex items-start justify-between gap-3">
+                  <div>
+                    <span class="text-[11px] font-mono uppercase font-bold tracking-wider text-slate-400">
+                      FLAG: GEO_FENCE_ENFORCEMENT
+                    </span>
+                    <h3 class="text-sm font-bold text-white mt-1">
+                      সাভার পৌরসভা ওয়ার্ড সীমানা জিওফেন্স
+                    </h3>
+                  </div>
+
+                  <!-- Green Toggle (Active ON) -->
+                  <div class="w-12 h-6 bg-emerald-500 rounded-full p-0.5 cursor-pointer shadow-[0_0_10px_rgba(16,185,129,0.4)] flex items-center justify-end shrink-0">
+                    <div class="w-5 h-5 bg-white rounded-full shadow"></div>
+                  </div>
+                </div>
+
+                <p class="text-xs text-slate-400 mt-2.5 leading-relaxed">
+                  পৌরসভার সীমানার বাইরের নাগরিক রিকোয়েস্টে ওয়ার্নিং নোটিস এবং অটোমেটিক ওয়ার্ড ম্যাপিং পরিচালনা করে।
+                </p>
+              </div>
+
+              <div class="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between">
+                <span class="inline-flex items-center gap-1 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 text-[10px] font-mono font-bold">
+                  <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                  STATUS: ENABLED
+                </span>
+                <span class="text-[10px] font-mono text-slate-500">POSTGIS BOUNDS</span>
+              </div>
+            </div>
+
+            <!-- CARD 6: DYNAMIC_RATE_CALCULATOR -->
+            <div class="rounded-2xl border border-slate-800 bg-[#0d1424] hover:border-slate-700/80 p-5 shadow-lg transition-all flex flex-col justify-between">
+              <div>
+                <div class="flex items-start justify-between gap-3">
+                  <div>
+                    <span class="text-[11px] font-mono uppercase font-bold tracking-wider text-slate-400">
+                      FLAG: DYNAMIC_RATE_CALCULATOR
+                    </span>
+                    <h3 class="text-sm font-bold text-white mt-1">
+                      বর্জ্য মার্কেট রিয়েল-টাইম মূল্য নির্ধারণ
+                    </h3>
+                  </div>
+
+                  <!-- Green Toggle (Active ON) -->
+                  <div class="w-12 h-6 bg-emerald-500 rounded-full p-0.5 cursor-pointer shadow-[0_0_10px_rgba(16,185,129,0.4)] flex items-center justify-end shrink-0">
+                    <div class="w-5 h-5 bg-white rounded-full shadow"></div>
+                  </div>
+                </div>
+
+                <p class="text-xs text-slate-400 mt-2.5 leading-relaxed">
+                  রিসাইক্লেবল বর্জ্য নিলামের ক্ষেত্রে সাভার লোকাল পাইকারি বাজার দর স্বয়ংক্রিয়ভাবে হিসাব করে।
+                </p>
+              </div>
+
+              <div class="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between">
+                <span class="inline-flex items-center gap-1 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 text-[10px] font-mono font-bold">
+                  <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                  STATUS: ENABLED
+                </span>
+                <span class="text-[10px] font-mono text-slate-500">COMMODITY API</span>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- Bottom Micro Status Bar -->
+          <div class="pt-2 flex items-center justify-between text-xs text-slate-500 font-mono">
+            <div class="flex items-center gap-4">
+              <span>ACTIVE FLAGS: <strong class="text-emerald-400">5</strong></span>
+              <span>PAUSED / BYPASS: <strong class="text-amber-400">2</strong></span>
+              <span>DISABLED: <strong class="text-slate-400">1</strong></span>
+            </div>
+            <div>
+              <span>LAST SYNC: <strong>2026-11-15 08:12:23 BDT</strong></span>
+            </div>
+          </div>
+
+        </main>
+      </div>
+
+    </div>
+
+  </div>
+
+</body>
+</html>

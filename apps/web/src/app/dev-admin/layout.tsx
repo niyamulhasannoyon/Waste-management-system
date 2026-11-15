@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import React from 'react';
+import { DevRouteGuard } from '@/components/dev/DevRouteGuard';
 
 export const metadata: Metadata = {
   title: 'ডেভেলপার অ্যাডমিন কনসোল — ক্লিন সাভার',
@@ -11,5 +12,9 @@ export default function DevAdminLayout({
 }: {
   children: React.ReactNode;
 }) {
-  return <div className="min-h-screen bg-slate-950 text-slate-100">{children}</div>;
+  return (
+    <div className="min-h-screen bg-slate-950 text-slate-100">
+      <DevRouteGuard>{children}</DevRouteGuard>
+    </div>
+  );
 }

@@ -112,7 +112,7 @@ export function AuthGateCard({
             </p>
           </div>
           <div className="flex shrink-0 flex-wrap gap-2">
-            {allowedRoles?.includes('admin') ? (
+            {allowedRoles?.includes('admin') && isApprovedAdmin ? (
               <Button
                 type="button"
                 variant="primary"

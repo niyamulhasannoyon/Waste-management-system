@@ -4,6 +4,8 @@
  * feature flags, simulation engines, user RBAC, and telemetry.
  */
 
+import type { UserRole } from './types';
+
 export interface DevFeatureFlags {
   enableDemoMode: boolean;
   strictOtp: boolean;
@@ -25,7 +27,7 @@ export interface DevFeatureFlags {
   broadcastBannerMessage: string;
 }
 
-export type ExtendedRole = 'citizen' | 'collector' | 'partner' | 'admin' | 'developer';
+export type ExtendedRole = UserRole;
 
 export interface DevUserAccount {
   id: string;

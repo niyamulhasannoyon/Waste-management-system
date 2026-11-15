@@ -38,6 +38,15 @@ export default function nextConfig(phase: string): NextConfig {
       unoptimized: true,
       remotePatterns,
     },
+    async redirects() {
+      return [
+        {
+          source: '/dev',
+          destination: '/dev-admin',
+          permanent: false,
+        },
+      ];
+    },
     async headers() {
       return [
         {
