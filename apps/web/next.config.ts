@@ -32,7 +32,7 @@ export default function nextConfig(phase: string): NextConfig {
       process.env.NEXT_DIST_DIR ||
       (phase === PHASE_DEVELOPMENT_SERVER ? '.next-dev' : '.next'),
     output: 'standalone',
-    serverExternalPackages: ['firebase-admin', 'jwks-rsa', 'jose'],
+    serverExternalPackages: [],
     outputFileTracingRoot: path.join(__dirname, '../..'),
     images: {
       unoptimized: true,

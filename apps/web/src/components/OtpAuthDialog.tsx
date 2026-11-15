@@ -1,7 +1,6 @@
 'use client';
 
 import React from 'react';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { NativeDialog } from '@/components/ui/native-dialog';
 import { OtpAuthPanel } from '@/components/OtpAuthPanel';
@@ -16,8 +15,8 @@ export function OtpAuthDialog() {
     <NativeDialog
       open={authModalOpen}
       onClose={closeAuthModal}
-      title="ক্লিন সাভার — ব্যবহারকারী লগইন"
-      description="নাম, মোবাইল নম্বর ও Google সাইন-ইন দিয়ে যাচাইকরণ"
+      title="ক্লিন সাভার লগইন"
+      description="আপনার ভূমিকা ও মোবাইল নম্বর দিয়ে Google সাইন-ইন সম্পন্ন করুন"
     >
       <div className="space-y-4">
         <OtpAuthPanel
@@ -37,16 +36,6 @@ export function OtpAuthDialog() {
           }}
           titleId="modal-otp"
         />
-        <p className="border-t border-[#E2E8F0] pt-3 text-center text-xs text-[#475569]">
-          আলাদা পূর্ণ পৃষ্ঠায় যেতে চাইলে{' '}
-          <Link
-            href="/login"
-            onClick={closeAuthModal}
-            className="font-semibold text-[#15803D] underline underline-offset-2"
-          >
-            লগইন পেজ খুলুন
-          </Link>
-        </p>
       </div>
     </NativeDialog>
   );

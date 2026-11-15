@@ -127,9 +127,6 @@ describe('Clean Savar interactive web workflows', () => {
 
     render(<OtpAuthPanel />);
 
-    // Shows professional notice that OTP is paused
-    expect(screen.getByText(/জরুরী নোটিশ: SMS OTP সাময়িক স্থগিত/)).toBeInTheDocument();
-
     const nameInput = screen.getByLabelText(/আপনার পূর্ণ নাম/);
     const phoneInput = screen.getByLabelText(/মোবাইল নম্বর/);
 
@@ -142,7 +139,7 @@ describe('Clean Savar interactive web workflows', () => {
 
     fireEvent.change(nameInput, { target: { value: 'রাফি আহমেদ' } });
     fireEvent.change(phoneInput, { target: { value: '01715883210' } });
-    fireEvent.click(screen.getByRole('button', { name: /Google দিয়ে সাইন-ইন করে প্রবেশ করুন/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Google দিয়ে সাইন-ইন/ }));
 
     await waitFor(() => {
       expect(mockLoginWithGoogleAuth).toHaveBeenCalledWith(
@@ -265,15 +262,17 @@ describe('Clean Savar interactive web workflows', () => {
     });
   });
 
-  it('displays technical pause notice for SMS OTP and requires full name and phone', async () => {
+  it('renders clean login panel without clutter and validates mobile number', async () => {
     render(<OtpAuthPanel />);
-    expect(screen.getByText(/জরুরী নোটিশ: SMS OTP সাময়িক স্থগিত/)).toBeInTheDocument();
-    expect(screen.getAllByText(/যান্ত্রিক ত্রুটি/).length).toBeGreaterThanOrEqual(1);
+    expect(screen.queryByText(/জরুরী নোটিশ: SMS OTP সাময়িক স্থগিত/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/যান্ত্রিক ত্রুটি/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/টেস্ট প্রি-ফিল/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/নিরাপদ Google অথেনটিকেশন নীতি/)).not.toBeInTheDocument();
 
-    // Clicking Google login with empty fields triggers validation errors
-    fireEvent.click(screen.getByRole('button', { name: /Google দিয়ে সাইন-ইন করে প্রবেশ করুন/ }));
+    // Clicking Google login with empty phone triggers validation error
+    fireEvent.click(screen.getByRole('button', { name: /Google দিয়ে সাইন-ইন/ }));
     await waitFor(() => {
-      expect(screen.getByText(/আপনার পূর্ণ নাম লেখা আবশ্যক/)).toBeInTheDocument();
+      expect(screen.getByText(/সঠিক.*মোবাইল নম্বর/)).toBeInTheDocument();
     });
   });
 

@@ -29,15 +29,14 @@ export default function LoginPage() {
   const { profile, logout } = useCleanSavar();
 
   return (
-    <div className="mx-auto max-w-xl space-y-6">
-      <div className="space-y-1">
-        <div className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#15803D]">
-          <ShieldCheck className="h-4 w-4" aria-hidden="true" />
-          ব্যবহারকারী যাচাইকরণ ও নিরাপদ প্রবেশ
+    <div className="mx-auto max-w-md space-y-6">
+      <div className="text-center space-y-1.5">
+        <div className="inline-flex items-center justify-center h-12 w-12 rounded-full bg-[#F0FDF4] text-[#15803D] mb-1">
+          <ShieldCheck className="h-6 w-6" aria-hidden="true" />
         </div>
-        <h1 className="text-2xl font-bold text-[#0F172A]">ক্লিন সাভার অ্যাকাউন্ট লগইন</h1>
-        <p className="text-sm text-[#475569]">
-          নাম ও মোবাইল নম্বর প্রদান করে Google অ্যাকাউন্টের মাধ্যমে দ্রুত ও নিরাপদে সাইন-ইন সম্পন্ন করুন।
+        <h1 className="text-2xl font-bold tracking-tight text-[#0F172A]">ক্লিন সাভার লগইন</h1>
+        <p className="text-sm text-[#64748B]">
+          সাভার পৌরসভা ডিজিটাল বর্জ্য ব্যবস্থাপনা প্ল্যাটফর্ম
         </p>
       </div>
 
@@ -93,7 +92,7 @@ export default function LoginPage() {
           </div>
         </section>
       ) : (
-        <section className="cs-card p-6">
+        <section className="cs-card p-6 shadow-sm">
           <OtpAuthPanel
             titleId="page-otp"
             onSuccess={(session) => {
