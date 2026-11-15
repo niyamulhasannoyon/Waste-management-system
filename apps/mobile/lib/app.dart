@@ -44,10 +44,15 @@ class CleanSavarRootScreen extends ConsumerWidget {
     );
     final hasSession =
         isAuthenticated || (AppBuildConfig.enableDemoMode && isDemoPreview);
-    final showRoleSwitcher = isDemoPreview ||
-        kDebugMode ||
-        authRole == 'collector' ||
-        authRole == 'admin';
+    // Role switcher is strictly limited to unauthenticated demo preview testing.
+    final showRoleSwitcher = isDemoPreview;
+
+    // Enforce role isolation: authenticated users are locked to their authoritative role.
+    final effectiveRole = isAuthenticated
+        ? ((authRole == 'collector' || authRole == 'cleaner')
+            ? AppRole.collector
+            : AppRole.citizen)
+        : activeRole;
 
     final appContent = !hasSession
         ? const AuthLoginScreen()
@@ -55,7 +60,7 @@ class CleanSavarRootScreen extends ConsumerWidget {
             children: [
               if (showRoleSwitcher) const RoleSwitcherBanner(),
               Expanded(
-                child: activeRole == AppRole.citizen
+                child: effectiveRole == AppRole.citizen
                     ? const CitizenShellScreen()
                     : const CollectorHomeScreen(),
               ),

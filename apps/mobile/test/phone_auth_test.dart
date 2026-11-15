@@ -40,6 +40,16 @@ class _MockFirebaseApiClient extends core.CleanSavarApiClient {
       );
     }
 
+    if (role == 'collector' && (idToken?.contains('admin') == true)) {
+      return const core.OtpAuthResult(
+        token: 'admin_jwt_token',
+        userId: 'adm-uuid-1',
+        phone: '01711223344',
+        role: 'pouro_admin',
+        nameBn: 'পৌর অ্যাডমিন',
+      );
+    }
+
     if (role == 'collector' && (idToken?.contains('non_collector') == true)) {
       return const core.OtpAuthResult(
         token: 'citizen_jwt_token',
@@ -82,6 +92,15 @@ class _MockFirebaseApiClient extends core.CleanSavarApiClient {
     String? nameBn,
     int? wardId,
   }) async {
+    if (phone.contains('admin')) {
+      return core.OtpAuthResult(
+        token: 'verified_token',
+        userId: 'admin-user',
+        phone: phone,
+        role: 'pouro_admin',
+        nameBn: 'পৌর অ্যাডমিন',
+      );
+    }
     final isCollector = phone.contains('448910');
     return core.OtpAuthResult(
       token: 'verified_token',
@@ -206,6 +225,47 @@ void main() {
           ),
         ),
       );
+    });
+
+    test('Collector login rejects admin/pouro_admin role directing to web portal', () async {
+      final mockApi = _MockFirebaseApiClient();
+      final container = ProviderContainer(
+        overrides: [
+          apiClientProvider.overrideWithValue(mockApi),
+        ],
+      );
+
+      final notifier = container.read(citizenStateProvider.notifier);
+
+      try {
+        await notifier.loginWithFirebaseToken(
+          idToken: 'admin_firebase_token',
+          phone: '01711223344',
+          expectedRole: AppRole.collector,
+        );
+        fail('Should have thrown CleanSavarApiException 403');
+      } on core.CleanSavarApiException catch (e) {
+        expect(e.statusCode, 403);
+        expect(
+          e.message,
+          contains('পৌর অ্যাডমিন ও ব্যবস্থাপনার জন্য দয়া করে ক্লিন সাভার ওয়েব পোর্টাল ব্যবহার করুন'),
+        );
+      }
+
+      try {
+        await notifier.verifyCitizenOtp(
+          otp: '123456',
+          phone: '01711-admin-01',
+          expectedRole: AppRole.collector,
+        );
+        fail('Should have thrown CleanSavarApiException 403');
+      } on core.CleanSavarApiException catch (e) {
+        expect(e.statusCode, 403);
+        expect(
+          e.message,
+          contains('পৌর অ্যাডমিন ও ব্যবস্থাপনার জন্য দয়া করে ক্লিন সাভার ওয়েব পোর্টাল ব্যবহার করুন'),
+        );
+      }
     });
 
     test('Collector login succeeds for authorized collector Firebase token', () async {

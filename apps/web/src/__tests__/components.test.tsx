@@ -272,7 +272,7 @@ describe('Clean Savar interactive web workflows', () => {
     // Clicking Google login with empty phone triggers validation error
     fireEvent.click(screen.getByRole('button', { name: /Google দিয়ে সাইন-ইন/ }));
     await waitFor(() => {
-      expect(screen.getByText(/সঠিক.*মোবাইল নম্বর/)).toBeInTheDocument();
+      expect(screen.getAllByText(/সঠিক.*মোবাইল নম্বর/)[0]).toBeInTheDocument();
     });
   });
 

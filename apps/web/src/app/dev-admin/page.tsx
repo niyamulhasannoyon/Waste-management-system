@@ -1,19 +1,20 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import {
   Activity,
+  AlertTriangle,
   ArrowRight,
   CheckCircle2,
-  ChevronLeft,
-  ChevronRight,
   Database,
   Download,
   Flame,
   Globe,
   KeyRound,
   Lock,
+  LogOut,
+  Menu,
   MessageSquare,
   Play,
   Plus,
@@ -33,7 +34,7 @@ import {
   Zap,
 } from 'lucide-react';
 
-import { DevAuthGate } from '@/components/dev/DevAuthGate';
+import { DevAuthGate, useDevAuthSession } from '@/components/dev/DevAuthGate';
 import { DevTrafficTab } from '@/components/dev/DevTrafficTab';
 import { DevDownloadsTab } from '@/components/dev/DevDownloadsTab';
 import { DevLoginsTab } from '@/components/dev/DevLoginsTab';
@@ -134,6 +135,26 @@ const DEV_TABS: TabItem[] = [
   { key: 'audit', labelBn: 'লাইভ অডিট ট্রেইল', labelEn: 'Security Audit Log', icon: Terminal },
 ];
 
+const CORE_TABS: DevTabKey[] = [
+  'switchboard',
+  'citizen_requests',
+  'traffic',
+  'downloads',
+  'logins',
+];
+
+const SYSTEM_TABS: DevTabKey[] = [
+  'telemetry',
+  'users',
+  'otp',
+  'fleet',
+  'pricing',
+  'wards',
+  'sandbox',
+  'apk',
+  'audit',
+];
+
 export default function DevAdminPage() {
   return (
     <DevAuthGate>
@@ -143,6 +164,11 @@ export default function DevAdminPage() {
 }
 
 function DevAdminConsoleContent() {
+  const { currentUser, handleSignOut } = useDevAuthSession();
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [flagSearchQuery, setFlagSearchQuery] = useState('');
+  const [flagFilterStatus, setFlagFilterStatus] = useState<'all' | 'active' | 'paused'>('all');
+
   const [activeTab, setActiveTab] = useState<DevTabKey>('switchboard');
   const [flags, setFlags] = useState<DevFeatureFlags>(getDevFeatureFlags());
   const [users, setUsers] = useState<DevUserAccount[]>(getDevUsers());
@@ -186,37 +212,6 @@ function DevAdminConsoleContent() {
   const [adminApprovals, setAdminApprovals] = useState<ApprovedAdminRecord[]>(getApprovedAdminRecords());
   const [newAdminPhone, setNewAdminPhone] = useState('');
   const [newAdminName, setNewAdminName] = useState('');
-
-  // Horizontal Tab Navigation Slider Controls
-  const tabsContainerRef = useRef<HTMLDivElement>(null);
-  const [canScrollLeft, setCanScrollLeft] = useState(false);
-  const [canScrollRight, setCanScrollRight] = useState(true);
-
-  const checkScrollability = useCallback(() => {
-    const el = tabsContainerRef.current;
-    if (!el) return;
-    setCanScrollLeft(el.scrollLeft > 6);
-    setCanScrollRight(el.scrollLeft < el.scrollWidth - el.clientWidth - 6);
-  }, []);
-
-  useEffect(() => {
-    const el = tabsContainerRef.current;
-    if (!el) return;
-    checkScrollability();
-    el.addEventListener('scroll', checkScrollability, { passive: true });
-    window.addEventListener('resize', checkScrollability);
-    return () => {
-      el.removeEventListener('scroll', checkScrollability);
-      window.removeEventListener('resize', checkScrollability);
-    };
-  }, [checkScrollability]);
-
-  const scrollTabs = (direction: 'left' | 'right') => {
-    const el = tabsContainerRef.current;
-    if (!el) return;
-    const scrollAmount = direction === 'left' ? -280 : 280;
-    el.scrollBy({ left: scrollAmount, behavior: 'smooth' });
-  };
 
   useEffect(() => {
     const handleApprovalsChanged = () => {
@@ -498,8 +493,143 @@ function DevAdminConsoleContent() {
     );
   }, [auditLogs, auditSearchQuery]);
 
+  const GRID_FLAGS = useMemo(
+    () => [
+      {
+        key: 'enableDemoMode' as const,
+        flagName: 'FLAG: ENABLE_DEMO_MODE',
+        title: 'অফলাইন ডেমো প্রিভিউ (Citizen & Staff Demo)',
+        desc: "লগইন স্ক্রিনে 'নাগরিক ডেমো' ও 'কর্মী ডেমো' বাটন দৃশ্যমান রাখবে যাতে সার্ভারহীন টেস্ট করা যায়।",
+        active: flags.enableDemoMode,
+        statusText: flags.enableDemoMode ? 'STATUS: ENABLED (সক্রিয়)' : 'STATUS: DISABLED (বন্ধ)',
+        badgeColor: flags.enableDemoMode ? 'bg-emerald-500/20 text-emerald-300' : 'bg-slate-800 text-slate-400',
+        activeColor: 'bg-emerald-500',
+      },
+      {
+        key: 'strictOtp' as const,
+        flagName: 'FLAG: STRICT_OTP_ENFORCEMENT',
+        title: 'কঠোর লাইভ OTP যাচাই',
+        desc: 'অন থাকলে কোনো টেস্ট বাইপাস অনুমোদন করবে না। শুধুমাত্র প্রকৃত এসএমএস ভেরিফিকেশন ছাড়া লগইন হবে না।',
+        active: flags.strictOtp,
+        statusText: flags.strictOtp ? 'STATUS: STRICT MODE' : 'STATUS: PERMISSIVE / DEV BYPASS',
+        badgeColor: flags.strictOtp ? 'bg-amber-500/20 text-amber-300' : 'bg-slate-800 text-slate-400',
+        activeColor: 'bg-emerald-500',
+      },
+      {
+        key: 'maintenanceMode' as const,
+        flagName: 'FLAG: MAINTENANCE_MODE',
+        title: 'সিস্টেম রক্ষণাবেক্ষণ মোড',
+        desc: 'সাধারণ ব্যবহারকারীদের জন্য রক্ষণাবেক্ষণ নোটিশ দেখাবে এবং নতুন রিকোয়েস্ট সাময়িক স্থগিত রাখবে।',
+        active: flags.maintenanceMode,
+        statusText: flags.maintenanceMode ? 'STATUS: ACTIVE (সার্ভার লকড)' : 'STATUS: NORMAL OPERATIONAL',
+        badgeColor: flags.maintenanceMode ? 'bg-rose-500/20 text-rose-300' : 'bg-emerald-500/20 text-emerald-300',
+        activeColor: 'bg-rose-500',
+      },
+      {
+        key: 'emergencyAlertActive' as const,
+        flagName: 'FLAG: EMERGENCY_BROADCAST',
+        title: 'জরুরি ব্রডকাস্ট ব্যানার',
+        desc: 'ভারী বৃষ্টি, জলাবদ্ধতা বা বিশেষ পরিচ্ছন্নতা সতর্কবার্তা সকল পেজে লাল ব্যানারে ফ্ল্যাশ করবে।',
+        active: flags.emergencyAlertActive,
+        statusText: flags.emergencyAlertActive ? 'STATUS: BROADCASTING' : 'STATUS: OFF AIR',
+        badgeColor: flags.emergencyAlertActive ? 'bg-amber-500/20 text-amber-300' : 'bg-slate-800 text-slate-400',
+        activeColor: 'bg-amber-500',
+      },
+      {
+        key: 'requireDumpPhoto' as const,
+        flagName: 'FLAG: REQUIRE_DUMP_PHOTO',
+        title: 'অভিযোগে ছবি বাধ্যতামূলক',
+        desc: 'নাগরিক যখন ময়লার স্তূপ রিপোর্ট করবে তখন ছবি তোলা বাধ্যতামূলক রাখা হবে নাকি ঐচ্ছিক।',
+        active: flags.requireDumpPhoto,
+        statusText: flags.requireDumpPhoto ? 'STATUS: PHOTO REQUIRED' : 'STATUS: PHOTO OPTIONAL',
+        badgeColor: flags.requireDumpPhoto ? 'bg-emerald-500/20 text-emerald-300' : 'bg-slate-800 text-slate-400',
+        activeColor: 'bg-emerald-500',
+      },
+      {
+        key: 'autoDispatchNearest' as const,
+        flagName: 'FLAG: AUTO_DISPATCH_NEAREST',
+        title: 'অটো-ডিসপ্যাচ অ্যালগরিদম',
+        desc: 'নতুন অভিযোগ বা পিকআপ কিউ আসলে PostGIS জিও-ডিস্টেন্স দিয়ে নিকটবর্তী খালি গাড়িকে স্বয়ংক্রিয় অ্যাসাইন করা।',
+        active: flags.autoDispatchNearest,
+        statusText: flags.autoDispatchNearest ? 'STATUS: AUTOMATIC (AI/GIS)' : 'STATUS: MANUAL DISPATCH',
+        badgeColor: flags.autoDispatchNearest ? 'bg-emerald-500/20 text-emerald-300' : 'bg-slate-800 text-slate-400',
+        activeColor: 'bg-emerald-500',
+      },
+      {
+        key: 'enableTrafficTracking' as const,
+        flagName: 'FLAG: REALTIME_TRAFFIC_TRACKING',
+        title: 'রিয়েল-টাইম ট্রাফিক ও ভিজিটর ট্র্যাকিং',
+        desc: 'ওয়েবসাইট ও পোর্টালের সকল পেজে ভিজিটরের আইপি, ভৌগোলিক অবস্থান ও ডিভাইস অডিট সক্রিয় রাখা।',
+        active: flags.enableTrafficTracking,
+        statusText: flags.enableTrafficTracking ? 'STATUS: ACTIVE (MONITORING)' : 'STATUS: PAUSED',
+        badgeColor: flags.enableTrafficTracking ? 'bg-emerald-500/20 text-emerald-300' : 'bg-slate-800 text-slate-400',
+        activeColor: 'bg-emerald-500',
+      },
+      {
+        key: 'enableDownloadTracking' as const,
+        flagName: 'FLAG: REALTIME_DOWNLOAD_TRACKING',
+        title: 'ডাউনলোড ট্র্যাকিং ও অডিট ইঞ্জিন',
+        desc: 'কারা কারা কতবার এবং কোন লোকেশন থেকে APK ও রিপোর্ট ফাইল ডাউনলোড করছে তার রিয়েল-টাইম কাউন্টার।',
+        active: flags.enableDownloadTracking,
+        statusText: flags.enableDownloadTracking ? 'STATUS: COUNTING ACTIVE' : 'STATUS: PAUSED',
+        badgeColor: flags.enableDownloadTracking ? 'bg-emerald-500/20 text-emerald-300' : 'bg-slate-800 text-slate-400',
+        activeColor: 'bg-emerald-500',
+      },
+      {
+        key: 'allowGuestDownloads' as const,
+        flagName: 'FLAG: ALLOW_GUEST_DOWNLOADS',
+        title: 'গেস্ট ভিজিটরদের APK ডাউনলোড অনুমোদন',
+        desc: 'লগইন না করা সাধারণ নাগরিকদেরও অফিসিয়াল মোবাইল অ্যাপ নামানোর অনুমতি দেওয়া হবে।',
+        active: flags.allowGuestDownloads,
+        statusText: flags.allowGuestDownloads ? 'STATUS: OPEN TO PUBLIC' : 'STATUS: REQUIRE AUTH',
+        badgeColor: flags.allowGuestDownloads ? 'bg-sky-500/20 text-sky-300' : 'bg-slate-800 text-slate-400',
+        activeColor: 'bg-sky-500',
+      },
+      {
+        key: 'strictGeofence' as const,
+        flagName: 'FLAG: STRICT_SAVAR_GEOFENCE',
+        title: 'কঠোর সাভার জিওফেন্সিং ফিল্টার',
+        desc: 'সাভার পৌরসভার ভৌগোলিক সীমানার বাইরের কোঅর্ডিনেট থেকে আসা রিকোয়েস্ট স্বয়ংক্রিয় ফিল্টার আউট করা।',
+        active: flags.strictGeofence,
+        statusText: flags.strictGeofence ? 'STATUS: STRICT GEOFENCE' : 'STATUS: PERMISSIVE',
+        badgeColor: flags.strictGeofence ? 'bg-emerald-500/20 text-emerald-300' : 'bg-slate-800 text-slate-400',
+        activeColor: 'bg-emerald-500',
+      },
+      {
+        key: 'simulateGpsMovement' as const,
+        flagName: 'FLAG: SIMULATE_GPS_MOVEMENT',
+        title: 'লাইভ GPS মুভমেন্ট সিমুলেশন',
+        desc: 'ম্যাপ ভিউতে ময়লার গাড়িগুলোর রিয়েল-টাইম মুভমেন্ট সিমুলেট করবে।',
+        active: flags.simulateGpsMovement,
+        statusText: flags.simulateGpsMovement ? 'STATUS: SIMULATING' : 'STATUS: STATIC',
+        badgeColor: flags.simulateGpsMovement ? 'bg-emerald-500/20 text-emerald-300' : 'bg-slate-800 text-slate-400',
+        activeColor: 'bg-emerald-500',
+      },
+    ],
+    [flags],
+  );
+
+  const filteredGridFlags = useMemo(() => {
+    return GRID_FLAGS.filter((f) => {
+      if (flagFilterStatus === 'active' && !f.active) return false;
+      if (flagFilterStatus === 'paused' && f.active) return false;
+      if (flagSearchQuery.trim()) {
+        const q = flagSearchQuery.toLowerCase();
+        return (
+          f.flagName.toLowerCase().includes(q) ||
+          f.title.toLowerCase().includes(q) ||
+          f.desc.toLowerCase().includes(q)
+        );
+      }
+      return true;
+    });
+  }, [GRID_FLAGS, flagFilterStatus, flagSearchQuery]);
+
   return (
-    <div className="min-h-screen bg-slate-950 font-sans text-slate-100 antialiased selection:bg-emerald-500 selection:text-black" style={{ colorScheme: 'dark' }}>
+    <div
+      className="min-h-screen bg-[#070a13] font-sans text-slate-100 antialiased selection:bg-emerald-500 selection:text-black flex flex-col"
+      style={{ colorScheme: 'dark' }}
+    >
       {/* Toast Notification */}
       {toastMessage && (
         <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3 rounded-xl border border-emerald-500/40 bg-slate-900/95 px-5 py-3.5 text-sm font-medium text-emerald-300 shadow-2xl backdrop-blur ring-1 ring-emerald-500/30 animate-in fade-in slide-in-from-bottom-3">
@@ -508,567 +638,465 @@ function DevAdminConsoleContent() {
         </div>
       )}
 
-      {/* Top Telemetry & Control Bar */}
-      <header className="sticky top-0 z-40 border-b border-slate-800/80 bg-slate-950/90 backdrop-blur-md">
-        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-4 py-3 sm:px-6">
-          {/* Brand & Mode */}
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-400 ring-1 ring-emerald-500/30">
-              <Terminal className="h-5 w-5" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="text-base font-extrabold tracking-tight text-white">
-                  Clean Savar Developer Console
-                </span>
-                <span className="rounded bg-emerald-500/15 px-2 py-0.5 text-[10px] font-mono font-bold uppercase tracking-wider text-emerald-400 ring-1 ring-emerald-500/30">
-                  SuperAdmin
-                </span>
-              </div>
-              <p className="text-xs text-slate-400 font-mono">
-                Savar Smart Municipal Operating System • v2.1.0-dev
-              </p>
-            </div>
-          </div>
+      {/* Main SaaS Shell (Sidebar + Main Area) */}
+      <div className="flex flex-1 min-h-screen">
+        {/* Mobile Backdrop */}
+        {mobileSidebarOpen && (
+          <div
+            className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm lg:hidden"
+            onClick={() => setMobileSidebarOpen(false)}
+          />
+        )}
 
-          {/* Real-time System Health Telemetry Badges */}
-          <div className="flex flex-wrap items-center gap-2.5">
-            <div className="flex items-center gap-2 rounded-lg border border-slate-800 bg-slate-900/80 px-3 py-1.5 text-xs font-mono text-slate-300">
-              <span className="relative flex h-2 w-2">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75"></span>
-                <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500"></span>
-              </span>
-              <span>API:</span>
-              <button
-                type="button"
-                onClick={pingBackend}
-                disabled={isPinging}
-                className="font-semibold text-emerald-400 hover:underline"
-              >
-                {isPinging ? 'Pinging...' : apiPingMs ? `${apiPingMs}ms` : 'Check'}
-              </button>
-            </div>
-
-            <div className="hidden sm:flex items-center gap-2 rounded-lg border border-slate-800 bg-slate-900/80 px-3 py-1.5 text-xs font-mono text-slate-300">
-              <Database className="h-3.5 w-3.5 text-sky-400" />
-              <span>DB:</span>
-              <span className="font-semibold text-sky-400">Supabase PostGIS</span>
-            </div>
-
-            <div className="hidden md:flex items-center gap-2 rounded-lg border border-slate-800 bg-slate-900/80 px-3 py-1.5 text-xs font-mono text-slate-300">
-              <Flame className="h-3.5 w-3.5 text-amber-400" />
-              <span>Auth:</span>
-              <span className="font-semibold text-amber-400">Firebase + HMAC</span>
-            </div>
-
-            {/* Quick Actions */}
-            <Link
-              href="/admin"
-              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs font-semibold text-slate-200 transition hover:bg-slate-800 hover:text-white"
-            >
-              <span>পৌর অ্যাডমিন ভিউ</span>
-              <ArrowRight className="h-3.5 w-3.5" />
-            </Link>
-
-            <button
-              type="button"
-              onClick={handleLockConsole}
-              title="লক কনসোল"
-              className="flex items-center gap-1.5 rounded-lg border border-rose-500/30 bg-rose-500/10 px-2.5 py-1.5 text-xs font-semibold text-rose-300 transition hover:bg-rose-500/20"
-            >
-              <Lock className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">লক</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Tab Navigation Menu with Professional Sleek Slider Controls */}
-        <div className="border-t border-slate-800/80 bg-slate-950/70 backdrop-blur-md">
-          <div className="mx-auto max-w-7xl px-4 sm:px-6">
-            <div className="relative flex items-center">
-              {/* Left Scroll Button */}
-              {canScrollLeft && (
+        {/* LEFT SIDEBAR */}
+        <aside
+          className={`fixed inset-y-0 left-0 z-50 w-72 bg-[#090e1a] border-r border-slate-800/90 flex flex-col justify-between shrink-0 select-none transition-transform duration-300 ease-in-out lg:sticky lg:top-0 lg:h-screen lg:translate-x-0 ${
+            mobileSidebarOpen ? 'translate-x-0' : '-translate-x-full'
+          }`}
+        >
+          {/* Top Section */}
+          <div className="overflow-y-auto flex-1 cs-admin-scrollbar">
+            {/* Sidebar Branding */}
+            <div className="p-5 border-b border-slate-800/80">
+              <div className="flex items-center justify-between mb-3.5">
+                <div className="inline-flex items-center gap-1.5 bg-emerald-500/10 border border-emerald-500/30 px-2.5 py-1 rounded-md text-[11px] font-mono font-bold uppercase tracking-wider text-emerald-400">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                  SUPERADMIN • v2.1.0-dev
+                </div>
                 <button
                   type="button"
-                  onClick={() => scrollTabs('left')}
-                  aria-label="বামে স্ক্রোল করুন"
-                  className="absolute left-0 z-20 flex h-8 w-8 items-center justify-center rounded-lg border border-slate-700/80 bg-slate-900/95 text-slate-300 shadow-md backdrop-blur transition hover:border-emerald-500/50 hover:bg-slate-800 hover:text-white"
+                  onClick={() => setMobileSidebarOpen(false)}
+                  className="lg:hidden text-slate-400 hover:text-white p-1"
                 >
-                  <ChevronLeft className="h-4 w-4" />
+                  <X className="h-4 w-4" />
                 </button>
-              )}
+              </div>
 
-              {/* Scrollable Tabs */}
-              <div
-                ref={tabsContainerRef}
-                className="cs-admin-scrollbar flex w-full overflow-x-auto scroll-smooth py-2.5 space-x-1.5 focus:outline-none"
-                tabIndex={0}
-                role="region"
-                aria-label="ডেভেলপার অ্যাডমিন ট্যাব তালিকা"
-              >
-                <nav className="flex space-x-1.5 shrink-0" aria-label="Developer Tabs">
-                  {DEV_TABS.map((tab) => {
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500/20 to-teal-500/10 border border-emerald-500/40 flex items-center justify-center text-emerald-400 font-mono font-extrabold text-base shadow-lg">
+                  [&nbsp;&gt;_&nbsp;]
+                </div>
+                <div>
+                  <h1 className="font-extrabold text-white text-base leading-tight tracking-tight">
+                    Clean Savar
+                  </h1>
+                  <p className="text-xs text-slate-400 font-medium">Developer Console</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Vertical Navigation Links */}
+            <div className="px-3 py-5 space-y-4">
+              {/* Group 1: কোর মডিউল ও কন্ট্রোল */}
+              <div>
+                <div className="px-3 pb-2 text-[11px] font-mono uppercase tracking-wider text-slate-500 font-semibold">
+                  কোর মডিউল ও কন্ট্রোল
+                </div>
+                <div className="space-y-1">
+                  {DEV_TABS.filter((t) => CORE_TABS.includes(t.key)).map((tab) => {
                     const Icon = tab.icon;
                     const isActive = activeTab === tab.key;
                     return (
                       <button
                         key={tab.key}
                         type="button"
-                        onClick={() => setActiveTab(tab.key)}
-                        className={`flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition-all ${
+                        onClick={() => {
+                          setActiveTab(tab.key);
+                          setMobileSidebarOpen(false);
+                        }}
+                        className={`w-full relative flex items-center gap-3 px-3.5 py-2.5 rounded-xl font-medium text-sm transition-all group ${
                           isActive
-                            ? 'bg-emerald-500/15 text-emerald-400 shadow-sm ring-1 ring-emerald-500/30'
-                            : 'text-slate-400 hover:bg-slate-900 hover:text-slate-200'
+                            ? 'bg-emerald-500/15 text-emerald-300 font-semibold border border-emerald-500/30 shadow-sm'
+                            : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
                         }`}
                       >
-                        <Icon className={`h-4 w-4 ${isActive ? 'text-emerald-400' : 'text-slate-500'}`} />
-                        <span>{tab.labelBn}</span>
-                        <span className="hidden lg:inline text-[10px] text-slate-500 font-mono">
-                          ({tab.labelEn})
-                        </span>
+                        {isActive && (
+                          <span className="absolute left-0 top-1/2 -translate-y-1/2 w-1.5 h-6 bg-emerald-400 rounded-r-full shadow-[0_0_10px_#10b981]" />
+                        )}
+                        <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-emerald-400' : 'text-slate-500 group-hover:text-slate-300'}`} />
+                        <span className="truncate">{tab.labelBn}</span>
+                        {isActive ? (
+                          <span className="ml-auto text-[10px] font-mono bg-emerald-400/20 text-emerald-300 px-1.5 py-0.5 rounded">
+                            Active
+                          </span>
+                        ) : tab.badge ? (
+                          <span className="ml-auto text-[10px] font-mono bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded border border-slate-700/60">
+                            {tab.badge}
+                          </span>
+                        ) : null}
                       </button>
                     );
                   })}
-                </nav>
+                </div>
               </div>
 
-              {/* Right Scroll Button */}
-              {canScrollRight && (
-                <button
-                  type="button"
-                  onClick={() => scrollTabs('right')}
-                  aria-label="ডানে স্ক্রোল করুন"
-                  className="absolute right-0 z-20 flex h-8 w-8 items-center justify-center rounded-lg border border-slate-700/80 bg-slate-900/95 text-slate-300 shadow-md backdrop-blur transition hover:border-emerald-500/50 hover:bg-slate-800 hover:text-white"
-                >
-                  <ChevronRight className="h-4 w-4" />
-                </button>
-              )}
+              {/* Group 2: সিস্টেম ও ইনফ্রাস্ট্রাকচার */}
+              <div>
+                <div className="px-3 pb-2 text-[11px] font-mono uppercase tracking-wider text-slate-500 font-semibold">
+                  সিস্টেম ও ইনফ্রাস্ট্রাকচার
+                </div>
+                <div className="space-y-1">
+                  {DEV_TABS.filter((t) => SYSTEM_TABS.includes(t.key)).map((tab) => {
+                    const Icon = tab.icon;
+                    const isActive = activeTab === tab.key;
+                    return (
+                      <button
+                        key={tab.key}
+                        type="button"
+                        onClick={() => {
+                          setActiveTab(tab.key);
+                          setMobileSidebarOpen(false);
+                        }}
+                        className={`w-full relative flex items-center gap-3 px-3.5 py-2.5 rounded-xl font-medium text-sm transition-all group ${
+                          isActive
+                            ? 'bg-emerald-500/15 text-emerald-300 font-semibold border border-emerald-500/30 shadow-sm'
+                            : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+                        }`}
+                      >
+                        {isActive && (
+                          <span className="absolute left-0 top-1/2 -translate-y-1/2 w-1.5 h-6 bg-emerald-400 rounded-r-full shadow-[0_0_10px_#10b981]" />
+                        )}
+                        <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-emerald-400' : 'text-slate-500 group-hover:text-slate-300'}`} />
+                        <span className="truncate">{tab.labelBn}</span>
+                        {isActive && (
+                          <span className="ml-auto text-[10px] font-mono bg-emerald-400/20 text-emerald-300 px-1.5 py-0.5 rounded">
+                            Active
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
           </div>
-        </div>
-      </header>
 
-      {/* Main Container */}
-      <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
-        {/* TAB 1: FEATURE FLAGS & SYSTEM SWITCHBOARD */}
-        {activeTab === 'switchboard' && (
-          <div className="space-y-6">
-            <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-slate-800 bg-slate-900/60 p-5">
-              <div>
-                <h2 className="text-lg font-bold text-white flex items-center gap-2">
-                  <Sliders className="h-5 w-5 text-emerald-400" />
-                  সিস্টেম ফিচার ফ্ল্যাগ সুইচবোর্ড (Runtime Feature Flags)
-                </h2>
-                <p className="text-xs text-slate-400 mt-1">
-                  এই সুইচগুলোর পরিবর্তন তাৎক্ষণিকভাবে সিস্টেমের ওয়েব ও অ্যাপ্লিকেশনের আচরণ নিয়ন্ত্রণ করে।
-                </p>
+          {/* Sidebar Bottom Footer */}
+          <div className="p-4 border-t border-slate-800/80 bg-[#070a13] shrink-0">
+            <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-3 space-y-2">
+              <div className="flex items-center justify-between text-[11px] font-mono text-slate-400">
+                <span>DEPLOYED REGION:</span>
+                <span className="text-emerald-400 font-bold">asia-south1 (Dhaka)</span>
               </div>
+              <div className="flex items-center justify-between text-[11px] font-mono text-slate-400">
+                <span>SAVAR WARDS:</span>
+                <span className="text-slate-200">১-৯ সক্রিয় ওয়ার্ড</span>
+              </div>
+              <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                  <span className="text-xs text-slate-300 font-medium font-mono truncate max-w-[130px]">
+                    {currentUser?.email || 'dev-root@internal'}
+                  </span>
+                </div>
+                <span className="text-[10px] font-mono bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded">
+                  HMAC-256
+                </span>
+              </div>
+            </div>
+          </div>
+        </aside>
+
+        {/* MAIN CONTENT AREA */}
+        <div className="flex-1 flex flex-col min-w-0 bg-[#070a13]">
+          {/* TOP HEADER */}
+          <header className="h-16 border-b border-slate-800/90 bg-[#090e1a]/95 backdrop-blur px-4 sm:px-6 flex items-center justify-between gap-4 shrink-0 sticky top-0 z-30">
+            {/* Left: Mobile Toggle & Google Cloud Session Badge */}
+            <div className="flex items-center gap-3">
               <button
                 type="button"
-                onClick={handleResetAll}
-                className="flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-1.5 text-xs font-semibold text-slate-300 hover:bg-slate-700 hover:text-white"
+                onClick={() => setMobileSidebarOpen(!mobileSidebarOpen)}
+                className="lg:hidden flex h-9 w-9 items-center justify-center rounded-lg border border-slate-700 bg-slate-900 text-slate-300 hover:text-white"
+                aria-label="টগল মেনু"
               >
-                <RefreshCw className="h-3.5 w-3.5" />
-                <span>সব ফ্ল্যাগ ডিফল্ট করুন</span>
+                {mobileSidebarOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+              </button>
+
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-slate-700/80 bg-slate-900/90 shadow-sm text-xs font-medium text-slate-200">
+                <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
+                  <path fill="#4285F4" d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM19 18H6c-2.21 0-4-1.79-4-4 0-2.05 1.53-3.76 3.56-3.97l1.07-.11.5-.95C8.08 7.14 9.94 6 12 6c2.62 0 4.88 1.86 5.39 4.43l.3 1.5 1.53.11c1.56.1 2.78 1.41 2.78 2.96 0 1.65-1.35 3-3 3z"/>
+                </svg>
+                <span className="hidden sm:inline">Google Cloud সেশন সক্রিয়:</span>
+                <span className="font-mono text-emerald-400 font-semibold truncate max-w-[180px] sm:max-w-none">
+                  {currentUser?.email || 'Verified Developer'}
+                </span>
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+              </div>
+            </div>
+
+            {/* Center-Right: System Telemetry Status Chips & Quick Actions */}
+            <div className="flex items-center gap-2.5">
+              <div className="flex items-center gap-2 rounded-lg border border-slate-800 bg-[#0e1526] px-3 py-1.5 text-xs font-mono text-slate-300 shadow-sm">
+                <span className="relative flex h-2 w-2">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                  <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+                </span>
+                <span className="hidden sm:inline">API:</span>
+                <button
+                  type="button"
+                  onClick={pingBackend}
+                  disabled={isPinging}
+                  className="font-semibold text-emerald-400 hover:underline"
+                >
+                  {isPinging ? '...' : apiPingMs ? `${apiPingMs}ms` : 'Check'}
+                </button>
+              </div>
+
+              <div className="hidden sm:flex items-center gap-2 rounded-lg border border-slate-800 bg-[#0e1526] px-3 py-1.5 text-xs font-mono text-slate-300">
+                <Database className="h-3.5 w-3.5 text-sky-400" />
+                <span>DB:</span>
+                <span className="font-semibold text-sky-400">Supabase PostGIS</span>
+              </div>
+
+              <div className="hidden md:flex items-center gap-2 rounded-lg border border-slate-800 bg-[#0e1526] px-3 py-1.5 text-xs font-mono text-slate-300">
+                <Flame className="h-3.5 w-3.5 text-amber-400" />
+                <span>Auth:</span>
+                <span className="font-semibold text-amber-400">Firebase + HMAC</span>
+              </div>
+
+              <Link
+                href="/admin"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs font-semibold text-slate-200 transition hover:bg-slate-800 hover:text-white"
+              >
+                <span className="hidden sm:inline">পৌর অ্যাডমিন ভিউ</span>
+                <ArrowRight className="h-3.5 w-3.5" />
+              </Link>
+
+              <button
+                type="button"
+                onClick={handleLockConsole}
+                title="লক কনসোল"
+                className="hidden sm:flex items-center gap-1.5 rounded-lg border border-rose-500/30 bg-rose-500/10 px-2.5 py-1.5 text-xs font-semibold text-rose-300 transition hover:bg-rose-500/20"
+              >
+                <Lock className="h-3.5 w-3.5" />
+                <span>লক</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleSignOut}
+                title="লগআউট / পরিবর্তন"
+                className="flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-900 px-2.5 py-1.5 text-xs font-semibold text-slate-300 hover:border-rose-500/50 hover:bg-rose-950/30 hover:text-rose-300 transition"
+              >
+                <LogOut className="h-3.5 w-3.5" />
+                <span className="hidden md:inline">লগআউট / পরিবর্তন</span>
               </button>
             </div>
+          </header>
 
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {/* Flag: OTP Paused & Google Login Active */}
-              <div className="rounded-xl border border-amber-500/40 bg-amber-950/20 p-5 transition hover:border-amber-500/60 sm:col-span-2 lg:col-span-3">
-                <div className="flex flex-wrap items-start justify-between gap-4">
-                  <div>
-                    <span className="text-xs font-mono uppercase tracking-wider text-amber-400 font-bold">
-                      FLAG: OTP_VERIFICATION_PAUSED (যান্ত্রিক ত্রুটির কারণে OTP স্থগিত)
-                    </span>
-                    <h3 className="mt-1 text-base font-bold text-white flex items-center gap-2">
-                      <span>SMS OTP যাচাইকরণ স্থগিত &amp; নাম + মোবাইল + Google সাইন-ইন সক্রিয়</span>
-                    </h3>
-                    <p className="mt-1 text-xs text-slate-300 max-w-3xl leading-relaxed">
-                      টেলিকম এসএমএস গেটওয়ে যান্ত্রিক সমস্যার কারণে পাবলিক OTP চ্যালেঞ্জ সাময়িক স্থগিত রয়েছে।
-                      ব্যবহারকারীরা নাম এবং ১১ সংখ্যার মোবাইল নম্বর প্রদান করে Google সাইন-ইনের মাধ্যমে লগইন করতে পারবেন।
-                    </p>
+          {/* MAIN SCROLLABLE DASHBOARD */}
+          <main className="flex-1 p-4 sm:p-6 lg:p-8 space-y-6 overflow-y-auto">
+            {/* TAB 1: FEATURE FLAGS & SYSTEM SWITCHBOARD */}
+            {activeTab === 'switchboard' && (
+              <div className="space-y-6">
+                {/* Title & Control Bar Row */}
+                <div className="rounded-2xl border border-slate-800/90 bg-[#0d1424] p-5 sm:p-6 shadow-xl flex flex-wrap items-center justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+                      <Sliders className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h2 className="text-xl font-bold text-white tracking-tight flex items-center gap-2">
+                        সিস্টেম ফিচার ফ্ল্যাগ সুইচবোর্ড (Runtime Feature Flags)
+                      </h2>
+                      <p className="text-xs text-slate-400 mt-0.5">
+                        এই সুইচগুলোর পরিবর্তন তাৎক্ষণিকভাবে সিস্টেমের ওয়েব ও অ্যাপ্লিকেশনের আচরণ নিয়ন্ত্রণ করে।
+                      </p>
+                    </div>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => handleToggleFlag('otpPaused')}
-                    className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                      flags.otpPaused ? 'bg-amber-500' : 'bg-slate-700'
-                    }`}
-                  >
-                    <span
-                      className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition duration-200 ease-in-out ${
-                        flags.otpPaused ? 'translate-x-5' : 'translate-x-0'
-                      }`}
-                    />
-                  </button>
+
+                  {/* Search, Filter & Default Button */}
+                  <div className="flex items-center gap-3 flex-wrap">
+                    {/* Search Bar */}
+                    <div className="relative w-48 sm:w-60">
+                      <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="text"
+                        value={flagSearchQuery}
+                        onChange={(e) => setFlagSearchQuery(e.target.value)}
+                        placeholder="ফ্ল্যাগ খুঁজুন..."
+                        className="w-full bg-[#080d19] border border-slate-700/80 rounded-xl pl-9 pr-3 py-2 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-emerald-500/60"
+                      />
+                      {flagSearchQuery && (
+                        <button
+                          type="button"
+                          onClick={() => setFlagSearchQuery('')}
+                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Filter Selector */}
+                    <div className="flex items-center gap-1 bg-[#080d19] border border-slate-700/80 rounded-xl p-1 text-xs">
+                      <button
+                        type="button"
+                        onClick={() => setFlagFilterStatus('all')}
+                        className={`px-2.5 py-1 rounded-lg font-semibold transition ${
+                          flagFilterStatus === 'all'
+                            ? 'bg-emerald-500/20 text-emerald-300'
+                            : 'text-slate-400 hover:text-slate-200'
+                        }`}
+                      >
+                        সব ({GRID_FLAGS.length + 1})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setFlagFilterStatus('active')}
+                        className={`px-2.5 py-1 rounded-lg font-semibold transition ${
+                          flagFilterStatus === 'active'
+                            ? 'bg-emerald-500/20 text-emerald-300'
+                            : 'text-slate-400 hover:text-slate-200'
+                        }`}
+                      >
+                        সক্রিয় ({GRID_FLAGS.filter((f) => f.active).length + (flags.otpPaused ? 1 : 0)})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setFlagFilterStatus('paused')}
+                        className={`px-2.5 py-1 rounded-lg font-semibold transition ${
+                          flagFilterStatus === 'paused'
+                            ? 'bg-emerald-500/20 text-emerald-300'
+                            : 'text-slate-400 hover:text-slate-200'
+                        }`}
+                      >
+                        স্থগিত ({GRID_FLAGS.filter((f) => !f.active).length + (flags.otpPaused ? 0 : 1)})
+                      </button>
+                    </div>
+
+                    {/* Reset to Defaults Button */}
+                    <button
+                      type="button"
+                      onClick={handleResetAll}
+                      className="flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-800/90 hover:bg-slate-700 px-3.5 py-2 text-xs font-semibold text-slate-200 shadow-sm transition"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5 text-slate-300" />
+                      <span>সব ফ্ল্যাগ ডিফল্ট করুন</span>
+                    </button>
+                  </div>
                 </div>
-                <div className="mt-3 flex items-center gap-2 text-[11px] font-mono">
-                  <span
-                    className={`inline-flex rounded px-2 py-0.5 font-bold ${
-                      flags.otpPaused
-                        ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
-                        : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
-                    }`}
-                  >
-                    STATUS: {flags.otpPaused ? 'PAUSED (স্থগিত - Google Sign-in Enforced)' : 'NORMAL (স্বাভাবিক OTP সক্রিয়)'}
-                  </span>
+
+                {/* MAIN WARN BANNER: OTP_VERIFICATION_PAUSED */}
+                {(flagFilterStatus !== 'paused' || !flags.otpPaused) && (
+                  <div className="rounded-2xl border-2 border-amber-500/60 bg-gradient-to-r from-amber-950/40 via-amber-950/20 to-slate-900/60 p-6 shadow-2xl relative overflow-hidden">
+                    <div className="absolute -right-16 -top-16 w-64 h-64 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
+
+                    <div className="flex items-start justify-between gap-6 relative z-10">
+                      <div className="flex items-start gap-4">
+                        <div className="w-12 h-12 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 shrink-0 shadow-lg">
+                          <AlertTriangle className="w-6 h-6" />
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <div className="flex items-center gap-3 flex-wrap">
+                            <span className="text-xs font-mono uppercase font-bold tracking-wider text-amber-400">
+                              FLAG: OTP_VERIFICATION_PAUSED (যান্ত্রিক ত্রুটির কারণে OTP স্থগিত)
+                            </span>
+                            <span className="inline-flex items-center gap-1.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2 py-0.5 text-[11px] font-mono font-bold">
+                              <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+                              STATUS: {flags.otpPaused ? 'PAUSED (স্থগিত - Google Sign-in Enforced)' : 'NORMAL (স্বাভাবিক OTP সক্রিয়)'}
+                            </span>
+                          </div>
+
+                          <h3 className="text-base font-bold text-white flex items-center gap-2">
+                            SMS OTP যাচাইকরণ স্থগিত &amp; নাম + মোবাইল + Google সাইন-ইন সক্রিয়
+                          </h3>
+
+                          <p className="text-xs text-slate-300 leading-relaxed max-w-4xl">
+                            টেলিকম এসএমএস গেটওয়ে যান্ত্রিক সমস্যার কারণে পাবলিক OTP চ্যালেঞ্জ সাময়িক স্থগিত রয়েছে।
+                            ব্যবহারকারীরা নাম এবং ১১ সংখ্যার মোবাইল নম্বর প্রদান করে Google সাইন-ইনের মাধ্যমে লগইন করতে পারবেন।
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-col items-end gap-2 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => handleToggleFlag('otpPaused')}
+                          className={`relative inline-flex h-8 w-14 shrink-0 cursor-pointer rounded-full p-1 transition-colors duration-200 ease-in-out focus:outline-none ${
+                            flags.otpPaused
+                              ? 'bg-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.5)]'
+                              : 'bg-slate-700'
+                          }`}
+                        >
+                          <span
+                            className={`inline-block h-6 w-6 transform rounded-full bg-white shadow-md transition duration-200 ease-in-out ${
+                              flags.otpPaused ? 'translate-x-6' : 'translate-x-0'
+                            }`}
+                          />
+                        </button>
+                        <span className="text-[11px] font-mono font-semibold text-amber-400">
+                          {flags.otpPaused ? 'ACTIVE OVERRIDE' : 'NORMAL MODE'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* 3-COLUMN GRID: OTHER FEATURE FLAGS */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                  {filteredGridFlags.map((card) => (
+                    <div
+                      key={card.key}
+                      className="rounded-2xl border border-slate-800 bg-[#0d1424] hover:border-slate-700/80 p-5 shadow-lg transition-all flex flex-col justify-between"
+                    >
+                      <div>
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <span className="text-[11px] font-mono uppercase font-bold tracking-wider text-slate-400">
+                              {card.flagName}
+                            </span>
+                            <h3 className="text-sm font-bold text-white mt-1">
+                              {card.title}
+                            </h3>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => handleToggleFlag(card.key)}
+                            className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                              card.active ? card.activeColor : 'bg-slate-700'
+                            }`}
+                          >
+                            <span
+                              className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition duration-200 ease-in-out ${
+                                card.active ? 'translate-x-5' : 'translate-x-0'
+                              }`}
+                            />
+                          </button>
+                        </div>
+                        <p className="mt-2 text-xs text-slate-400 leading-relaxed">
+                          {card.desc}
+                        </p>
+                      </div>
+
+                      <div className="mt-4 flex items-center gap-2 text-[11px] font-mono">
+                        <span className={`inline-flex rounded px-1.5 py-0.5 font-bold ${card.badgeColor}`}>
+                          {card.statusText}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+
+                  {filteredGridFlags.length === 0 && (
+                    <div className="col-span-full rounded-2xl border border-slate-800 bg-[#0d1424] p-8 text-center">
+                      <p className="text-slate-400 text-sm">কোনো ফিচার ফ্ল্যাগ পাওয়া যায়নি।</p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setFlagSearchQuery('');
+                          setFlagFilterStatus('all');
+                        }}
+                        className="mt-3 text-xs text-emerald-400 hover:underline"
+                      >
+                        সার্চ ও ফিল্টার রিসেট করুন
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
-
-              {/* Flag: Offline Demo Mode */}
-              <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-5 transition hover:border-slate-700">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <span className="text-xs font-mono uppercase tracking-wider text-slate-500">
-                      FLAG: ENABLE_DEMO_MODE
-                    </span>
-                    <h3 className="mt-1 text-sm font-bold text-white">অফলাইন ডেমো প্রিভিউ</h3>
-                    <p className="mt-1 text-xs text-slate-400">
-                      লগইন স্ক্রিনে &apos;নাগরিক ডেমো&apos; ও &apos;কর্মী ডেমো&apos; বাটন দৃশ্যমান রাখবে যাতে সার্ভারহীন টেস্ট করা যায়।
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => handleToggleFlag('enableDemoMode')}
-                    className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                      flags.enableDemoMode ? 'bg-emerald-500' : 'bg-slate-700'
-                    }`}
-                  >
-                    <span
-                      className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition duration-200 ease-in-out ${
-                        flags.enableDemoMode ? 'translate-x-5' : 'translate-x-0'
-                      }`}
-                    />
-                  </button>
-                </div>
-                <div className="mt-4 flex items-center gap-2 text-[11px] font-mono">
-                  <span
-                    className={`inline-flex rounded px-1.5 py-0.5 font-bold ${
-                      flags.enableDemoMode
-                        ? 'bg-emerald-500/20 text-emerald-300'
-                        : 'bg-slate-800 text-slate-400'
-                    }`}
-                  >
-                    STATUS: {flags.enableDemoMode ? 'ENABLED (সক্রিয়)' : 'DISABLED (বন্ধ)'}
-                  </span>
-                </div>
-              </div>
-
-              {/* Flag: Strict OTP Mode */}
-              <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-5 transition hover:border-slate-700">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <span className="text-xs font-mono uppercase tracking-wider text-slate-500">
-                      FLAG: STRICT_OTP_ENFORCEMENT
-                    </span>
-                    <h3 className="mt-1 text-sm font-bold text-white">কঠোর লাইভ OTP যাচাই</h3>
-                    <p className="mt-1 text-xs text-slate-400">
-                      অন থাকলে কোনো টেস্ট বাইপাস অনুমোদন করবে না। শুধুমাত্র প্রকৃত এসএমএস ভেরিফিকেশন ছাড়া লগইন হবে না।
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => handleToggleFlag('strictOtp')}
-                    className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                      flags.strictOtp ? 'bg-emerald-500' : 'bg-slate-700'
-                    }`}
-                  >
-                    <span
-                      className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition duration-200 ease-in-out ${
-                        flags.strictOtp ? 'translate-x-5' : 'translate-x-0'
-                      }`}
-                    />
-                  </button>
-                </div>
-                <div className="mt-4 flex items-center gap-2 text-[11px] font-mono">
-                  <span
-                    className={`inline-flex rounded px-1.5 py-0.5 font-bold ${
-                      flags.strictOtp
-                        ? 'bg-amber-500/20 text-amber-300'
-                        : 'bg-slate-800 text-slate-400'
-                    }`}
-                  >
-                    STATUS: {flags.strictOtp ? 'STRICT MODE' : 'PERMISSIVE / DEV BYPASS'}
-                  </span>
-                </div>
-              </div>
-
-              {/* Flag: Maintenance Mode */}
-              <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-5 transition hover:border-slate-700">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <span className="text-xs font-mono uppercase tracking-wider text-slate-500">
-                      FLAG: MAINTENANCE_MODE
-                    </span>
-                    <h3 className="mt-1 text-sm font-bold text-white">সিস্টেম রক্ষণাবেক্ষণ মোড</h3>
-                    <p className="mt-1 text-xs text-slate-400">
-                      সাধারণ ব্যবহারকারীদের জন্য রক্ষণাবেক্ষণ নোটিশ দেখাবে এবং নতুন রিকোয়েস্ট সাময়িক স্থগিত রাখবে।
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => handleToggleFlag('maintenanceMode')}
-                    className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                      flags.maintenanceMode ? 'bg-rose-500' : 'bg-slate-700'
-                    }`}
-                  >
-                    <span
-                      className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition duration-200 ease-in-out ${
-                        flags.maintenanceMode ? 'translate-x-5' : 'translate-x-0'
-                      }`}
-                    />
-                  </button>
-                </div>
-                <div className="mt-4 flex items-center gap-2 text-[11px] font-mono">
-                  <span
-                    className={`inline-flex rounded px-1.5 py-0.5 font-bold ${
-                      flags.maintenanceMode
-                        ? 'bg-rose-500/20 text-rose-300'
-                        : 'bg-emerald-500/20 text-emerald-300'
-                    }`}
-                  >
-                    STATUS: {flags.maintenanceMode ? 'ACTIVE (সার্ভার লকড)' : 'NORMAL OPERATIONAL'}
-                  </span>
-                </div>
-              </div>
-
-              {/* Flag: Emergency Alert Broadcast */}
-              <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-5 transition hover:border-slate-700">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <span className="text-xs font-mono uppercase tracking-wider text-slate-500">
-                      FLAG: EMERGENCY_BROADCAST
-                    </span>
-                    <h3 className="mt-1 text-sm font-bold text-white">জরুরি ব্রডকাস্ট ব্যানার</h3>
-                    <p className="mt-1 text-xs text-slate-400">
-                      ভারী বৃষ্টি, জলাবদ্ধতা বা বিশেষ পরিচ্ছন্নতা সতর্কবার্তা সকল পেজে লাল ব্যানারে ফ্ল্যাশ করবে।
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => handleToggleFlag('emergencyAlertActive')}
-                    className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                      flags.emergencyAlertActive ? 'bg-amber-500' : 'bg-slate-700'
-                    }`}
-                  >
-                    <span
-                      className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition duration-200 ease-in-out ${
-                        flags.emergencyAlertActive ? 'translate-x-5' : 'translate-x-0'
-                      }`}
-                    />
-                  </button>
-                </div>
-                <div className="mt-4 flex items-center gap-2 text-[11px] font-mono">
-                  <span
-                    className={`inline-flex rounded px-1.5 py-0.5 font-bold ${
-                      flags.emergencyAlertActive
-                        ? 'bg-amber-500/20 text-amber-300'
-                        : 'bg-slate-800 text-slate-400'
-                    }`}
-                  >
-                    STATUS: {flags.emergencyAlertActive ? 'BROADCASTING' : 'OFF AIR'}
-                  </span>
-                </div>
-              </div>
-
-              {/* Flag: Require Photo on Report */}
-              <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-5 transition hover:border-slate-700">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <span className="text-xs font-mono uppercase tracking-wider text-slate-500">
-                      FLAG: REQUIRE_DUMP_PHOTO
-                    </span>
-                    <h3 className="mt-1 text-sm font-bold text-white">অভিযোগে ছবি বাধ্যতামূলক</h3>
-                    <p className="mt-1 text-xs text-slate-400">
-                      নাগরিক যখন ময়লার স্তূপ রিপোর্ট করবে তখন ছবি তোলা বাধ্যতামূলক রাখা হবে নাকি ঐচ্ছিক।
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => handleToggleFlag('requireDumpPhoto')}
-                    className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                      flags.requireDumpPhoto ? 'bg-emerald-500' : 'bg-slate-700'
-                    }`}
-                  >
-                    <span
-                      className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition duration-200 ease-in-out ${
-                        flags.requireDumpPhoto ? 'translate-x-5' : 'translate-x-0'
-                      }`}
-                    />
-                  </button>
-                </div>
-                <div className="mt-4 flex items-center gap-2 text-[11px] font-mono">
-                  <span
-                    className={`inline-flex rounded px-1.5 py-0.5 font-bold ${
-                      flags.requireDumpPhoto
-                        ? 'bg-emerald-500/20 text-emerald-300'
-                        : 'bg-slate-800 text-slate-400'
-                    }`}
-                  >
-                    STATUS: {flags.requireDumpPhoto ? 'PHOTO REQUIRED' : 'PHOTO OPTIONAL'}
-                  </span>
-                </div>
-              </div>
-
-              {/* Flag: Auto Dispatch Nearest */}
-              <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-5 transition hover:border-slate-700">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <span className="text-xs font-mono uppercase tracking-wider text-slate-500">
-                      FLAG: AUTO_DISPATCH_NEAREST
-                    </span>
-                    <h3 className="mt-1 text-sm font-bold text-white">অটো-ডিসপ্যাচ অ্যালগরিদম</h3>
-                    <p className="mt-1 text-xs text-slate-400">
-                      নতুন অভিযোগ বা পিকআপ কিউ আসলে PostGIS জিও-ডিস্টেন্স দিয়ে নিকটবর্তী খালি গাড়িকে স্বয়ংক্রিয় অ্যাসাইন করা।
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => handleToggleFlag('autoDispatchNearest')}
-                    className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                      flags.autoDispatchNearest ? 'bg-emerald-500' : 'bg-slate-700'
-                    }`}
-                  >
-                    <span
-                      className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition duration-200 ease-in-out ${
-                        flags.autoDispatchNearest ? 'translate-x-5' : 'translate-x-0'
-                      }`}
-                    />
-                  </button>
-                </div>
-                <div className="mt-4 flex items-center gap-2 text-[11px] font-mono">
-                  <span
-                    className={`inline-flex rounded px-1.5 py-0.5 font-bold ${
-                      flags.autoDispatchNearest
-                        ? 'bg-emerald-500/20 text-emerald-300'
-                        : 'bg-slate-800 text-slate-400'
-                    }`}
-                  >
-                    STATUS: {flags.autoDispatchNearest ? 'AUTOMATIC (AI/GIS)' : 'MANUAL DISPATCH'}
-                  </span>
-                </div>
-              </div>
-
-              {/* Flag: Traffic Tracking */}
-              <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-5 transition hover:border-slate-700">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <span className="text-xs font-mono uppercase tracking-wider text-emerald-400 font-bold">
-                      FLAG: REALTIME_TRAFFIC_TRACKING
-                    </span>
-                    <h3 className="mt-1 text-sm font-bold text-white">রিয়েল-টাইম ট্রাফিক ও ভিজিটর ট্র্যাকিং</h3>
-                    <p className="mt-1 text-xs text-slate-400">
-                      ওয়েবসাইট ও পোর্টালের সকল পেজে ভিজিটরের আইপি, ভৌগোলিক অবস্থান ও ডিভাইস অডিট সক্রিয় রাখা।
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => handleToggleFlag('enableTrafficTracking')}
-                    className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                      flags.enableTrafficTracking ? 'bg-emerald-500' : 'bg-slate-700'
-                    }`}
-                  >
-                    <span
-                      className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition duration-200 ease-in-out ${
-                        flags.enableTrafficTracking ? 'translate-x-5' : 'translate-x-0'
-                      }`}
-                    />
-                  </button>
-                </div>
-                <div className="mt-4 flex items-center gap-2 text-[11px] font-mono">
-                  <span
-                    className={`inline-flex rounded px-1.5 py-0.5 font-bold ${
-                      flags.enableTrafficTracking
-                        ? 'bg-emerald-500/20 text-emerald-300'
-                        : 'bg-slate-800 text-slate-400'
-                    }`}
-                  >
-                    STATUS: {flags.enableTrafficTracking ? 'ACTIVE (MONITORING)' : 'PAUSED'}
-                  </span>
-                </div>
-              </div>
-
-              {/* Flag: Download Tracking */}
-              <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-5 transition hover:border-slate-700">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <span className="text-xs font-mono uppercase tracking-wider text-emerald-400 font-bold">
-                      FLAG: REALTIME_DOWNLOAD_TRACKING
-                    </span>
-                    <h3 className="mt-1 text-sm font-bold text-white">ডাউনলোড ট্র্যাকিং ও অডিট ইঞ্জিন</h3>
-                    <p className="mt-1 text-xs text-slate-400">
-                      কারা কারা কতবার এবং কোন লোকেশন থেকে APK ও রিপোর্ট ফাইল ডাউনলোড করছে তার রিয়েল-টাইম কাউন্টার।
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => handleToggleFlag('enableDownloadTracking')}
-                    className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                      flags.enableDownloadTracking ? 'bg-emerald-500' : 'bg-slate-700'
-                    }`}
-                  >
-                    <span
-                      className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition duration-200 ease-in-out ${
-                        flags.enableDownloadTracking ? 'translate-x-5' : 'translate-x-0'
-                      }`}
-                    />
-                  </button>
-                </div>
-                <div className="mt-4 flex items-center gap-2 text-[11px] font-mono">
-                  <span
-                    className={`inline-flex rounded px-1.5 py-0.5 font-bold ${
-                      flags.enableDownloadTracking
-                        ? 'bg-emerald-500/20 text-emerald-300'
-                        : 'bg-slate-800 text-slate-400'
-                    }`}
-                  >
-                    STATUS: {flags.enableDownloadTracking ? 'COUNTING ACTIVE' : 'PAUSED'}
-                  </span>
-                </div>
-              </div>
-
-              {/* Flag: Allow Guest Downloads */}
-              <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-5 transition hover:border-slate-700">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <span className="text-xs font-mono uppercase tracking-wider text-sky-400 font-bold">
-                      FLAG: ALLOW_GUEST_DOWNLOADS
-                    </span>
-                    <h3 className="mt-1 text-sm font-bold text-white">গেস্ট ভিজিটরদের APK ডাউনলোড অনুমোদন</h3>
-                    <p className="mt-1 text-xs text-slate-400">
-                      লগইন না করা সাধারণ নাগরিকদেরও অফিসিয়াল মোবাইল অ্যাপ নামানোর অনুমতি দেওয়া হবে।
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => handleToggleFlag('allowGuestDownloads')}
-                    className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                      flags.allowGuestDownloads ? 'bg-sky-500' : 'bg-slate-700'
-                    }`}
-                  >
-                    <span
-                      className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition duration-200 ease-in-out ${
-                        flags.allowGuestDownloads ? 'translate-x-5' : 'translate-x-0'
-                      }`}
-                    />
-                  </button>
-                </div>
-                <div className="mt-4 flex items-center gap-2 text-[11px] font-mono">
-                  <span
-                    className={`inline-flex rounded px-1.5 py-0.5 font-bold ${
-                      flags.allowGuestDownloads
-                        ? 'bg-sky-500/20 text-sky-300'
-                        : 'bg-slate-800 text-slate-400'
-                    }`}
-                  >
-                    STATUS: {flags.allowGuestDownloads ? 'OPEN TO PUBLIC' : 'REQUIRE AUTH'}
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
+            )}
 
         {/* TAB: CITIZEN REQUESTS & RESPONSES LIVE STREAM */}
         {activeTab === 'citizen_requests' && (
@@ -2140,6 +2168,8 @@ function DevAdminConsoleContent() {
           </div>
         )}
       </main>
+        </div>
+      </div>
     </div>
   );
 }

@@ -203,8 +203,10 @@ class CitizenStateNotifier extends Notifier<CitizenState> {
         isAuthenticated: true,
         authenticatedRole: role,
       );
-      if (role == 'collector') {
+      if (role == 'collector' || role == 'cleaner') {
         ref.read(appRoleProvider.notifier).setRole(AppRole.collector);
+      } else {
+        ref.read(appRoleProvider.notifier).setRole(AppRole.citizen);
       }
     }
 
@@ -308,7 +310,7 @@ class CitizenStateNotifier extends Notifier<CitizenState> {
     final effectiveWardId = wardId ?? state.selectedWard.id;
 
     // Backend `/auth/otp-login` expects `citizen` (or empty) and resolves
-    // collector/admin roles authoritatively from DB during `/auth/otp-verify`.
+    // collector/citizen roles authoritatively from DB during `/auth/otp-verify`.
     final challenge = await _api.requestOtp(
       phone: targetPhone,
       role: 'citizen',
@@ -335,12 +337,18 @@ class CitizenStateNotifier extends Notifier<CitizenState> {
 
     if (expectedRole == AppRole.collector &&
         auth.role != 'collector' &&
-        auth.role != 'admin') {
+        auth.role != 'cleaner') {
       await _api.logout();
       await _store.writeJsonMap(OfflineSyncStore.authSessionKey, {});
-      throw const core.CleanSavarApiException(
+      final isStaffOrAdmin = auth.role == 'admin' ||
+          auth.role == 'pouro_admin' ||
+          auth.role == 'developer' ||
+          auth.role == 'partner';
+      throw core.CleanSavarApiException(
         403,
-        'এই নম্বরটি পৌরসভার নিবন্ধিত পরিচ্ছন্নতাকর্মী হিসেবে যুক্ত নয়। অনুগ্রহ করে নাগরিক লগইন ব্যবহার করুন অথবা অনুমোদিত কর্মী নম্বর দিন।',
+        isStaffOrAdmin
+            ? 'এই নম্বরটি পৌরসভার নিবন্ধিত পরিচ্ছন্নতাকর্মী হিসেবে যুক্ত নয়। পৌর অ্যাডমিন ও ব্যবস্থাপনার জন্য দয়া করে ক্লিন সাভার ওয়েব পোর্টাল ব্যবহার করুন।'
+            : 'এই নম্বরটি পৌরসভার নিবন্ধিত পরিচ্ছন্নতাকর্মী হিসেবে যুক্ত নয়। অনুগ্রহ করে নাগরিক লগইন ব্যবহার করুন অথবা অনুমোদিত কর্মী নম্বর দিন।',
       );
     }
 
@@ -361,14 +369,13 @@ class CitizenStateNotifier extends Notifier<CitizenState> {
       authenticatedRole: auth.role,
       clearOtpPreview: true,
     );
-    if (expectedRole == AppRole.collector || auth.role == 'collector') {
+    if (expectedRole == AppRole.collector ||
+        auth.role == 'collector' ||
+        auth.role == 'cleaner') {
       ref.read(appRoleProvider.notifier).setRole(AppRole.collector);
       unawaited(ref.read(collectorStateProvider.notifier).refreshFromServer());
     } else {
       ref.read(appRoleProvider.notifier).setRole(AppRole.citizen);
-      if (auth.role == 'admin') {
-        unawaited(ref.read(collectorStateProvider.notifier).refreshFromServer());
-      }
     }
     await _persist();
     await refreshFromServer();
@@ -396,12 +403,18 @@ class CitizenStateNotifier extends Notifier<CitizenState> {
 
     if (expectedRole == AppRole.collector &&
         auth.role != 'collector' &&
-        auth.role != 'admin') {
+        auth.role != 'cleaner') {
       await _api.logout();
       await _store.writeJsonMap(OfflineSyncStore.authSessionKey, {});
-      throw const core.CleanSavarApiException(
+      final isStaffOrAdmin = auth.role == 'admin' ||
+          auth.role == 'pouro_admin' ||
+          auth.role == 'developer' ||
+          auth.role == 'partner';
+      throw core.CleanSavarApiException(
         403,
-        'এই নম্বরটি পৌরসভার নিবন্ধিত পরিচ্ছন্নতাকর্মী হিসেবে যুক্ত নয়। অনুগ্রহ করে নাগরিক লগইন ব্যবহার করুন অথবা অনুমোদিত কর্মী নম্বর দিন।',
+        isStaffOrAdmin
+            ? 'এই নম্বরটি পৌরসভার নিবন্ধিত পরিচ্ছন্নতাকর্মী হিসেবে যুক্ত নয়। পৌর অ্যাডমিন ও ব্যবস্থাপনার জন্য দয়া করে ক্লিন সাভার ওয়েব পোর্টাল ব্যবহার করুন।'
+            : 'এই নম্বরটি পৌরসভার নিবন্ধিত পরিচ্ছন্নতাকর্মী হিসেবে যুক্ত নয়। অনুগ্রহ করে নাগরিক লগইন ব্যবহার করুন অথবা অনুমোদিত কর্মী নম্বর দিন।',
       );
     }
 
@@ -423,14 +436,13 @@ class CitizenStateNotifier extends Notifier<CitizenState> {
       authenticatedRole: auth.role,
       clearOtpPreview: true,
     );
-    if (expectedRole == AppRole.collector || auth.role == 'collector') {
+    if (expectedRole == AppRole.collector ||
+        auth.role == 'collector' ||
+        auth.role == 'cleaner') {
       ref.read(appRoleProvider.notifier).setRole(AppRole.collector);
       unawaited(ref.read(collectorStateProvider.notifier).refreshFromServer());
     } else {
       ref.read(appRoleProvider.notifier).setRole(AppRole.citizen);
-      if (auth.role == 'admin') {
-        unawaited(ref.read(collectorStateProvider.notifier).refreshFromServer());
-      }
     }
     await _persist();
     unawaited(refreshFromServer());

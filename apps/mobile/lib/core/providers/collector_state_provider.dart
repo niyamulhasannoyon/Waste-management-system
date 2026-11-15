@@ -200,7 +200,7 @@ class CollectorStateNotifier extends Notifier<CollectorState> {
           }
         }
       } catch (_) {
-        // Vehicles endpoint is restricted to collector/admin; ignore for citizen debug sessions.
+        // Vehicles endpoint is restricted to collector; ignore for citizen debug sessions.
       }
 
       final pickups = await _api.fetchPickups();

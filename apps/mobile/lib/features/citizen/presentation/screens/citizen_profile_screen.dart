@@ -230,10 +230,7 @@ class CitizenProfileScreen extends ConsumerWidget {
           isDemoPreview: citizen.isDemoPreview,
           otpPreview: citizen.otpPreview,
         ),
-        if (citizen.isDemoPreview ||
-            kDebugMode ||
-            citizen.authenticatedRole == 'collector' ||
-            citizen.authenticatedRole == 'admin') ...[
+        if (citizen.isDemoPreview) ...[
           const SizedBox(height: 12),
           FlatCard(
             onTap: () => ref

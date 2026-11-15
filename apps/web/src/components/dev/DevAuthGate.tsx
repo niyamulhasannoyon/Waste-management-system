@@ -19,9 +19,23 @@ import {
 } from '@/lib/dev-store';
 import { signInWithGoogleCloud } from '@/lib/google-cloud-client';
 
-interface DevUserSession {
+export interface DevUserSession {
   email: string;
   name?: string;
+}
+
+export interface DevAuthContextType {
+  currentUser: DevUserSession | null;
+  handleSignOut: () => void;
+}
+
+export const DevAuthContext = React.createContext<DevAuthContextType>({
+  currentUser: null,
+  handleSignOut: () => {},
+});
+
+export function useDevAuthSession() {
+  return React.useContext(DevAuthContext);
 }
 
 const DEV_USER_STORAGE_KEY = 'cs_dev_user_gcp_session';
@@ -146,28 +160,9 @@ export function DevAuthGate({ children }: DevAuthGateProps) {
 
   if (isAuthorized) {
     return (
-      <div>
-        {/* Developer Active Session Top Bar */}
-        <div className="sticky top-0 z-40 flex flex-wrap items-center justify-between gap-3 border-b border-emerald-900/60 bg-slate-950/95 px-4 py-2.5 text-xs text-slate-200 backdrop-blur">
-          <div className="flex items-center gap-2">
-            <span className="flex h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse" />
-            <span className="font-semibold text-emerald-400">Google Cloud সেশন সক্রিয়:</span>
-            <span className="font-mono text-slate-300">{currentUser?.email}</span>
-            <span className="rounded bg-emerald-950 px-2 py-0.5 text-[11px] font-semibold text-emerald-300 ring-1 ring-emerald-700/50">
-              Verified Developer
-            </span>
-          </div>
-          <button
-            type="button"
-            onClick={handleSignOut}
-            className="inline-flex items-center gap-1.5 rounded border border-slate-700 bg-slate-900 px-2.5 py-1 text-slate-300 hover:border-rose-500 hover:bg-rose-950/30 hover:text-rose-300 transition-colors"
-          >
-            <LogOut className="h-3.5 w-3.5" />
-            লগআউট / অ্যাকাউন্ট পরিবর্তন
-          </button>
-        </div>
+      <DevAuthContext.Provider value={{ currentUser, handleSignOut }}>
         {children}
-      </div>
+      </DevAuthContext.Provider>
     );
   }
 

@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 // ignore: deprecated_member_use
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -15,16 +14,10 @@ class RoleSwitcherBanner extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final currentRole = ref.watch(appRoleProvider);
-    final authenticatedRole = ref.watch(
-      citizenStateProvider.select((s) => s.authenticatedRole),
-    );
     final isDemoPreview = ref.watch(
       citizenStateProvider.select((s) => s.isDemoPreview),
     );
-    final canSwitchToCollector = isDemoPreview ||
-        kDebugMode ||
-        authenticatedRole == 'collector' ||
-        authenticatedRole == 'admin';
+    final canSwitchToCollector = isDemoPreview;
 
     return Material(
       color: AppColors.cardSurface,
