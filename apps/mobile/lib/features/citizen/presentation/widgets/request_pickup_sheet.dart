@@ -1,10 +1,14 @@
 // ignore: deprecated_member_use
+import 'package:clean_savar_core/clean_savar_core.dart' as core;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/constants/savar_seed_data.dart';
 import '../../../../core/models/pickup_request.dart';
+import '../../../../core/models/ward_info.dart';
 import '../../../../core/providers/citizen_state_provider.dart';
+import '../../../../core/services/device_services.dart';
 import '../../../../core/utils/bangla_formatters.dart';
 
 Future<void> showRequestPickupSheet(BuildContext context) {
@@ -26,12 +30,17 @@ class RequestPickupSheet extends ConsumerStatefulWidget {
 class _RequestPickupSheetState extends ConsumerState<RequestPickupSheet> {
   late final TextEditingController _addressController;
   final TextEditingController _notesController = TextEditingController();
+  late WardInfo _selectedWard;
 
   WasteCategory _selectedCategory = WasteCategory.household;
   PickupSlot _selectedSlot = PickupSlot.morning;
   int _estimatedBags = 2;
   String _scheduleType = 'one_time';
   String _preferredDay = 'friday';
+
+  double? _liveLat;
+  double? _liveLng;
+  bool _isLocating = false;
 
   static const List<(String, String)> _weekDays = [
     ('saturday', 'শনি'),
@@ -46,8 +55,10 @@ class _RequestPickupSheetState extends ConsumerState<RequestPickupSheet> {
   @override
   void initState() {
     super.initState();
+    final citizen = ref.read(citizenStateProvider);
+    _selectedWard = citizen.selectedWard;
     _addressController = TextEditingController(
-      text: ref.read(citizenStateProvider).defaultAddress,
+      text: citizen.defaultAddress.isNotEmpty ? citizen.defaultAddress : citizen.selectedWard.areaChipLabel,
     );
   }
 
@@ -58,9 +69,46 @@ class _RequestPickupSheetState extends ConsumerState<RequestPickupSheet> {
     super.dispose();
   }
 
+  Future<void> _detectGpsLocation() async {
+    if (_isLocating) return;
+    setState(() => _isLocating = true);
+    try {
+      final fix = await ref.read(deviceLocationServiceProvider).getCurrentLocation();
+      if (fix != null && mounted) {
+        setState(() {
+          _liveLat = fix.lat;
+          _liveLng = fix.lng;
+        });
+        final nearest = core.resolveNearestWardOffline(fix.lat, fix.lng);
+        final matched = SavarSeedData.wards.firstWhere(
+          (w) => w.id == nearest.id,
+          orElse: () => _selectedWard,
+        );
+        setState(() {
+          _selectedWard = matched;
+          if (_addressController.text.trim().isEmpty || _addressController.text == 'সাভার পৌরসভা') {
+            _addressController.text = matched.areaChipLabel;
+          }
+        });
+        if (mounted) {
+          ScaffoldMessenger.of(context)
+            ..hideCurrentSnackBar()
+            ..showSnackBar(
+              SnackBar(content: Text('GPS অবস্থান গৃহীত: ${matched.areaChipLabel}')),
+            );
+        }
+      }
+    } finally {
+      if (mounted) setState(() => _isLocating = false);
+    }
+  }
+
   void _submitPickup() {
     final code = ref.read(citizenStateProvider.notifier).submitPickupRequest(
           addressLine: _addressController.text,
+          ward: _selectedWard,
+          lat: _liveLat ?? _selectedWard.lat,
+          lng: _liveLng ?? _selectedWard.lng,
           category: _selectedCategory,
           slot: _selectedSlot,
           estimatedBags: _estimatedBags,
@@ -293,12 +341,74 @@ class _RequestPickupSheetState extends ConsumerState<RequestPickupSheet> {
                 ),
               ],
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                const Expanded(
+                  child: Text(
+                    'পিকআপ লোকেশন ও ওয়ার্ড',
+                    style: TextStyle(
+                      fontSize: 14.5,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                ),
+                TextButton.icon(
+                  onPressed: _isLocating ? null : _detectGpsLocation,
+                  icon: _isLocating
+                      ? const SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.my_location_rounded, size: 16),
+                  label: Text(_isLocating ? 'জিপিএস খোঁজা হচ্ছে...' : 'আমার GPS নিন'),
+                  style: TextButton.styleFrom(
+                    visualDensity: VisualDensity.compact,
+                    foregroundColor: AppColors.primaryGreen,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            DropdownButtonFormField<int>(
+              initialValue: _selectedWard.id,
+              isExpanded: true,
+              decoration: const InputDecoration(
+                labelText: 'সাভার ওয়ার্ড / ইউনিয়ন *',
+                prefixIcon: Icon(Icons.location_on_outlined),
+              ),
+              items: [
+                for (final ward in SavarSeedData.wards)
+                  DropdownMenuItem<int>(
+                    value: ward.id,
+                    child: Text(
+                      ward.fullNameBn,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+              ],
+              onChanged: (wardId) {
+                if (wardId == null) return;
+                final found = SavarSeedData.wards.firstWhere((w) => w.id == wardId);
+                setState(() {
+                  _selectedWard = found;
+                  _liveLat = found.lat;
+                  _liveLng = found.lng;
+                });
+              },
+            ),
+            const SizedBox(height: 10),
             TextField(
               controller: _addressController,
-              decoration: const InputDecoration(
-                labelText: 'বাসার ঠিকানা',
+              decoration: InputDecoration(
+                labelText: 'বাসার বিস্তারিত ঠিকানা *',
                 hintText: 'বাসা নম্বর, রোড ও এলাকা লিখুন',
+                prefixIcon: const Icon(Icons.home_work_outlined),
+                helperText: _liveLat != null && _liveLng != null
+                    ? 'স্থানাঙ্ক: ${_liveLat!.toStringAsFixed(4)}°N, ${_liveLng!.toStringAsFixed(4)}°E'
+                    : 'ওয়ার্ড স্থানাঙ্ক: ${_selectedWard.lat.toStringAsFixed(4)}°N, ${_selectedWard.lng.toStringAsFixed(4)}°E',
               ),
             ),
             const SizedBox(height: 10),
@@ -307,6 +417,7 @@ class _RequestPickupSheetState extends ConsumerState<RequestPickupSheet> {
               decoration: const InputDecoration(
                 labelText: 'অতিরিক্ত নির্দেশনা (ঐচ্ছিক)',
                 hintText: 'যেমন: নিচতলার গেটের পাশে রাখা আছে',
+                prefixIcon: Icon(Icons.notes_rounded),
               ),
             ),
             const SizedBox(height: 16),

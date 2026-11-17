@@ -27,6 +27,7 @@ class AuthLoginScreen extends ConsumerStatefulWidget {
 class _AuthLoginScreenState extends ConsumerState<AuthLoginScreen> {
   static const String _demoCitizenPhone = '01715-883210';
   static const String _demoCollectorPhone = '01712-448910';
+  static const String _demoAdminPhone = '01711-240100';
 
   AppRole _selectedRole = AppRole.citizen;
   late final TextEditingController _phoneCtrl;
@@ -78,9 +79,20 @@ class _AuthLoginScreenState extends ConsumerState<AuthLoginScreen> {
         final current = _phoneCtrl.text.trim();
         if (current.isEmpty ||
             current == _demoCitizenPhone ||
-            current == _demoCollectorPhone) {
-          _phoneCtrl.text =
-              role == AppRole.citizen ? _demoCitizenPhone : _demoCollectorPhone;
+            current == _demoCollectorPhone ||
+            current == _demoAdminPhone) {
+          _phoneCtrl.text = role == AppRole.citizen
+              ? _demoCitizenPhone
+              : (role == AppRole.collector
+                  ? _demoCollectorPhone
+                  : _demoAdminPhone);
+        }
+        if (role == AppRole.admin) {
+          _nameCtrl.text = 'সাভার পৌরসভা অ্যাডমিন';
+        } else if (role == AppRole.collector) {
+          _nameCtrl.text = 'মো. রফিকুল ইসলাম';
+        } else {
+          _nameCtrl.text = 'রাফি আহমেদ';
         }
       }
     });
@@ -88,17 +100,30 @@ class _AuthLoginScreenState extends ConsumerState<AuthLoginScreen> {
 
   Future<void> _signInWithGoogle() async {
     final rawName = _nameCtrl.text.trim();
-    String finalName = rawName.isNotEmpty ? rawName : 'নাগরিক';
+    final defaultRoleName = _selectedRole == AppRole.admin
+        ? 'সাভার পৌর অ্যাডমিন'
+        : (_selectedRole == AppRole.collector ? 'পরিচ্ছন্নতাকর্মী' : 'নাগরিক');
+    String finalName = rawName.isNotEmpty ? rawName : defaultRoleName;
 
-    final rawPhone = _phoneCtrl.text.trim();
-    final cleanDigits = rawPhone.replaceAll(RegExp(r'\D'), '');
+    var rawPhone = _phoneCtrl.text.trim();
+    var cleanDigits = rawPhone.replaceAll(RegExp(r'\D'), '');
     if (cleanDigits.length < 11) {
-      setState(() {
-        _isError = true;
-        _statusMessage =
-            'পৌরসভা সেবার জন্য অনুগ্রহ করে আপনার ১১ সংখ্যার সচল মোবাইল নম্বরটি লিখুন (যেমন: 01715-883210)।';
-      });
-      return;
+      if (_selectedRole == AppRole.collector) {
+        rawPhone = _demoCollectorPhone;
+        cleanDigits = rawPhone.replaceAll(RegExp(r'\D'), '');
+        _phoneCtrl.text = rawPhone;
+      } else if (_selectedRole == AppRole.admin) {
+        rawPhone = _demoAdminPhone;
+        cleanDigits = rawPhone.replaceAll(RegExp(r'\D'), '');
+        _phoneCtrl.text = rawPhone;
+      } else {
+        setState(() {
+          _isError = true;
+          _statusMessage =
+              'পৌরসভা সেবার জন্য অনুগ্রহ করে আপনার ১১ সংখ্যার সচল মোবাইল নম্বরটি লিখুন (যেমন: 01715-883210)।';
+        });
+        return;
+      }
     }
 
     setState(() {
@@ -547,6 +572,7 @@ class _AuthLoginScreenState extends ConsumerState<AuthLoginScreen> {
   @override
   Widget build(BuildContext context) {
     final isCollector = _selectedRole == AppRole.collector;
+    final isAdmin = _selectedRole == AppRole.admin;
 
     return Scaffold(
       backgroundColor: AppColors.scaffoldBg,
@@ -626,7 +652,7 @@ class _AuthLoginScreenState extends ConsumerState<AuthLoginScreen> {
                 ),
                 const SizedBox(height: 18),
 
-                // Citizen vs Collector Role Selector
+                // Citizen vs Collector vs Pouro Admin Role Selector
                 Container(
                   padding: const EdgeInsets.all(4),
                   decoration: BoxDecoration(
@@ -639,9 +665,9 @@ class _AuthLoginScreenState extends ConsumerState<AuthLoginScreen> {
                       Expanded(
                         child: _LoginRoleTab(
                           key: const ValueKey('login_tab_citizen'),
-                          label: 'নাগরিক লগইন',
+                          label: 'নাগরিক',
                           icon: Icons.home_outlined,
-                          selected: !isCollector,
+                          selected: _selectedRole == AppRole.citizen,
                           onTap: () => _switchLoginRole(AppRole.citizen),
                         ),
                       ),
@@ -649,10 +675,20 @@ class _AuthLoginScreenState extends ConsumerState<AuthLoginScreen> {
                       Expanded(
                         child: _LoginRoleTab(
                           key: const ValueKey('login_tab_collector'),
-                          label: 'কর্মী লগইন',
+                          label: 'কর্মী',
                           icon: Icons.local_shipping_outlined,
-                          selected: isCollector,
+                          selected: _selectedRole == AppRole.collector,
                           onTap: () => _switchLoginRole(AppRole.collector),
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: _LoginRoleTab(
+                          key: const ValueKey('login_tab_admin'),
+                          label: 'পৌর অ্যাডমিন',
+                          icon: Icons.admin_panel_settings_outlined,
+                          selected: _selectedRole == AppRole.admin,
+                          onTap: () => _switchLoginRole(AppRole.admin),
                         ),
                       ),
                     ],
@@ -665,27 +701,35 @@ class _AuthLoginScreenState extends ConsumerState<AuthLoginScreen> {
 
                 // Main Authentication Card
                 FlatCard(
-                  borderColor: isCollector
-                      ? AppColors.borderStrong
-                      : AppColors.primaryGreenBorder,
+                  borderColor: isAdmin
+                      ? AppColors.infoBlueDark
+                      : (isCollector
+                          ? AppColors.borderStrong
+                          : AppColors.primaryGreenBorder),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       Row(
                         children: [
                           Icon(
-                            isCollector
-                                ? Icons.badge_outlined
-                                : Icons.verified_user_outlined,
-                            color: AppColors.primaryGreen,
+                            isAdmin
+                                ? Icons.admin_panel_settings_rounded
+                                : (isCollector
+                                    ? Icons.badge_outlined
+                                    : Icons.verified_user_outlined),
+                            color: isAdmin
+                                ? AppColors.infoBlueDark
+                                : AppColors.primaryGreen,
                             size: 22,
                           ),
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
-                              isCollector
-                                  ? 'পরিচ্ছন্নতাকর্মী OTP লগইন'
-                                  : 'নাগরিক মোবাইল OTP লগইন',
+                              isAdmin
+                                  ? 'পৌরসভা নিয়ন্ত্রণ কক্ষ অ্যাডমিন লগইন'
+                                  : (isCollector
+                                      ? 'পরিচ্ছন্নতাকর্মী OTP লগইন'
+                                      : 'নাগরিক মোবাইল OTP লগইন'),
                               style: const TextStyle(
                                 fontSize: 16.5,
                                 fontWeight: FontWeight.w700,
@@ -697,9 +741,11 @@ class _AuthLoginScreenState extends ConsumerState<AuthLoginScreen> {
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        isCollector
-                            ? 'আপনার পূর্ণ নাম ও পৌরসভায় নিবন্ধিত কর্মী নম্বর দিয়ে Google অ্যাকাউন্ট এর মাধ্যমে প্রবেশ করুন।'
-                            : 'আপনার পূর্ণ নাম ও সচল মোবাইল নম্বর পূরণ করে Google অ্যাকাউন্ট এর মাধ্যমে নিরাপদে প্রবেশ করুন।',
+                        isAdmin
+                            ? 'সাভার পৌরসভা অ্যাডমিন একাউন্টে প্রবেশ করে লাইভ মনিটরিং ও পরিচালনা করুন।'
+                            : (isCollector
+                                ? 'আপনার পূর্ণ নাম ও নিবন্ধিত কর্মী নম্বর দিয়ে Google অ্যাকাউন্ট এর মাধ্যমে প্রবেশ করুন।'
+                                : 'আপনার পূর্ণ নাম ও সচল মোবাইল নম্বর পূরণ করে Google অ্যাকাউন্ট এর মাধ্যমে নিরাপদে প্রবেশ করুন।'),
                         style: const TextStyle(
                           fontSize: 13,
                           color: AppColors.textSecondary,
@@ -714,10 +760,12 @@ class _AuthLoginScreenState extends ConsumerState<AuthLoginScreen> {
                         controller: _nameCtrl,
                         textInputAction: TextInputAction.next,
                         enabled: !_isSigningInWithGoogle && !_isSendingOtp,
-                        decoration: const InputDecoration(
+                        decoration: InputDecoration(
                           labelText: 'আপনার পূর্ণ নাম *',
-                          hintText: 'যেমন: মো. রাফি আহমেদ',
-                          prefixIcon: Icon(Icons.person_outline_rounded),
+                          hintText: isAdmin
+                              ? 'যেমন: সাভার পৌরসভা অ্যাডমিন'
+                              : (isCollector ? 'যেমন: মো. রফিকুল ইসলাম' : 'যেমন: মো. রাফি আহমেদ'),
+                          prefixIcon: const Icon(Icons.person_outline_rounded),
                         ),
                       ),
                       const SizedBox(height: 12),
@@ -730,12 +778,14 @@ class _AuthLoginScreenState extends ConsumerState<AuthLoginScreen> {
                         enabled: !_otpSent && !_isSendingOtp && !_isSigningInWithGoogle,
                         decoration: InputDecoration(
                           labelText: 'মোবাইল নম্বর *',
-                          hintText: isCollector ? '01712-448910' : '01715-883210',
+                          hintText: isAdmin
+                              ? '01711-240100'
+                              : (isCollector ? '01712-448910' : '01715-883210'),
                           prefixIcon: const Icon(Icons.phone_outlined),
                         ),
                       ),
 
-                      if (!isCollector && !_otpSent) ...[
+                      if (!isCollector && !isAdmin && !_otpSent) ...[
                         const SizedBox(height: 12),
                         DropdownButtonFormField<int>(
                           initialValue: _selectedWard.id,
@@ -967,12 +1017,13 @@ class _AuthLoginScreenState extends ConsumerState<AuthLoginScreen> {
                                     .enterDemoPreview(role: AppRole.citizen),
                                 style: OutlinedButton.styleFrom(
                                   minimumSize: const Size(0, 44),
+                                  padding: const EdgeInsets.symmetric(horizontal: 4),
                                   backgroundColor: AppColors.cardSurface,
                                 ),
-                                child: const Text('নাগরিক ডেমো'),
+                                child: const Text('নাগরিক ডেমো', style: TextStyle(fontSize: 12)),
                               ),
                             ),
-                            const SizedBox(width: 8),
+                            const SizedBox(width: 6),
                             Expanded(
                               child: OutlinedButton(
                                 key: const ValueKey('demo_collector_btn'),
@@ -981,9 +1032,25 @@ class _AuthLoginScreenState extends ConsumerState<AuthLoginScreen> {
                                     .enterDemoPreview(role: AppRole.collector),
                                 style: OutlinedButton.styleFrom(
                                   minimumSize: const Size(0, 44),
+                                  padding: const EdgeInsets.symmetric(horizontal: 4),
                                   backgroundColor: AppColors.cardSurface,
                                 ),
-                                child: const Text('কর্মী ডেমো'),
+                                child: const Text('কর্মী ডেমো', style: TextStyle(fontSize: 12)),
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: OutlinedButton(
+                                key: const ValueKey('demo_admin_btn'),
+                                onPressed: () => ref
+                                    .read(citizenStateProvider.notifier)
+                                    .enterDemoPreview(role: AppRole.admin),
+                                style: OutlinedButton.styleFrom(
+                                  minimumSize: const Size(0, 44),
+                                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                                  backgroundColor: AppColors.cardSurface,
+                                ),
+                                child: const Text('অ্যাডমিন ডেমো', style: TextStyle(fontSize: 12)),
                               ),
                             ),
                           ],

@@ -9,6 +9,7 @@ import 'core/providers/app_role_provider.dart';
 import 'core/providers/citizen_state_provider.dart';
 import 'core/theme/app_theme.dart';
 import 'core/widgets/role_switcher_banner.dart';
+import 'features/admin/presentation/pouro_admin_home_screen.dart';
 import 'features/auth/presentation/auth_login_screen.dart';
 import 'features/citizen/presentation/citizen_shell_screen.dart';
 import 'features/collector/presentation/collector_home_screen.dart';
@@ -51,7 +52,9 @@ class CleanSavarRootScreen extends ConsumerWidget {
     final effectiveRole = isAuthenticated
         ? ((authRole == 'collector' || authRole == 'cleaner')
             ? AppRole.collector
-            : AppRole.citizen)
+            : (authRole == 'admin' || authRole == 'pouro_admin' || authRole == 'developer')
+                ? AppRole.admin
+                : AppRole.citizen)
         : activeRole;
 
     final appContent = !hasSession
@@ -60,9 +63,11 @@ class CleanSavarRootScreen extends ConsumerWidget {
             children: [
               if (showRoleSwitcher) const RoleSwitcherBanner(),
               Expanded(
-                child: effectiveRole == AppRole.citizen
-                    ? const CitizenShellScreen()
-                    : const CollectorHomeScreen(),
+                child: effectiveRole == AppRole.admin
+                    ? const PouroAdminHomeScreen()
+                    : (effectiveRole == AppRole.collector
+                        ? const CollectorHomeScreen()
+                        : const CitizenShellScreen()),
               ),
             ],
           );

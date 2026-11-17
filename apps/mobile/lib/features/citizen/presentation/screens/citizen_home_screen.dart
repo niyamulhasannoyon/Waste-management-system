@@ -25,28 +25,32 @@ class CitizenHomeScreen extends ConsumerWidget {
       ),
     );
 
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
-      children: [
-        const CitizenTopBar(),
-        const SizedBox(height: 16),
-        const NextPickupCard(),
-        const SizedBox(height: 14),
-        PrimaryActionCards(
-          onRequestPickup: () => showRequestPickupSheet(context),
-          onReportGarbage: () => showReportGarbageSheet(context),
-        ),
-        const SizedBox(height: 18),
-        const EcoPointsSegregationSection(),
-        if (latestPickup != null) ...[
-          const SizedBox(height: 18),
-          _LatestActivityCard(
-            pickup: latestPickup,
-            onViewAll: () =>
-                ref.read(citizenStateProvider.notifier).setTab(1),
+    return RefreshIndicator(
+      onRefresh: () => ref.read(citizenStateProvider.notifier).refreshFromServer(),
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
+        children: [
+          const CitizenTopBar(),
+          const SizedBox(height: 16),
+          const NextPickupCard(),
+          const SizedBox(height: 14),
+          PrimaryActionCards(
+            onRequestPickup: () => showRequestPickupSheet(context),
+            onReportGarbage: () => showReportGarbageSheet(context),
           ),
+          const SizedBox(height: 18),
+          const EcoPointsSegregationSection(),
+          if (latestPickup != null) ...[
+            const SizedBox(height: 18),
+            _LatestActivityCard(
+              pickup: latestPickup,
+              onViewAll: () =>
+                  ref.read(citizenStateProvider.notifier).setTab(1),
+            ),
+          ],
         ],
-      ],
+      ),
     );
   }
 }

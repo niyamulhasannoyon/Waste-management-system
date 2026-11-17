@@ -5,9 +5,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/constants/savar_seed_data.dart';
 import '../../../../core/models/app_role.dart';
+import '../../../../core/models/ward_info.dart';
 import '../../../../core/providers/app_role_provider.dart';
 import '../../../../core/providers/citizen_state_provider.dart';
+import '../../../../core/services/device_services.dart';
 import '../../../../core/utils/bangla_formatters.dart';
 import '../../../../core/utils/phone_caller.dart';
 import '../../../../core/widgets/flat_card.dart';
@@ -73,6 +76,58 @@ class CitizenProfileScreen extends ConsumerWidget {
                     ),
                   ],
                 ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        FlatCard(
+          onTap: () => _showEditLocationSheet(context, ref, citizen),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppColors.neutralSurface,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: AppColors.border, width: 1),
+                ),
+                child: const Icon(
+                  Icons.edit_location_alt_rounded,
+                  color: AppColors.primaryGreen,
+                  size: 22,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'আমার ঠিকানা ও সাভার ওয়ার্ড নির্ধারণ',
+                      style: TextStyle(
+                        fontSize: 14.5,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '${citizen.defaultAddress} • ${citizen.selectedWard.areaChipLabel}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 12.5,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(
+                Icons.arrow_forward_ios_rounded,
+                size: 14,
+                color: AppColors.textMuted,
               ),
             ],
           ),
@@ -530,6 +585,166 @@ class _CitizenOtpAuthCardState extends ConsumerState<_CitizenOtpAuthCard> {
             ),
           ],
         ],
+      ),
+    );
+  }
+}
+
+void _showEditLocationSheet(BuildContext context, WidgetRef ref, CitizenState citizen) {
+  showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    useSafeArea: true,
+    builder: (ctx) => _EditLocationModal(initialWard: citizen.selectedWard, initialAddress: citizen.defaultAddress),
+  );
+}
+
+class _EditLocationModal extends ConsumerStatefulWidget {
+  const _EditLocationModal({required this.initialWard, required this.initialAddress});
+  final WardInfo initialWard;
+  final String initialAddress;
+
+  @override
+  ConsumerState<_EditLocationModal> createState() => _EditLocationModalState();
+}
+
+class _EditLocationModalState extends ConsumerState<_EditLocationModal> {
+  late final TextEditingController _addressCtrl;
+  late WardInfo _ward;
+  bool _locating = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _addressCtrl = TextEditingController(text: widget.initialAddress);
+    _ward = widget.initialWard;
+  }
+
+  @override
+  void dispose() {
+    _addressCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _detectGps() async {
+    setState(() => _locating = true);
+    try {
+      final fix = await ref.read(deviceLocationServiceProvider).getCurrentLocation();
+      if (fix != null && mounted) {
+        final nearest = core.resolveNearestWardOffline(fix.lat, fix.lng);
+        final matched = SavarSeedData.wards.firstWhere(
+          (w) => w.id == nearest.id,
+          orElse: () => _ward,
+        );
+        setState(() {
+          _ward = matched;
+          if (_addressCtrl.text.trim().isEmpty || _addressCtrl.text == 'সাভার পৌরসভা') {
+            _addressCtrl.text = matched.areaChipLabel;
+          }
+        });
+      }
+    } finally {
+      if (mounted) setState(() => _locating = false);
+    }
+  }
+
+  void _save() {
+    final addr = _addressCtrl.text.trim();
+    ref.read(citizenStateProvider.notifier).updateDefaultLocation(
+      address: addr.isNotEmpty ? addr : _ward.areaChipLabel,
+      ward: _ward,
+    );
+    Navigator.of(context).pop();
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('ঠিকানা ও ওয়ার্ড সফলভাবে আপডেট হয়েছে।')),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
+    return Padding(
+      padding: EdgeInsets.only(bottom: bottomInset),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(18, 16, 18, 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                const Expanded(
+                  child: Text(
+                    'ঠিকানা ও ওয়ার্ড পরিবর্তন করুন',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  icon: const Icon(Icons.close_rounded),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                const Expanded(
+                  child: Text(
+                    'সাভার ওয়ার্ড বা ইউনিয়ন নির্বাচন করুন',
+                    style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: AppColors.textSecondary),
+                  ),
+                ),
+                TextButton.icon(
+                  onPressed: _locating ? null : _detectGps,
+                  icon: _locating
+                      ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
+                      : const Icon(Icons.my_location_rounded, size: 16),
+                  label: Text(_locating ? 'খুঁজছে...' : 'GPS ব্যবহার'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            DropdownButtonFormField<int>(
+              initialValue: _ward.id,
+              isExpanded: true,
+              decoration: const InputDecoration(
+                labelText: 'ওয়ার্ড / এলাকা',
+                prefixIcon: Icon(Icons.location_on_outlined),
+              ),
+              items: [
+                for (final w in SavarSeedData.wards)
+                  DropdownMenuItem<int>(
+                    value: w.id,
+                    child: Text(w.fullNameBn, overflow: TextOverflow.ellipsis),
+                  ),
+              ],
+              onChanged: (wid) {
+                if (wid == null) return;
+                final found = SavarSeedData.wards.firstWhere((w) => w.id == wid);
+                setState(() => _ward = found);
+              },
+            ),
+            const SizedBox(height: 14),
+            TextField(
+              controller: _addressCtrl,
+              decoration: const InputDecoration(
+                labelText: 'বাসা / রোড / বিস্তারিত ঠিকানা',
+                hintText: 'যেমন: বাসা ১৪, রোড ২, ব্যাংক টাউন',
+                prefixIcon: Icon(Icons.home_outlined),
+              ),
+            ),
+            const SizedBox(height: 18),
+            FilledButton.icon(
+              onPressed: _save,
+              icon: const Icon(Icons.check_circle_rounded, size: 18),
+              label: const Text('সংরক্ষণ করুন'),
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -5,7 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/providers/citizen_state_provider.dart';
 import 'screens/citizen_home_screen.dart';
-import 'screens/citizen_hotspots_screen.dart';
+import 'screens/citizen_live_map_screen.dart';
 import 'screens/citizen_profile_screen.dart';
 import 'screens/citizen_requests_screen.dart';
 
@@ -21,7 +21,7 @@ class CitizenShellScreen extends ConsumerWidget {
     final body = switch (activeTab) {
       0 => const CitizenHomeScreen(),
       1 => const CitizenRequestsScreen(),
-      2 => const CitizenHotspotsScreen(),
+      2 => const CitizenLiveMapScreen(),
       _ => const CitizenProfileScreen(),
     };
 

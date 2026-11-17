@@ -7,6 +7,10 @@ enum AppRole {
   collector(
     labelBn: 'কর্মী অ্যাপ',
     subtitleBn: 'ফিল্ড সংগ্রহ',
+  ),
+  admin(
+    labelBn: 'পৌর অ্যাডমিন',
+    subtitleBn: 'পৌরসভা নিয়ন্ত্রণ কক্ষ',
   );
 
   const AppRole({

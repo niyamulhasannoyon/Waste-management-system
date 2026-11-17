@@ -68,6 +68,7 @@ class CitizenState {
     String? citizenName,
     String? citizenFullName,
     String? citizenPhone,
+    String? defaultAddress,
     WardInfo? selectedWard,
     int? ecoPoints,
     List<PickupRequest>? pickups,
@@ -87,7 +88,7 @@ class CitizenState {
       citizenName: citizenName ?? this.citizenName,
       citizenFullName: citizenFullName ?? this.citizenFullName,
       citizenPhone: citizenPhone ?? this.citizenPhone,
-      defaultAddress: defaultAddress,
+      defaultAddress: defaultAddress ?? this.defaultAddress,
       selectedWard: selectedWard ?? this.selectedWard,
       ecoPoints: ecoPoints ?? this.ecoPoints,
       nextPickupWindow: nextPickupWindow,
@@ -114,6 +115,7 @@ class CitizenState {
       'citizenName': citizenName,
       'citizenFullName': citizenFullName,
       'citizenPhone': citizenPhone,
+      'defaultAddress': defaultAddress,
       'selectedWard': selectedWard.toJson(),
       'ecoPoints': ecoPoints,
       'pickups': pickups.map((e) => e.toJson()).toList(),
@@ -128,33 +130,47 @@ class CitizenState {
 class CitizenStateNotifier extends Notifier<CitizenState> {
   int _sequenceCounter = 45;
   bool _hydrated = false;
+  Timer? _autoRefreshTimer;
 
   core.CleanSavarApiClient get _api => ref.read(apiClientProvider);
   OfflineSyncStore get _store => ref.read(offlineSyncStoreProvider);
 
   @override
   CitizenState build() {
+    ref.onDispose(() {
+      _autoRefreshTimer?.cancel();
+    });
+
     if (!_hydrated) {
       _hydrated = true;
       Future.microtask(_hydrateAndSync);
     }
+    _startAutoRefresh();
+
     return const CitizenState(
-      citizenName: 'রাফি',
-      citizenFullName: 'রাফি আহমেদ',
-      citizenPhone: '01715-883210',
-      defaultAddress: 'বাসা ১৪, রোড ২, ব্যাংক টাউন',
+      citizenName: '',
+      citizenFullName: 'সাভার নাগরিক',
+      citizenPhone: '',
+      defaultAddress: 'সাভার পৌরসভা',
       selectedWard: SavarSeedData.defaultWard,
-      ecoPoints: 120,
-      nextPickupWindow: 'আগামীকাল সকাল ৯:০০ - ১০:০০',
-      nextCollectorName: 'মোঃ আলমগীর',
-      nextCollectorVehicle: 'SV-VAN-04',
-      nextCollectorPhone: '01812-101002',
+      ecoPoints: 0,
+      nextPickupWindow: 'শিডিউল লোড হচ্ছে...',
+      nextCollectorName: '',
+      nextCollectorVehicle: '',
+      nextCollectorPhone: '',
       pickups: SavarSeedData.initialPickups,
       hotspots: SavarSeedData.initialHotspots,
       notifications: SavarSeedData.citizenNotifications,
-      hasUnreadNotifications: true,
+      hasUnreadNotifications: false,
       activeTabIndex: 0,
     );
+  }
+
+  void _startAutoRefresh() {
+    _autoRefreshTimer?.cancel();
+    _autoRefreshTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+      refreshFromServer();
+    });
   }
 
   Future<void> _hydrateAndSync() async {
@@ -182,6 +198,8 @@ class CitizenStateNotifier extends Notifier<CitizenState> {
           citizenFullName:
               (saved['citizenFullName'] as String?) ?? state.citizenFullName,
           citizenPhone: (saved['citizenPhone'] as String?) ?? state.citizenPhone,
+          defaultAddress:
+              (saved['defaultAddress'] as String?) ?? state.defaultAddress,
           selectedWard: savedWard,
           ecoPoints: (saved['ecoPoints'] as num?)?.toInt() ?? state.ecoPoints,
           pickups: savedPickups,
@@ -205,12 +223,25 @@ class CitizenStateNotifier extends Notifier<CitizenState> {
       );
       if (role == 'collector' || role == 'cleaner') {
         ref.read(appRoleProvider.notifier).setRole(AppRole.collector);
+      } else if (role == 'admin' || role == 'pouro_admin' || role == 'developer') {
+        ref.read(appRoleProvider.notifier).setRole(AppRole.admin);
       } else {
         ref.read(appRoleProvider.notifier).setRole(AppRole.citizen);
       }
     }
 
     await refreshFromServer();
+  }
+
+  Future<void> updateDefaultLocation({
+    required String address,
+    required WardInfo ward,
+  }) async {
+    state = state.copyWith(
+      defaultAddress: address.trim(),
+      selectedWard: ward,
+    );
+    await _persist();
   }
 
   Future<void> _persist() async {
@@ -233,7 +264,7 @@ class CitizenStateNotifier extends Notifier<CitizenState> {
           final rawPickups = await _api.fetchPickups();
           serverPickups = rawPickups.map(PickupRequest.fromCore).toList();
         } on core.CleanSavarApiException catch (e) {
-          if (e.statusCode == 401) {
+          if (e.statusCode == 401 && !state.isDemoPreview) {
             _api.setAuthToken(null);
             await _store.writeJsonMap(OfflineSyncStore.authSessionKey, {});
             state = state.copyWith(isAuthenticated: false);
@@ -248,7 +279,7 @@ class CitizenStateNotifier extends Notifier<CitizenState> {
             : await _api.fetchPublicHotspots();
         serverReports = rawReports.map(HotspotReport.fromCore).toList();
       } on core.CleanSavarApiException catch (e) {
-        if (e.statusCode == 401) {
+        if (e.statusCode == 401 && !state.isDemoPreview) {
           try {
             final pubReports = await _api.fetchPublicHotspots();
             serverReports = pubReports.map(HotspotReport.fromCore).toList();
@@ -259,100 +290,19 @@ class CitizenStateNotifier extends Notifier<CitizenState> {
       final unsyncedPickups = state.pickups.where((p) => !p.synced).toList();
       final unsyncedHotspots = state.hotspots.where((h) => !h.synced).toList();
 
-      final updatedPickups = <PickupRequest>[];
-      if (serverPickups.isNotEmpty) {
-        final serverMap = <String, PickupRequest>{};
-        for (final p in serverPickups) {
-          serverMap[p.trackingCode] = p;
-          serverMap[p.id] = p;
-        }
-        for (final p in state.pickups) {
-          if (!p.synced) {
-            updatedPickups.add(p);
-          } else if (serverMap.containsKey(p.trackingCode)) {
-            updatedPickups.add(serverMap[p.trackingCode]!);
-            serverMap.remove(p.trackingCode);
-            serverMap.remove(p.id);
-          } else if (serverMap.containsKey(p.id)) {
-            updatedPickups.add(serverMap[p.id]!);
-            serverMap.remove(p.id);
-          } else {
-            updatedPickups.add(p);
-          }
-        }
-        for (final remaining in serverPickups) {
-          if (serverMap.containsKey(remaining.trackingCode) || serverMap.containsKey(remaining.id)) {
-            updatedPickups.add(remaining);
-            serverMap.remove(remaining.trackingCode);
-            serverMap.remove(remaining.id);
-          }
-        }
-      } else {
-        for (final p in state.pickups) {
-          if (p.trackingCode.startsWith('CS-PK-')) {
-            try {
-              final trackRes = await _api.trackByQuery(p.trackingCode);
-              if (trackRes != null && trackRes['pickup'] != null) {
-                final item = core.PickupRequestItem.fromJson(trackRes['pickup'] as Map<String, dynamic>);
-                updatedPickups.add(PickupRequest.fromCore(item));
-                continue;
-              }
-            } catch (_) {}
-          }
-          updatedPickups.add(p);
+      final updatedPickups = <PickupRequest>[...unsyncedPickups];
+      for (final sp in serverPickups) {
+        if (!updatedPickups.any((p) => p.trackingCode == sp.trackingCode || p.id == sp.id)) {
+          updatedPickups.add(sp);
         }
       }
 
-      final updatedHotspots = <HotspotReport>[];
-      if (serverReports.isNotEmpty) {
-        final serverMap = <String, HotspotReport>{};
-        for (final r in serverReports) {
-          serverMap[r.trackingCode] = r;
-          serverMap[r.id] = r;
-        }
-        for (final h in state.hotspots) {
-          if (!h.synced) {
-            updatedHotspots.add(h);
-          } else if (serverMap.containsKey(h.trackingCode)) {
-            updatedHotspots.add(serverMap[h.trackingCode]!);
-            serverMap.remove(h.trackingCode);
-            serverMap.remove(h.id);
-          } else if (serverMap.containsKey(h.id)) {
-            updatedHotspots.add(serverMap[h.id]!);
-            serverMap.remove(h.id);
-          } else {
-            updatedHotspots.add(h);
-          }
-        }
-        for (final remaining in serverReports) {
-          if (serverMap.containsKey(remaining.trackingCode) || serverMap.containsKey(remaining.id)) {
-            updatedHotspots.add(remaining);
-            serverMap.remove(remaining.trackingCode);
-            serverMap.remove(remaining.id);
-          }
-        }
-      } else {
-        for (final h in state.hotspots) {
-          if (h.trackingCode.startsWith('CS-DR-')) {
-            try {
-              final trackRes = await _api.trackByQuery(h.trackingCode);
-              if (trackRes != null && trackRes['report'] != null) {
-                final item = core.DumpReportItem.fromJson(trackRes['report'] as Map<String, dynamic>);
-                updatedHotspots.add(HotspotReport.fromCore(item));
-                continue;
-              }
-            } catch (_) {}
-          }
-          updatedHotspots.add(h);
+      final updatedHotspots = <HotspotReport>[...unsyncedHotspots];
+      for (final sr in serverReports) {
+        if (!updatedHotspots.any((h) => h.trackingCode == sr.trackingCode || h.id == sr.id)) {
+          updatedHotspots.add(sr);
         }
       }
-
-      final mergedPickups = updatedPickups.isNotEmpty
-          ? updatedPickups
-          : (unsyncedPickups.isNotEmpty ? unsyncedPickups : state.pickups);
-      final mergedHotspots = updatedHotspots.isNotEmpty
-          ? updatedHotspots
-          : (unsyncedHotspots.isNotEmpty ? unsyncedHotspots : state.hotspots);
 
       var updatedNotifs = state.notifications;
       if (flush.conflictMessages.isNotEmpty) {
@@ -360,8 +310,8 @@ class CitizenStateNotifier extends Notifier<CitizenState> {
       }
 
       state = state.copyWith(
-        pickups: mergedPickups,
-        hotspots: mergedHotspots,
+        pickups: updatedPickups,
+        hotspots: updatedHotspots,
         notifications: updatedNotifs,
         hasUnreadNotifications: flush.conflictMessages.isNotEmpty
             ? true
@@ -417,27 +367,14 @@ class CitizenStateNotifier extends Notifier<CitizenState> {
     final targetPhone = (phone ?? state.citizenPhone).trim();
     final auth = await _api.verifyOtp(phone: targetPhone, otp: otp.trim());
 
-    if (expectedRole == AppRole.collector &&
-        auth.role != 'collector' &&
-        auth.role != 'cleaner') {
-      await _api.logout();
-      await _store.writeJsonMap(OfflineSyncStore.authSessionKey, {});
-      final isStaffOrAdmin = auth.role == 'admin' ||
-          auth.role == 'pouro_admin' ||
-          auth.role == 'developer' ||
-          auth.role == 'partner';
-      throw core.CleanSavarApiException(
-        403,
-        isStaffOrAdmin
-            ? 'এই নম্বরটি পৌরসভার নিবন্ধিত পরিচ্ছন্নতাকর্মী হিসেবে যুক্ত নয়। পৌর অ্যাডমিন ও ব্যবস্থাপনার জন্য দয়া করে ক্লিন সাভার ওয়েব পোর্টাল ব্যবহার করুন।'
-            : 'এই নম্বরটি পৌরসভার নিবন্ধিত পরিচ্ছন্নতাকর্মী হিসেবে যুক্ত নয়। অনুগ্রহ করে নাগরিক লগইন ব্যবহার করুন অথবা অনুমোদিত কর্মী নম্বর দিন।',
-      );
-    }
+    final effectiveRoleStr = (expectedRole == AppRole.admin)
+        ? 'admin'
+        : (expectedRole == AppRole.collector ? 'collector' : auth.role);
 
     await _store.writeJsonMap(OfflineSyncStore.authSessionKey, {
       'token': auth.token,
       'phone': auth.phone,
-      'role': auth.role,
+      'role': effectiveRoleStr,
     });
     final resolvedFullName = (auth.nameBn != null && auth.nameBn!.trim().isNotEmpty)
         ? auth.nameBn!.trim()
@@ -448,12 +385,14 @@ class CitizenStateNotifier extends Notifier<CitizenState> {
       citizenName: resolvedFullName.split(' ').first,
       isAuthenticated: auth.token.isNotEmpty,
       isDemoPreview: false,
-      authenticatedRole: auth.role,
+      authenticatedRole: effectiveRoleStr,
       clearOtpPreview: true,
     );
-    if (expectedRole == AppRole.collector ||
-        auth.role == 'collector' ||
-        auth.role == 'cleaner') {
+    if (expectedRole == AppRole.admin || effectiveRoleStr == 'admin') {
+      ref.read(appRoleProvider.notifier).setRole(AppRole.admin);
+    } else if (expectedRole == AppRole.collector ||
+        effectiveRoleStr == 'collector' ||
+        effectiveRoleStr == 'cleaner') {
       ref.read(appRoleProvider.notifier).setRole(AppRole.collector);
       unawaited(ref.read(collectorStateProvider.notifier).refreshFromServer());
     } else {
@@ -473,6 +412,10 @@ class CitizenStateNotifier extends Notifier<CitizenState> {
     int? wardId,
   }) async {
     final targetPhone = (phone ?? state.citizenPhone).trim();
+    final roleParam = (expectedRole == AppRole.admin)
+        ? 'admin'
+        : (expectedRole == AppRole.collector ? 'collector' : 'citizen');
+
     final auth = await _api.loginWithFirebaseToken(
       idToken: idToken,
       accessToken: accessToken,
@@ -480,30 +423,17 @@ class CitizenStateNotifier extends Notifier<CitizenState> {
       fullName: fullName ??
           (state.citizenFullName.isNotEmpty ? state.citizenFullName : null),
       wardId: wardId ?? state.selectedWard.id,
-      role: expectedRole == AppRole.collector ? 'collector' : 'citizen',
+      role: roleParam,
     );
 
-    if (expectedRole == AppRole.collector &&
-        auth.role != 'collector' &&
-        auth.role != 'cleaner') {
-      await _api.logout();
-      await _store.writeJsonMap(OfflineSyncStore.authSessionKey, {});
-      final isStaffOrAdmin = auth.role == 'admin' ||
-          auth.role == 'pouro_admin' ||
-          auth.role == 'developer' ||
-          auth.role == 'partner';
-      throw core.CleanSavarApiException(
-        403,
-        isStaffOrAdmin
-            ? 'এই নম্বরটি পৌরসভার নিবন্ধিত পরিচ্ছন্নতাকর্মী হিসেবে যুক্ত নয়। পৌর অ্যাডমিন ও ব্যবস্থাপনার জন্য দয়া করে ক্লিন সাভার ওয়েব পোর্টাল ব্যবহার করুন।'
-            : 'এই নম্বরটি পৌরসভার নিবন্ধিত পরিচ্ছন্নতাকর্মী হিসেবে যুক্ত নয়। অনুগ্রহ করে নাগরিক লগইন ব্যবহার করুন অথবা অনুমোদিত কর্মী নম্বর দিন।',
-      );
-    }
+    final effectiveRoleStr = (expectedRole == AppRole.admin)
+        ? 'admin'
+        : (expectedRole == AppRole.collector ? 'collector' : auth.role);
 
     await _store.writeJsonMap(OfflineSyncStore.authSessionKey, {
       'token': auth.token,
       'phone': auth.phone,
-      'role': auth.role,
+      'role': effectiveRoleStr,
     });
     final resolvedFullName =
         (auth.nameBn != null && auth.nameBn!.trim().isNotEmpty)
@@ -515,12 +445,14 @@ class CitizenStateNotifier extends Notifier<CitizenState> {
       citizenName: resolvedFullName.split(' ').first,
       isAuthenticated: auth.token.isNotEmpty,
       isDemoPreview: false,
-      authenticatedRole: auth.role,
+      authenticatedRole: effectiveRoleStr,
       clearOtpPreview: true,
     );
-    if (expectedRole == AppRole.collector ||
-        auth.role == 'collector' ||
-        auth.role == 'cleaner') {
+    if (expectedRole == AppRole.admin || effectiveRoleStr == 'admin') {
+      ref.read(appRoleProvider.notifier).setRole(AppRole.admin);
+    } else if (expectedRole == AppRole.collector ||
+        effectiveRoleStr == 'collector' ||
+        effectiveRoleStr == 'cleaner') {
       ref.read(appRoleProvider.notifier).setRole(AppRole.collector);
       unawaited(ref.read(collectorStateProvider.notifier).refreshFromServer());
     } else {
@@ -542,14 +474,16 @@ class CitizenStateNotifier extends Notifier<CitizenState> {
     final sessionToken = token ??
         'app_verified:$cleanDigits:user_${DateTime.now().millisecondsSinceEpoch}';
     _api.setAuthToken(sessionToken);
-    final roleStr = role == AppRole.collector ? 'collector' : 'citizen';
+    final roleStr = (role == AppRole.admin)
+        ? 'admin'
+        : (role == AppRole.collector ? 'collector' : 'citizen');
     await _store.writeJsonMap(OfflineSyncStore.authSessionKey, {
       'token': sessionToken,
       'phone': phone,
       'role': roleStr,
     });
     final cleanFullName =
-        fullName.trim().isNotEmpty ? fullName.trim() : 'নাগরিক';
+        fullName.trim().isNotEmpty ? fullName.trim() : 'ব্যবহারকারী';
     state = state.copyWith(
       citizenPhone: phone,
       citizenFullName: cleanFullName,
@@ -559,7 +493,9 @@ class CitizenStateNotifier extends Notifier<CitizenState> {
       authenticatedRole: roleStr,
       clearOtpPreview: true,
     );
-    if (role == AppRole.collector) {
+    if (role == AppRole.admin) {
+      ref.read(appRoleProvider.notifier).setRole(AppRole.admin);
+    } else if (role == AppRole.collector) {
       ref.read(appRoleProvider.notifier).setRole(AppRole.collector);
       unawaited(ref.read(collectorStateProvider.notifier).refreshFromServer());
     } else {
@@ -631,7 +567,11 @@ class CitizenStateNotifier extends Notifier<CitizenState> {
     String scheduleType = 'one_time',
     String? preferredDay,
     String notes = '',
+    double? lat,
+    double? lng,
+    WardInfo? ward,
   }) {
+    final targetWard = ward ?? state.selectedWard;
     _sequenceCounter += 1;
     final code = 'CS-PK-${2000 + _sequenceCounter}';
     final localId = 'pk-$_sequenceCounter';
@@ -657,8 +597,8 @@ class CitizenStateNotifier extends Notifier<CitizenState> {
       id: localId,
       trackingCode: code,
       addressLine: resolvedAddress,
-      wardLabel: state.selectedWard.fullNameBn,
-      wardId: state.selectedWard.id,
+      wardLabel: targetWard.fullNameBn,
+      wardId: targetWard.id,
       scheduleType: normalizedSchedule,
       preferredDay: resolvedPreferredDay,
       category: category,
@@ -685,6 +625,8 @@ class CitizenStateNotifier extends Notifier<CitizenState> {
     unawaited(_persistAndSyncPickup(
       localId: localId,
       request: newRequest,
+      lat: lat ?? targetWard.lat,
+      lng: lng ?? targetWard.lng,
     ));
 
     return code;
@@ -693,6 +635,8 @@ class CitizenStateNotifier extends Notifier<CitizenState> {
   Future<void> _persistAndSyncPickup({
     required String localId,
     required PickupRequest request,
+    double? lat,
+    double? lng,
   }) async {
     await _persist();
     try {
@@ -705,8 +649,8 @@ class CitizenStateNotifier extends Notifier<CitizenState> {
         wasteType: request.category.toCoreWasteType(),
         slot: request.slot.toCoreSlot(),
         estimatedBags: request.estimatedBags,
-        lat: state.selectedWard.lat,
-        lng: state.selectedWard.lng,
+        lat: lat ?? state.selectedWard.lat,
+        lng: lng ?? state.selectedWard.lng,
         scheduleType: request.scheduleType,
         preferredDay: request.preferredDay,
         notes: request.notes,
@@ -726,6 +670,7 @@ class CitizenStateNotifier extends Notifier<CitizenState> {
         ],
       );
       await _persist();
+      unawaited(refreshFromServer());
     } on core.CleanSavarApiException catch (e) {
       if (e.statusCode == 400 ||
           e.statusCode == 404 ||
@@ -873,6 +818,7 @@ class CitizenStateNotifier extends Notifier<CitizenState> {
         ],
       );
       await _persist();
+      unawaited(refreshFromServer());
     } on core.CleanSavarApiException catch (e) {
       if (e.statusCode == 400 ||
           e.statusCode == 404 ||
