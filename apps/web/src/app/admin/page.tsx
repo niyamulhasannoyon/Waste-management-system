@@ -4,10 +4,12 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import {
   Bell,
+  Camera,
   CheckCircle2,
   Download,
   Edit3,
   ExternalLink,
+  Maximize2,
   PlusCircle,
   Power,
   RefreshCw,
@@ -15,6 +17,7 @@ import {
   ShieldAlert,
   ShieldCheck,
   Truck,
+  Users,
   Volume2,
   VolumeX,
   X,
@@ -36,6 +39,11 @@ import {
 } from '@/components/admin/AdminDispatchDialog';
 import { AdminLotsSection } from '@/components/admin/AdminLotsSection';
 import { AdminOverviewStats } from '@/components/admin/AdminOverviewStats';
+import {
+  AdminPhotoLightboxModal,
+  type PhotoLightboxData,
+} from '@/components/admin/AdminPhotoLightboxModal';
+import { AdminPouroAdminSection } from '@/components/admin/AdminPouroAdminSection';
 import { SavarWardMap } from '@/components/savar-ward-map';
 import { StatusBadge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -47,6 +55,7 @@ import {
   fetchRecyclableLots,
   fetchReports,
   fetchVehicles,
+  saveAdminUser,
   updateCollectorVehicle,
   updatePickupStatus,
   updateReportStatus,
@@ -66,7 +75,7 @@ import type {
   RecyclableLotRecord,
 } from '@/lib/types';
 import { RelativeTimeBn } from '@/components/ui/relative-time';
-import { buildSafeCsv, toBanglaDigits } from '@/lib/utils';
+import { buildSafeCsv, resolveAllMediaUrls, toBanglaDigits } from '@/lib/utils';
 
 function playNotificationChime() {
   if (typeof window === 'undefined') return;
@@ -104,14 +113,23 @@ function playNotificationChime() {
   }
 }
 
-type AdminTab = 'overview' | 'live_feed' | 'pickups' | 'reports' | 'vehicles' | 'lots' | 'zones';
+type AdminTab =
+  | 'overview'
+  | 'reports'
+  | 'pickups'
+  | 'workers'
+  | 'admins'
+  | 'live_feed'
+  | 'lots'
+  | 'zones';
 
 const TABS: { id: AdminTab; label: string; badge?: string }[] = [
   { id: 'overview', label: 'সার্বিক ও ম্যাপ' },
-  { id: 'live_feed', label: 'নাগরিক লাইভ স্ট্রিম ও রেসপন্স', badge: 'Live' },
+  { id: 'reports', label: 'ময়লার অভিযোগ ও ছবি' },
   { id: 'pickups', label: 'পিকআপ কিউ' },
-  { id: 'reports', label: 'ময়লার অভিযোগ' },
-  { id: 'vehicles', label: 'গাড়ি ও টিম' },
+  { id: 'workers', label: 'পরিচ্ছন্নতাকর্মী ও গাড়ি' },
+  { id: 'admins', label: 'পৌর অ্যাডমিন ও অ্যাক্সেস' },
+  { id: 'live_feed', label: 'নাগরিক লাইভ স্ট্রিম', badge: 'Live' },
   { id: 'lots', label: 'রিসাইক্লিং লট' },
   { id: 'zones', label: 'এলাকা সূচি' },
 ];
@@ -136,6 +154,7 @@ function AdminCommandInner() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [isCollectorModalOpen, setIsCollectorModalOpen] = useState<boolean>(false);
   const [editingVehicle, setEditingVehicle] = useState<CollectorVehicleRecord | null>(null);
+  const [photoLightboxData, setPhotoLightboxData] = useState<PhotoLightboxData | null>(null);
 
   // Live Stream, Auto-Sync & Sound Alerts
   const [citizenRequests, setCitizenRequests] = useState<DevCitizenRequest[]>([]);
@@ -431,7 +450,7 @@ function AdminCommandInner() {
               {soundEnabled ? 'সাউন্ড অ্যালার্ট' : 'সাউন্ড বন্ধ'}
             </button>
 
-            {/* Add New Collector Button */}
+            {/* Add New Porichonnota Kormi Button */}
             <button
               type="button"
               onClick={() => {
@@ -441,7 +460,17 @@ function AdminCommandInner() {
               className="inline-flex items-center gap-1.5 rounded-md border border-emerald-600 bg-emerald-700 px-3 py-1 text-xs font-semibold text-white hover:bg-emerald-800 transition-colors shadow-xs"
             >
               <PlusCircle className="h-3.5 w-3.5" />
-              + নতুন কালেক্টর যোগ করুন
+              + পরিচ্ছন্নতাকর্মী নিয়োগ
+            </button>
+
+            {/* Manage Pouro Admins Button */}
+            <button
+              type="button"
+              onClick={() => setTab('admins')}
+              className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-800 hover:bg-slate-50 transition-colors"
+            >
+              <Users className="h-3.5 w-3.5 text-emerald-700" />
+              পৌর অ্যাডমিন অ্যাক্সেস
             </button>
 
             {/* Link to Citizen Portal */}
@@ -633,22 +662,50 @@ function AdminCommandInner() {
                       .map((r) => (
                         <li
                           key={r.id}
-                          className="space-y-2 rounded-md border border-[#E2E8F0] p-3"
+                          className="space-y-2 rounded-md border border-[#E2E8F0] p-3 hover:border-emerald-300 transition-colors"
                         >
                           <div className="flex items-start justify-between gap-2">
-                            <div>
-                              <span className="font-metric text-xs font-bold text-[#15803D]">
-                                {r.tracking_code}
-                              </span>
-                              <p className="text-sm font-semibold text-[#0F172A]">{r.title_bn}</p>
-                              <p className="text-xs text-[#475569]">{r.ward_name_bn}</p>
+                            <div className="flex items-start gap-2.5">
+                              {r.photo_urls && r.photo_urls.length > 0 ? (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setPhotoLightboxData({
+                                      title: r.title_bn,
+                                      trackingCode: r.tracking_code,
+                                      landmark: r.landmark,
+                                      wardNameBn: r.ward_name_bn,
+                                      photoUrls: resolveAllMediaUrls(r.photo_urls),
+                                    })
+                                  }
+                                  className="group relative h-12 w-14 shrink-0 overflow-hidden rounded-md border border-amber-300 hover:border-emerald-600 transition-all shadow-xs cursor-pointer"
+                                  title="ময়লার ছবি বড় করে দেখুন"
+                                >
+                                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                                  <img
+                                    src={resolveAllMediaUrls(r.photo_urls)[0]}
+                                    alt={r.title_bn}
+                                    className="h-full w-full object-cover group-hover:scale-105 transition-transform"
+                                  />
+                                  <span className="absolute bottom-0 right-0 bg-black/75 px-1 text-[8px] font-metric text-white font-bold">
+                                    {r.photo_urls.length}
+                                  </span>
+                                </button>
+                              ) : null}
+                              <div>
+                                <span className="font-metric text-xs font-bold text-[#15803D]">
+                                  {r.tracking_code}
+                                </span>
+                                <p className="text-sm font-semibold text-[#0F172A]">{r.title_bn}</p>
+                                <p className="text-xs text-[#475569]">{r.ward_name_bn} — {r.landmark}</p>
+                              </div>
                             </div>
                             <StatusBadge tone={REPORT_STATUS_META[r.status].tone}>
                               {REPORT_STATUS_META[r.status].label}
                             </StatusBadge>
                           </div>
 
-                          <div className="flex flex-wrap gap-2">
+                          <div className="flex flex-wrap items-center gap-2">
                             {r.status === 'reported' ? (
                               <Button
                                 type="button"
@@ -671,12 +728,33 @@ function AdminCommandInner() {
                                   title: r.title_bn,
                                   lat: r.lat,
                                   lng: r.lng,
+                                  photoUrls: r.photo_urls,
                                 })
                               }
                             >
                               <Truck className="h-3.5 w-3.5" aria-hidden="true" />
                               গাড়ি দিন
                             </Button>
+                            {r.photo_urls && r.photo_urls.length > 0 ? (
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="tint"
+                                onClick={() =>
+                                  setPhotoLightboxData({
+                                    title: r.title_bn,
+                                    trackingCode: r.tracking_code,
+                                    landmark: r.landmark,
+                                    wardNameBn: r.ward_name_bn,
+                                    photoUrls: resolveAllMediaUrls(r.photo_urls),
+                                  })
+                                }
+                                className="gap-1 text-xs"
+                              >
+                                <Camera className="h-3.5 w-3.5 text-amber-700" />
+                                ছবি ({toBanglaDigits(r.photo_urls.length)})
+                              </Button>
+                            ) : null}
                           </div>
                         </li>
                       ))}
@@ -809,6 +887,7 @@ function AdminCommandInner() {
                     <thead>
                       <tr>
                         <th scope="col">কোড</th>
+                        <th scope="col">ময়লার ছবি</th>
                         <th scope="col">অভিযোগ ও স্থান</th>
                         <th scope="col">ওয়ার্ড</th>
                         <th scope="col">অবস্থা</th>
@@ -825,6 +904,41 @@ function AdminCommandInner() {
                               <span className="block text-[11px] text-[#475569]">
                                 <RelativeTimeBn isoDate={r.created_at} />
                               </span>
+                            </td>
+                            <td data-label="ময়লার ছবি">
+                              {r.photo_urls && r.photo_urls.length > 0 ? (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setPhotoLightboxData({
+                                      title: r.title_bn,
+                                      trackingCode: r.tracking_code,
+                                      landmark: r.landmark,
+                                      wardNameBn: r.ward_name_bn,
+                                      photoUrls: resolveAllMediaUrls(r.photo_urls),
+                                    })
+                                  }
+                                  className="group flex items-center gap-1.5 cursor-pointer text-left"
+                                  title="ছবি বড় করে দেখুন"
+                                >
+                                  <div className="relative h-11 w-14 overflow-hidden rounded-md border border-amber-300 shadow-xs group-hover:border-emerald-600 transition-colors shrink-0">
+                                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                                    <img
+                                      src={resolveAllMediaUrls(r.photo_urls)[0]}
+                                      alt={r.title_bn}
+                                      className="h-full w-full object-cover group-hover:scale-105 transition-transform"
+                                    />
+                                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/25 flex items-center justify-center transition-colors">
+                                      <Maximize2 className="h-3 w-3 text-white opacity-0 group-hover:opacity-100 drop-shadow" />
+                                    </div>
+                                  </div>
+                                  <span className="rounded bg-amber-100 border border-amber-200 px-1.5 py-0.5 font-metric text-[10px] font-bold text-amber-900 shrink-0">
+                                    📸 {toBanglaDigits(r.photo_urls.length)}
+                                  </span>
+                                </button>
+                              ) : (
+                                <span className="text-[11px] text-[#94A3B8] italic">ছবি নেই</span>
+                              )}
                             </td>
                             <td data-label="অভিযোগ ও স্থান">
                               <span className="font-semibold">{r.title_bn}</span>
@@ -861,6 +975,7 @@ function AdminCommandInner() {
                                           title: r.title_bn,
                                           lat: r.lat,
                                           lng: r.lng,
+                                          photoUrls: r.photo_urls,
                                         })
                                       }
                                     >
@@ -890,45 +1005,45 @@ function AdminCommandInner() {
             </section>
           ) : null}
 
-          {tab === 'vehicles' ? (
+          {tab === 'workers' ? (
             <section className="cs-card overflow-hidden">
               <div className="flex flex-col gap-3 border-b border-[#E2E8F0] px-5 py-3.5 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <h2 className="text-base font-bold text-[#0F172A]">
-                    ওয়ার্ড কালেক্টর ও পরিচ্ছন্নতা গাড়ি ব্যবস্থাপনা ({toBanglaDigits(vehicles.length)})
+                    ওয়ার্ড পরিচ্ছন্নতাকর্মী ও গাড়ি ব্যবস্থাপনা ({toBanglaDigits(vehicles.length)} জন)
                   </h2>
                   <p className="text-xs text-[#475569] mt-0.5">
-                    ওয়ার্ডভিত্তিক কালেক্টর টিম, গাড়ির ধরন ও রিয়েল-টাইম কাজের অবস্থা
+                    সাভার পৌরসভা ও ওয়ার্ডভিত্তিক পরিচ্ছন্নতাকর্মী টিম, যোগাযোগের নম্বর ও রিয়েল-টাইম কাজের অবস্থা পরিচালনা
                   </p>
                 </div>
                 <Button
                   type="button"
                   size="sm"
                   variant="primary"
-                  className="gap-1.5"
+                  className="gap-1.5 bg-emerald-700 hover:bg-emerald-800 text-white"
                   onClick={() => {
                     setEditingVehicle(null);
                     setIsCollectorModalOpen(true);
                   }}
                 >
                   <PlusCircle className="h-4 w-4" />
-                  নতুন কালেক্টর যোগ করুন
+                  + নতুন পরিচ্ছন্নতাকর্মী যোগ করুন
                 </Button>
               </div>
               {vehicles.length === 0 ? (
                 <div className="p-8 text-center text-sm text-[#475569]">
-                  কোনো কালেক্টর বা গাড়ি পাওয়া যায়নি। নতুন কালেক্টর যোগ করতে উপরের বাটনে ক্লিক করুন।
+                  কোনো পরিচ্ছন্নতাকর্মী বা গাড়ি পাওয়া যায়নি। নতুন পরিচ্ছন্নতাকর্মী যোগ করতে উপরের বাটনে ক্লিক করুন।
                 </div>
               ) : (
                 <div className="cs-table-wrapper">
                   <table className="cs-table">
-                    <caption className="sr-only">সংগ্রহ গাড়ির তালিকা</caption>
+                    <caption className="sr-only">পরিচ্ছন্নতাকর্মী ও সংগ্রহ গাড়ির তালিকা</caption>
                     <thead>
                       <tr>
-                        <th scope="col">গাড়ি কোড</th>
-                        <th scope="col">কালেক্টর ও যোগাযোগ</th>
+                        <th scope="col">গাড়ি কোড ও ধরন</th>
+                        <th scope="col">পরিচ্ছন্নতাকর্মী ও যোগাযোগ</th>
                         <th scope="col">এলাকা / ওয়ার্ড</th>
-                        <th scope="col">অবস্থা</th>
+                        <th scope="col">ডিউটি অবস্থা</th>
                         <th scope="col">পদক্ষেপ</th>
                       </tr>
                     </thead>
@@ -946,9 +1061,9 @@ function AdminCommandInner() {
                                 {VEHICLE_TYPE_LABELS[v.vehicle_type] || v.vehicle_type}
                               </span>
                             </td>
-                            <td data-label="কালেক্টর ও যোগাযোগ">
-                              <span className="font-semibold">{v.driver_name_bn}</span>
-                              <span className="block font-metric text-xs text-[#475569]">
+                            <td data-label="পরিচ্ছন্নতাকর্মী">
+                              <span className="font-semibold text-[#0F172A]">{v.driver_name_bn}</span>
+                              <span className="block font-metric text-xs text-emerald-800 font-bold">
                                 {v.driver_phone}
                               </span>
                             </td>
@@ -983,7 +1098,7 @@ function AdminCommandInner() {
                                 >
                                   <Power className="h-3 w-3" />
                                   {v.status === 'offline'
-                                    ? 'সক্রিয় করুন'
+                                    ? 'অন-ডিউটি'
                                     : v.status === 'busy'
                                       ? 'ফ্রি করুন'
                                       : 'অফলাইন'}
@@ -998,6 +1113,17 @@ function AdminCommandInner() {
                 </div>
               )}
             </section>
+          ) : null}
+
+          {tab === 'admins' ? (
+            <AdminPouroAdminSection
+              wards={wards}
+              currentAdminPhone={profile?.user.phone}
+              onNotice={(msg) => {
+                setStatusNotice(msg);
+                announce(msg);
+              }}
+            />
           ) : null}
 
           {tab === 'lots' ? (
@@ -1085,8 +1211,14 @@ function AdminCommandInner() {
           setIsCollectorModalOpen(false);
           setEditingVehicle(null);
           await loadAdminData(true);
-          announce('কালেক্টর তালিকা সফলভাবে সংরক্ষিত হয়েছে।');
+          announce('পরিচ্ছন্নতাকর্মী ও গাড়ি সফলভাবে সংরক্ষিত হয়েছে।');
         }}
+      />
+
+      {/* Waste Photo Lightbox Modal */}
+      <AdminPhotoLightboxModal
+        data={photoLightboxData}
+        onClose={() => setPhotoLightboxData(null)}
       />
     </div>
   );
@@ -1188,14 +1320,20 @@ function AdminApprovalGate({ children }: { children: React.ReactNode }) {
             <Button
               type="button"
               variant="primary"
-              onClick={() => {
+              onClick={async () => {
+                await saveAdminUser({
+                  phone: profile.user.phone,
+                  full_name: profile.user.full_name,
+                  email: profile.user.email ?? undefined,
+                  role: 'admin',
+                }).catch(() => {});
                 approveAdminUser(profile.user.phone, profile.user.full_name, profile.user.email ?? undefined);
                 setIsApproved(true);
               }}
               className="gap-2 bg-emerald-700 hover:bg-emerald-800 text-white"
             >
               <ShieldCheck className="h-4 w-4" />
-              অ্যাডমিন হিসেবে তাৎক্ষণিক প্রবেশ করুন
+              পৌর অ্যাডমিন হিসেবে তাৎক্ষণিক প্রবেশ করুন
             </Button>
             <Button
               type="button"

@@ -730,6 +730,29 @@ pub async fn create_vehicle(
     .fetch_one(&state.pool)
     .await?;
 
+    // Ensure Porichonnota Kormi user account is recorded and linked in users table
+    let _ = sqlx::query(
+        r#"
+        INSERT INTO users (phone, full_name, role, ward_id, is_verified)
+        VALUES ($1, $2, 'collector', $3, TRUE)
+        ON CONFLICT (phone) DO UPDATE
+        SET role = 'collector', ward_id = EXCLUDED.ward_id, updated_at = NOW()
+        "#,
+    )
+    .bind(phone)
+    .bind(driver_name)
+    .bind(payload.ward_id)
+    .execute(&state.pool)
+    .await;
+
+    let _ = sqlx::query(
+        "UPDATE collector_vehicles SET user_id = (SELECT id FROM users WHERE phone = $1 LIMIT 1) WHERE id = $2 AND user_id IS NULL"
+    )
+    .bind(phone)
+    .bind(created.id)
+    .execute(&state.pool)
+    .await;
+
     record_audit_log(
         &state.pool,
         Some(admin.user_id),
@@ -794,6 +817,24 @@ pub async fn update_vehicle(
     .fetch_optional(&state.pool)
     .await?
     .ok_or_else(|| AppError::not_found("Vehicle not found.", "গাড়িটি খুঁজে পাওয়া যায়নি।"))?;
+
+    // Synchronize Porichonnota Kormi profile in users table
+    let _ = sqlx::query(
+        r#"
+        INSERT INTO users (phone, full_name, role, ward_id, is_verified)
+        VALUES ($1, $2, 'collector', $3, TRUE)
+        ON CONFLICT (phone) DO UPDATE
+        SET full_name = EXCLUDED.full_name,
+            role = 'collector',
+            ward_id = EXCLUDED.ward_id,
+            updated_at = NOW()
+        "#,
+    )
+    .bind(&updated.driver_phone)
+    .bind(&updated.driver_name_bn)
+    .bind(updated.ward_id)
+    .execute(&state.pool)
+    .await;
 
     record_audit_log(
         &state.pool,

@@ -8,6 +8,7 @@ import { NativeDialog } from '@/components/ui/native-dialog';
 import {
   ApiError,
   createCollectorVehicle,
+  saveAdminUser,
   updateCollectorVehicle,
 } from '@/lib/api-client';
 import { SAVAR_WARDS_SEED } from '@/lib/savar-data';
@@ -96,6 +97,14 @@ export function AdminCollectorManagementModal({
           vehicle_type: vehicleType,
           status,
         });
+        // Also persist Porichonnota Kormi profile in users table
+        await saveAdminUser({
+          phone: cleanPhone,
+          full_name: cleanName,
+          role: 'collector',
+          ward_id: wardId,
+        }).catch((err) => console.warn('Collector user sync note:', err));
+
         onSaved(updated, false);
       } else {
         const created = await createCollectorVehicle({
@@ -106,6 +115,14 @@ export function AdminCollectorManagementModal({
           vehicle_type: vehicleType,
           status,
         });
+        // Also persist Porichonnota Kormi profile in users table
+        await saveAdminUser({
+          phone: cleanPhone,
+          full_name: cleanName,
+          role: 'collector',
+          ward_id: wardId,
+        }).catch((err) => console.warn('Collector user sync note:', err));
+
         onSaved(created, true);
       }
       onClose();
@@ -113,7 +130,7 @@ export function AdminCollectorManagementModal({
       setErrorMsg(
         err instanceof ApiError
           ? err.messageBn
-          : 'কালেক্টর ও গাড়ি তথ্য সংরক্ষণ করা যায়নি। আবার চেষ্টা করুন।',
+          : 'পরিচ্ছন্নতাকর্মী ও গাড়ি তথ্য সংরক্ষণ করা যায়নি। আবার চেষ্টা করুন।',
       );
     } finally {
       setIsSubmitting(false);
@@ -124,8 +141,8 @@ export function AdminCollectorManagementModal({
     <NativeDialog
       open={open}
       onClose={onClose}
-      title={isEditing ? 'ওয়ার্ড কালেক্টর ও গাড়ি সম্পাদনা' : 'নতুন ওয়ার্ড কালেক্টর ও গাড়ি যোগ করুন'}
-      description="সাভার পৌরসভা ও ইউনিয়নের বর্জ্য সংগ্রহে নিয়োজিত কালেক্টর, মোবাইল নম্বর ও গাড়ির বিস্তারিত নির্ধারণ করুন।"
+      title={isEditing ? 'পরিচ্ছন্নতাকর্মী ও গাড়ি তথ্য সম্পাদনা' : 'নতুন পরিচ্ছন্নতাকর্মী ও গাড়ি নিয়োগ করুন'}
+      description="সাভার পৌরসভা ও ওয়ার্ডভিত্তিক বর্জ্য সংগ্রহে নিয়োজিত পরিচ্ছন্নতাকর্মী, মোবাইল নম্বর ও গাড়ির বিস্তারিত নির্ধারণ করুন।"
     >
       <form onSubmit={handleSubmit} className="space-y-4">
         {errorMsg ? (
@@ -179,9 +196,9 @@ export function AdminCollectorManagementModal({
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <FormField
             id="collector-name"
-            label="কালেক্টরের নাম"
+            label="পরিচ্ছন্নতাকর্মী / চালকের নাম"
             required
-            hint="কালেক্টর বা চালকের পূর্ণ নাম"
+            hint="মাঠপর্যায়ের পরিচ্ছন্নতাকর্মীর পূর্ণ নাম"
           >
             {(a11y) => (
               <input

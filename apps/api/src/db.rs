@@ -177,24 +177,31 @@ pub fn validate_coords(lat: f64, lng: f64) -> Result<(), AppError> {
     Ok(())
 }
 
-/// Validate that submitted photo URLs belong strictly to our sanitized `/uploads/<uuid>.(jpg|png)` store.
+/// Validate that submitted photo URLs belong strictly to our sanitized `/uploads/<uuid>.(jpg|png|webp)` or Supabase Storage store.
 pub fn validate_uploaded_photo_url(
     raw: &str,
     public_upload_base_url: &str,
 ) -> Result<String, AppError> {
     let trimmed = raw.trim();
-    if trimmed.is_empty() || trimmed.len() > 512 {
+    if trimmed.is_empty() || trimmed.len() > 1024 {
         return Err(AppError::validation(
             "Photo URL is empty or too long.",
             "ছবির লিংকটি সঠিক নয়।",
         ));
     }
 
+    const SUPABASE_CDN_PREFIX: &str =
+        "https://wosjqtspcblftirykphs.supabase.co/storage/v1/object/public/reports";
+
     let base = public_upload_base_url.trim_end_matches('/');
-    let file_part = if let Some(rest) = trimmed.strip_prefix("/uploads/") {
-        rest
+    let (file_part, is_supabase_cdn) = if let Some(rest) =
+        trimmed.strip_prefix(SUPABASE_CDN_PREFIX).and_then(|s| s.strip_prefix('/'))
+    {
+        (rest, true)
+    } else if let Some(rest) = trimmed.strip_prefix("/uploads/") {
+        (rest, false)
     } else if let Some(rest) = trimmed.strip_prefix(base).and_then(|s| s.strip_prefix('/')) {
-        rest
+        (rest, base.contains("supabase.co"))
     } else {
         return Err(AppError::validation(
             "Photo URL must reference an uploaded server asset.",
@@ -209,7 +216,8 @@ pub fn validate_uploaded_photo_url(
         ));
     }
 
-    let valid_ext = file_part.ends_with(".jpg") || file_part.ends_with(".png");
+    let valid_ext =
+        file_part.ends_with(".jpg") || file_part.ends_with(".png") || file_part.ends_with(".webp");
     let stem = file_part.split('.').next().unwrap_or("");
     if !valid_ext || Uuid::parse_str(stem).is_err() {
         return Err(AppError::validation(
@@ -218,7 +226,13 @@ pub fn validate_uploaded_photo_url(
         ));
     }
 
-    Ok(format!("/uploads/{file_part}"))
+    if is_supabase_cdn || base.contains("supabase.co") {
+        Ok(format!("{SUPABASE_CDN_PREFIX}/{file_part}"))
+    } else if base.starts_with("http") {
+        Ok(format!("{base}/{file_part}"))
+    } else {
+        Ok(format!("/uploads/{file_part}"))
+    }
 }
 
 /// Escape SQL `LIKE`/`ILIKE` metacharacters (`\`, `%`, `_`) so user search input matches literally.

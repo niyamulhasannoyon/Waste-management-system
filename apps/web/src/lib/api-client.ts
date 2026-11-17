@@ -725,13 +725,48 @@ export async function uploadDumpPhoto(file: File): Promise<UploadPhotoResponse> 
     });
   }
 
-  const form = new FormData();
-  form.append('photo', preparedFile);
-  return fetchJson<UploadPhotoResponse>('/uploads/photo', {
-    method: 'POST',
-    auth: true,
-    body: form,
-  });
+  try {
+    const form = new FormData();
+    form.append('photo', preparedFile);
+    return await fetchJson<UploadPhotoResponse>('/uploads/photo', {
+      method: 'POST',
+      auth: true,
+      body: form,
+    });
+  } catch (backendErr) {
+    console.warn('Backend /uploads/photo unavailable, attempting direct Supabase CDN upload:', backendErr);
+    try {
+      const uuid = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `rpt-${Date.now()}`;
+      const ext = preparedFile.type === 'image/png' ? 'png' : 'jpg';
+      const objectKey = `${uuid}.${ext}`;
+      const supabaseAnonKey =
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indvc2pxdHNwY2JsZnRpcnlrcGhzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTQ1NjcxMzMsImV4cCI6MjExMDE0MzEzM30.L7X4LUujetlAhwTlMkG4ohEwb4sHg6c2i2OJJK_6a8A';
+      const uploadRes = await fetch(
+        `https://wosjqtspcblftirykphs.supabase.co/storage/v1/object/reports/${objectKey}`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${supabaseAnonKey}`,
+            'Content-Type': preparedFile.type || 'image/jpeg',
+          },
+          body: preparedFile,
+        },
+      );
+      if (uploadRes.ok) {
+        const publicUrl = `https://wosjqtspcblftirykphs.supabase.co/storage/v1/object/public/reports/${objectKey}`;
+        return {
+          object_key: objectKey,
+          url: publicUrl,
+          mime_type: preparedFile.type || 'image/jpeg',
+          size_bytes: preparedFile.size,
+        };
+      }
+    } catch (supabaseErr) {
+      console.warn('Direct Supabase upload fallback also failed:', supabaseErr);
+    }
+    throw backendErr;
+  }
 }
 
 export async function fetchReports(params?: {
@@ -1017,3 +1052,110 @@ export async function collectRecyclableLot(lotId: string): Promise<RecyclableLot
 export async function fetchAnalyticsSummary(): Promise<AnalyticsSummary> {
   return fetchJson<AnalyticsSummary>('/analytics/summary', { auth: true });
 }
+
+export interface DbUserRecord {
+  id: string;
+  phone: string;
+  full_name: string;
+  email?: string | null;
+  role: string;
+  ward_id: number | null;
+  is_verified: boolean;
+  created_at: string;
+  updated_at?: string;
+}
+
+export async function fetchAdminUsers(role?: string, search?: string): Promise<DbUserRecord[]> {
+  const query = new URLSearchParams();
+  if (role) query.set('role', role);
+  if (search) query.set('q', search);
+  const qs = query.toString() ? `?${query.toString()}` : '';
+
+  try {
+    const res = await fetch(`/api/admin/users${qs}`, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' },
+      cache: 'no-store',
+    });
+    if (res.ok) {
+      const data = await res.json();
+      return data.users || [];
+    }
+  } catch (err) {
+    console.warn('Local /api/admin/users fetch note:', err);
+  }
+  return [];
+}
+
+export async function saveAdminUser(input: {
+  phone: string;
+  full_name: string;
+  email?: string;
+  role: 'admin' | 'collector' | 'citizen';
+  ward_id?: number | null;
+}): Promise<DbUserRecord> {
+  const res = await fetch('/api/admin/users', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new ApiError({
+      status: res.status,
+      code: 'USER_SAVE_FAILED',
+      message: err.error?.message || 'Failed to save admin user',
+      messageBn: err.error?.message_bn || 'ব্যবহারকারীর তথ্য সংরক্ষণ করা যায়নি।',
+    });
+  }
+
+  const data = await res.json();
+  return data.user;
+}
+
+export async function revokeAdminUser(input: { id?: string; phone?: string }): Promise<void> {
+  const params = new URLSearchParams();
+  if (input.id) params.set('id', input.id);
+  if (input.phone) params.set('phone', input.phone);
+
+  const res = await fetch(`/api/admin/users?${params.toString()}`, {
+    method: 'DELETE',
+  });
+
+  if (!res.ok) {
+    throw new ApiError({
+      status: res.status,
+      code: 'REVOKE_FAILED',
+      message: 'Failed to revoke admin role',
+      messageBn: 'অ্যাডমিন অ্যাক্সেস প্রত্যাহার করা যায়নি।',
+    });
+  }
+}
+
+export async function updateUserRoleInDb(input: {
+  id?: string;
+  phone?: string;
+  role: string;
+}): Promise<DbUserRecord> {
+  const res = await fetch('/api/admin/users', {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new ApiError({
+      status: res.status,
+      code: 'ROLE_UPDATE_FAILED',
+      message: err.error?.message || 'Failed to update user role in database',
+      messageBn: err.error?.message_bn || 'ব্যবহারকারীর রোল পরিবর্তন করা যায়নি।',
+    });
+  }
+
+  const data = await res.json();
+  return data.user;
+}
+
+

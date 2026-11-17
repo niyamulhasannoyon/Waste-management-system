@@ -526,13 +526,15 @@ const DEFAULT_MARKET_RATES: DevMarketRate[] = [
 const DEFAULT_APK_CONFIG: DevApkReleaseConfig = {
   versionName: '2.1.0',
   versionCode: 7,
-  releaseDate: '2026-11-14',
+  releaseDate: '2026-11-17',
   apkSizeMb: 26.8,
   downloadUrl: '/clean-savar.apk',
   sha256DebugCert: '49:82:B4:C6:48:4D:04:C8:82:E3:41:66:18:C7:1B:EB:59:18:58:8B:AB:5A:A4:0B:0C:A0:8D:FD:55:CB:66:70',
   minSupportedVersionCode: 1,
   forceUpdateEnabled: false,
   changelogBn: [
+    'সাভার পৌরসভা ও ডেভেলপার সুপার অ্যাডমিন লাইভ ইউজার সিঙ্ক',
+    'রিয়েল-টাইম ডাটাবেজ ডিরেক্টরি ও ১-ক্লিক পারমিশন ম্যানেজমেন্ট',
     'লগইন স্ক্রিন ও ওটিপি বার্তার পেশাদার ১-লাইন কম্প্যাক্ট ডিজাইন',
     'ফুল অ্যাপ প্রফেশনাল গ্রাফিক্স ও ম্যাটেরিয়াল ৩ প্রিমিয়াম ডিজাইন ওভারহল',
     'স্ট্যাটাস বার ও ক্যামেরা কাটআউট সেফ-এরিয়া ওভারল্যাপ ফিক্স',
@@ -2214,6 +2216,12 @@ export function simulateDevCitizenRequest(
         ? '২টি বড় ময়লার ব্যাগ, জরুরি ভিত্তিতে আজই সংগ্রহ প্রয়োজন।'
         : 'রাস্তার ড্রেনের মুখে বর্জ্যের স্তূপ জমে পানি আটকে আছে।',
     status: type === 'pickup' ? 'pending' : 'reported',
+    photoUrls:
+      type === 'dump_report'
+        ? [
+            'https://wosjqtspcblftirykphs.supabase.co/storage/v1/object/public/reports/test.jpg',
+          ]
+        : undefined,
   };
 
   const updated = recordDevCitizenRequest(req);

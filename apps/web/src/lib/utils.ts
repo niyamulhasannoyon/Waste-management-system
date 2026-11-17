@@ -78,6 +78,9 @@ export function formatDistanceLabel(meters: number | null): string {
   return `${toBanglaDigits((meters / 1000).toFixed(1))} কিমি দূরে`;
 }
 
+export const SUPABASE_STORAGE_REPORTS_CDN =
+  'https://wosjqtspcblftirykphs.supabase.co/storage/v1/object/public/reports';
+
 /**
  * Guard uploaded/external image URLs before rendering to block script/unsafe URIs.
  */
@@ -87,7 +90,8 @@ export function isSafeImageUrl(raw: string | null | undefined): raw is string {
   if (!trimmed) return false;
   if (trimmed.startsWith('/uploads/')) return !trimmed.includes('..');
   if (/^https?:\/\//i.test(trimmed)) return true;
-  if (/^data:image\/(png|jpeg|webp)[;,]/i.test(trimmed)) return true;
+  if (/^data:image\/(png|jpeg|jpg|webp|gif)[;,]/i.test(trimmed)) return true;
+  if (trimmed.startsWith('blob:')) return true;
   return false;
 }
 
@@ -149,11 +153,55 @@ export function resolveMediaUrl(
 ): string | null {
   if (!isSafeImageUrl(raw)) return null;
   const trimmed = raw.trim();
+  if (trimmed.startsWith('data:image/') || trimmed.startsWith('blob:')) {
+    return trimmed;
+  }
   if (trimmed.startsWith('/uploads/')) {
+    const filename = trimmed.replace(/^\/uploads\//, '');
+    // If the image filename matches a UUID format, Supabase Storage CDN is the most resilient host
+    if (/^[0-9a-fA-F-]{36}\.(jpg|png|webp)$/i.test(filename)) {
+      return `${SUPABASE_STORAGE_REPORTS_CDN}/${filename}`;
+    }
     const origin = apiBase.replace(/\/api\/v1\/?$/, '').replace(/\/$/, '');
     return `${origin}${trimmed}`;
   }
   return trimmed;
+}
+
+/**
+ * Returns a fallback alternate URL if the primary media URL fails to load.
+ */
+export function getMediaFallbackUrl(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  const trimmed = raw.trim();
+  if (trimmed.startsWith(SUPABASE_STORAGE_REPORTS_CDN)) {
+    const filename = trimmed.slice(SUPABASE_STORAGE_REPORTS_CDN.length + 1);
+    return `/uploads/${filename}`;
+  }
+  if (trimmed.startsWith('/uploads/')) {
+    const filename = trimmed.replace(/^\/uploads\//, '');
+    return `${SUPABASE_STORAGE_REPORTS_CDN}/${filename}`;
+  }
+  return null;
+}
+
+/**
+ * Resolves an array of photo URLs to safe, unique, displayable image links.
+ */
+export function resolveAllMediaUrls(
+  rawUrls?: (string | null | undefined)[] | null,
+): string[] {
+  if (!rawUrls || !Array.isArray(rawUrls)) return [];
+  const resolved: string[] = [];
+  const seen = new Set<string>();
+  for (const raw of rawUrls) {
+    const url = resolveMediaUrl(raw);
+    if (url && !seen.has(url)) {
+      seen.add(url);
+      resolved.push(url);
+    }
+  }
+  return resolved;
 }
 
 /**

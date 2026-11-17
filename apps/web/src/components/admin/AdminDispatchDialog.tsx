@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { Loader2, Truck } from 'lucide-react';
+import { Camera, ExternalLink, Loader2, Truck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { FormField } from '@/components/ui/form-field';
 import { NativeDialog } from '@/components/ui/native-dialog';
@@ -17,7 +17,7 @@ import {
 } from '@/lib/dev-store';
 import { VEHICLE_TYPE_LABELS } from '@/lib/savar-data';
 import type { CollectorVehicleRecord } from '@/lib/types';
-import { formatDistanceLabel } from '@/lib/utils';
+import { formatDistanceLabel, resolveAllMediaUrls, toBanglaDigits } from '@/lib/utils';
 
 export interface DispatchTarget {
   entityType: 'pickup' | 'dump_report';
@@ -26,6 +26,7 @@ export interface DispatchTarget {
   title: string;
   lat: number;
   lng: number;
+  photoUrls?: string[];
 }
 
 interface AdminDispatchDialogProps {
@@ -153,6 +154,33 @@ export function AdminDispatchDialog({
         {errorMsg ? (
           <div role="alert" className="rounded-md bg-[#FEF2F2] p-3 text-xs text-[#B91C1C]">
             {errorMsg}
+          </div>
+        ) : null}
+
+        {target?.photoUrls && target.photoUrls.length > 0 ? (
+          <div className="rounded-lg border border-amber-200 bg-amber-50/60 p-2.5 space-y-1.5">
+            <span className="flex items-center gap-1 text-xs font-bold text-amber-900">
+              <Camera className="h-3.5 w-3.5 text-amber-700" />
+              অভিযোগের সাথে সংযুক্ত ময়লার ছবি ({toBanglaDigits(target.photoUrls.length)}টি):
+            </span>
+            <div className="flex flex-wrap gap-2">
+              {resolveAllMediaUrls(target.photoUrls).map((url, i) => (
+                <a
+                  key={i}
+                  href={url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="group relative h-16 w-20 overflow-hidden rounded-md border border-amber-300 hover:border-emerald-600 transition-all shadow-xs"
+                  title="ছবি বড় করে দেখুন (নতুন ট্যাবে খুলবে)"
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={url} alt={`ময়লার ছবি ${i + 1}`} className="h-full w-full object-cover transition-transform group-hover:scale-105" />
+                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/25 flex items-center justify-center transition-colors">
+                    <ExternalLink className="h-3.5 w-3.5 text-white opacity-0 group-hover:opacity-100 drop-shadow" />
+                  </div>
+                </a>
+              ))}
+            </div>
           </div>
         ) : null}
 

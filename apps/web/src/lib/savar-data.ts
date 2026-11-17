@@ -409,8 +409,13 @@ export const REPORTS_SEED: DumpReportRecord[] = HOTSPOTS_SEED.map((h) => ({
   reporter_name: 'সাভারের নাগরিক',
   reporter_phone: '01700-••••00',
   description_bn: 'নাগরিক প্রতিবেদনে জরুরি পরিচ্ছন্নতা প্রয়োজন বলে চিহ্নিত।',
-  photo_urls: [],
-  resolved_photo_url: null,
+  photo_urls: [
+    'https://wosjqtspcblftirykphs.supabase.co/storage/v1/object/public/reports/test.jpg',
+  ],
+  resolved_photo_url:
+    h.status === 'cleared'
+      ? 'https://wosjqtspcblftirykphs.supabase.co/storage/v1/object/public/reports/test.jpg'
+      : null,
   assigned_vehicle_id: h.status === 'dispatched' ? '11111111-1111-4111-8111-111111111102' : null,
   assigned_vehicle_code: h.status === 'dispatched' ? 'SV-CMP-01' : null,
   duplicate_of: null,

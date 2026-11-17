@@ -2,9 +2,11 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import {
+  Camera,
   CheckCircle2,
   Clock,
   Flame,
+  Maximize2,
   MessageSquare,
   Phone,
   Play,
@@ -22,7 +24,11 @@ import {
   clearDevCitizenRequests,
 } from '@/lib/dev-store';
 import { Button } from '@/components/ui/button';
-import { toBanglaDigits } from '@/lib/utils';
+import { resolveAllMediaUrls, toBanglaDigits } from '@/lib/utils';
+import {
+  AdminPhotoLightboxModal,
+  type PhotoLightboxData,
+} from '@/components/admin/AdminPhotoLightboxModal';
 
 export function DevCitizenRequestsTab() {
   const [requests, setRequests] = useState<DevCitizenRequest[]>([]);
@@ -31,6 +37,7 @@ export function DevCitizenRequestsTab() {
   const [activeRequest, setActiveRequest] = useState<DevCitizenRequest | null>(null);
   const [replyMessage, setReplyMessage] = useState<string>('');
   const [statusNotice, setStatusNotice] = useState<string | null>(null);
+  const [activeLightbox, setActiveLightbox] = useState<PhotoLightboxData | null>(null);
 
   const loadRequests = () => {
     setRequests(getDevCitizenRequests());
@@ -351,6 +358,62 @@ export function DevCitizenRequestsTab() {
                   ) : null}
                 </div>
 
+                {/* Attached Waste Photos Gallery */}
+                {req.photoUrls && req.photoUrls.length > 0 ? (
+                  <div className="rounded-md bg-amber-950/20 border border-amber-900/40 p-2.5 space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="flex items-center gap-1.5 text-xs font-semibold text-amber-300">
+                        <Camera className="h-3.5 w-3.5 text-amber-400" />
+                        সংযুক্ত ময়লার ছবি ({toBanglaDigits(req.photoUrls.length)}টি):
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setActiveLightbox({
+                            title: req.details,
+                            trackingCode: req.trackingCode,
+                            landmark: req.addressOrLandmark,
+                            wardNameBn: req.wardNameBn,
+                            photoUrls: resolveAllMediaUrls(req.photoUrls),
+                          })
+                        }
+                        className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-400 hover:text-emerald-300 underline cursor-pointer"
+                      >
+                        <Maximize2 className="h-3 w-3" />
+                        বড় করে দেখুন
+                      </button>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {resolveAllMediaUrls(req.photoUrls).map((url, i) => (
+                        <div
+                          key={i}
+                          onClick={() =>
+                            setActiveLightbox({
+                              title: req.details,
+                              trackingCode: req.trackingCode,
+                              landmark: req.addressOrLandmark,
+                              wardNameBn: req.wardNameBn,
+                              photoUrls: resolveAllMediaUrls(req.photoUrls),
+                              initialIndex: i,
+                            })
+                          }
+                          className="group relative h-16 w-20 overflow-hidden rounded-md border border-amber-800/60 hover:border-emerald-500 transition-all cursor-pointer shadow-xs"
+                        >
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={url}
+                            alt={`${req.trackingCode} ছবি ${i + 1}`}
+                            className="h-full w-full object-cover group-hover:scale-105 transition-transform"
+                          />
+                          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center">
+                            <Maximize2 className="h-3.5 w-3.5 text-white opacity-0 group-hover:opacity-100 drop-shadow" />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+
                 {/* Previous Responses History */}
                 {req.responseNotes && req.responseNotes.length > 0 ? (
                   <div className="space-y-1.5 pt-1">
@@ -460,6 +523,11 @@ export function DevCitizenRequestsTab() {
           </div>
         </div>
       ) : null}
+      {/* Photo Lightbox Modal */}
+      <AdminPhotoLightboxModal
+        data={activeLightbox}
+        onClose={() => setActiveLightbox(null)}
+      />
     </div>
   );
 }

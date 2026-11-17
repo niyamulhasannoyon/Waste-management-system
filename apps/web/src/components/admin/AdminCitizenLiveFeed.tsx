@@ -2,9 +2,11 @@
 
 import React, { useState, useMemo } from 'react';
 import {
+  Camera,
   CheckCircle2,
   Clock,
   Flame,
+  Maximize2,
   MessageSquare,
   Phone,
   RefreshCw,
@@ -21,8 +23,12 @@ import {
 import { SAVAR_CENTER } from '@/lib/savar-data';
 import { StatusBadge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { toBanglaDigits } from '@/lib/utils';
+import { resolveAllMediaUrls, toBanglaDigits } from '@/lib/utils';
 import type { DispatchTarget } from '@/components/admin/AdminDispatchDialog';
+import {
+  AdminPhotoLightboxModal,
+  type PhotoLightboxData,
+} from '@/components/admin/AdminPhotoLightboxModal';
 import {
   sendAdminMessage,
   updatePickupStatus,
@@ -47,6 +53,7 @@ export function AdminCitizenLiveFeed({
   const [responseModalTarget, setResponseModalTarget] = useState<DevCitizenRequest | null>(null);
   const [replyMessage, setReplyMessage] = useState<string>('');
   const [isSending, setIsSending] = useState<boolean>(false);
+  const [activeLightbox, setActiveLightbox] = useState<PhotoLightboxData | null>(null);
 
   const filtered = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -414,6 +421,65 @@ export function AdminCitizenLiveFeed({
                   ) : null}
                 </div>
 
+                {/* Uploaded Waste Photos Gallery */}
+                {item.photoUrls && item.photoUrls.length > 0 ? (
+                  <div className="rounded-lg border border-amber-200 bg-amber-50/50 p-3 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="flex items-center gap-1.5 text-xs font-bold text-amber-900">
+                        <Camera className="h-3.5 w-3.5 text-amber-700" />
+                        নাগরিক কর্তৃক আপলোডকৃত ময়লার ছবি ({toBanglaDigits(item.photoUrls.length)}টি):
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setActiveLightbox({
+                            title: item.details,
+                            trackingCode: item.trackingCode,
+                            landmark: item.addressOrLandmark,
+                            wardNameBn: item.wardNameBn,
+                            photoUrls: resolveAllMediaUrls(item.photoUrls),
+                          })
+                        }
+                        className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-800 hover:text-emerald-950 underline cursor-pointer"
+                      >
+                        <Maximize2 className="h-3 w-3" />
+                        পূর্ণ স্ক্রিনে ছবি দেখুন
+                      </button>
+                    </div>
+                    <div className="flex flex-wrap gap-2.5">
+                      {resolveAllMediaUrls(item.photoUrls).map((url, idx) => (
+                        <div
+                          key={idx}
+                          className="group relative h-20 w-24 sm:h-24 sm:w-28 cursor-pointer overflow-hidden rounded-lg border border-amber-300 shadow-xs hover:border-emerald-600 transition-all hover:scale-105"
+                          onClick={() =>
+                            setActiveLightbox({
+                              title: item.details,
+                              trackingCode: item.trackingCode,
+                              landmark: item.addressOrLandmark,
+                              wardNameBn: item.wardNameBn,
+                              photoUrls: resolveAllMediaUrls(item.photoUrls),
+                              initialIndex: idx,
+                            })
+                          }
+                        >
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={url}
+                            alt={`${item.trackingCode} ছবি ${idx + 1}`}
+                            className="h-full w-full object-cover transition-transform group-hover:scale-110"
+                          />
+                          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center">
+                            <Maximize2 className="h-4 w-4 text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow" />
+                          </div>
+                          <span className="absolute bottom-1 right-1 rounded bg-black/70 px-1 py-0.5 text-[9px] font-metric font-bold text-white">
+                            {idx + 1}/{item.photoUrls!.length}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+
                 {/* Response History Thread */}
                 {item.responseNotes && item.responseNotes.length > 0 ? (
                   <div className="space-y-1.5 pt-1">
@@ -528,6 +594,11 @@ export function AdminCitizenLiveFeed({
           </div>
         </div>
       ) : null}
+      {/* Photo Lightbox Modal */}
+      <AdminPhotoLightboxModal
+        data={activeLightbox}
+        onClose={() => setActiveLightbox(null)}
+      />
     </div>
   );
 }
